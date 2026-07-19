@@ -210,11 +210,20 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
     display: none !important;
 }}
 .block-container {{
-    max-width: 400px !important;
+    max-width: 680px !important;
     padding: 1.2rem 1.3rem 9.5rem !important;
+    margin: 0 auto !important;
+}}
+@media (max-width: 768px) {{
+    .block-container {{ padding: 1rem 1rem 9rem !important; }}
+    .oc-hero h1, h1 {{ font-size: 1.8rem !important; }}
+    div.stButton > button {{
+        height: 48px !important; min-height: 48px !important;
+        font-size: 15px !important;
+    }}
 }}
 @media (max-width: 480px) {{
-    .block-container {{ padding: 1rem 1.05rem 9rem !important; }}
+    .block-container {{ padding: 1rem 1rem 9rem !important; }}
 }}
 
 /* ----- Brand ----- */
@@ -306,7 +315,8 @@ div[data-testid="stTextArea"] {{ margin: 0 0 1.35rem !important; }}
     font-family: inherit !important; font-size: 1.06rem !important;
     line-height: 1.55 !important; background: #fff !important;
     border: 1px solid rgba(62, 91, 132, 0.05) !important;
-    border-radius: 28px !important; min-height: 200px !important;
+    border-radius: 16px !important;
+    min-height: 200px !important;
     color: {INK} !important; padding: 1.4rem 1.45rem !important;
     box-shadow: {SHADOW} !important; caret-color: {PRIMARY} !important;
     resize: none !important; transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
@@ -325,21 +335,22 @@ div.stButton > button {{
 div.stButton > button:hover {{ transform: translateY(-1px) !important; }}
 div.stButton > button[data-testid="baseButton-primary"] {{
     background: {PRIMARY} !important; color: #fff !important; border: none !important;
-    border-radius: 999px !important; font-weight: 600 !important;
+    border-radius: 16px !important; font-weight: 600 !important;
     font-size: 1.06rem !important; letter-spacing: -0.01em !important;
-    height: 3.6rem !important; width: 100% !important; max-width: 360px !important;
+    height: 52px !important; width: 100% !important; max-width: 360px !important;
     box-shadow: 0 12px 28px rgba(90, 139, 255, 0.32) !important;
 }}
 div.stButton > button[data-testid="baseButton-secondary"] {{
     background: #fff !important; color: #555 !important;
     border: 1px solid rgba(62, 91, 132, 0.08) !important;
-    border-radius: 999px !important; font-weight: 500 !important;
-    font-size: 0.88rem !important; min-height: 2.85rem !important; width: 100% !important;
+    border-radius: 16px !important; font-weight: 500 !important;
+    font-size: 0.88rem !important; min-height: 52px !important; height: 52px !important;
+    width: 100% !important;
     box-shadow: {SHADOW_SOFT} !important;
 }}
 div[data-testid="stLinkButton"] a {{
-    border-radius: 999px !important; font-weight: 600 !important;
-    font-size: 0.82rem !important; min-height: 2.85rem !important; width: 100% !important;
+    border-radius: 16px !important; font-weight: 600 !important;
+    font-size: 0.82rem !important; min-height: 52px !important; width: 100% !important;
     display: flex !important; justify-content: center !important;
     align-items: center !important; text-decoration: none !important;
 }}
@@ -489,6 +500,39 @@ div.stButton > button[data-testid="baseButton-primary"] {{
 div[data-testid="stVerticalBlockBorderWrapper"] {{
     border: none !important; background: transparent !important; box-shadow: none !important;
 }}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+<style>
+    @media (max-width: 768px) {
+        .main .block-container {
+            padding: 1rem 1rem;
+        }
+        h1 {
+            font-size: 1.8rem;
+        }
+        .stButton > button {
+            height: 48px;
+            font-size: 15px;
+        }
+    }
+    .stApp {
+        background-color: #f8f9fa;
+    }
+    .main .block-container {
+        max-width: 680px;
+        margin: 0 auto;
+    }
+    .stButton > button {
+        border-radius: 16px;
+        height: 52px;
+    }
+    .stTextArea textarea {
+        border-radius: 16px;
+    }
 </style>
         """,
         unsafe_allow_html=True,
