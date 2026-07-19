@@ -27,6 +27,7 @@ import requests
 
 import db
 import feasibility
+import shopping
 
 log = logging.getLogger("onechoice.pipeline")
 
@@ -277,12 +278,11 @@ def decide(
         top["wildcard"] = True
 
     justification = str(top.get("justification") or "")
+    suggestion = str(top.get("suggestion") or "")
     execution = top.get("execution") if isinstance(top.get("execution"), dict) else None
     if not execution:
-        execution = _execution_for(
-            domain, str(top.get("suggestion") or ""), language, user
-        )
-    suggestion = str(top.get("suggestion") or "")
+        execution = _execution_for(domain, suggestion, language, user)
+    execution = _ensure_food_shopping(domain, suggestion, execution, top, user, language)
     status = "locked" if locked else "shown"
 
     decision = db.create_decision(
@@ -301,6 +301,7 @@ def decide(
             "feasible_n": len(survivors),
             "skip_feasibility": skip_feasibility,
             "execution_detail": execution.get("detail"),
+            "shopping": execution.get("shopping"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
         },
         execution_type=execution.get("type"),
@@ -693,7 +694,12 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
         "food": (
             "Only Swedish supermarket basic assortment (ICA/Coop/Willys/Lidl/Hemköp). "
             "No teff, fresh lemongrass, specialty imports. Max 30 min weekday / 60 min weekend. "
-            "Wildcard = flavor adventure, never sourcing. Eating out only if open + near user."
+            "Wildcard = flavor adventure, never sourcing. Eating out only if open + near user. "
+            "CRITICAL shopping rule: put FULL ingredient list in meta.ingredients first. "
+            "Never assume fresh items (meat/fish/dairy/produce) are already at home — "
+            "chicken is NEVER 'always in the fridge'. "
+            "Only salt, pepper, oil, butter, sugar, flour, and common dried spices may be "
+            "assumed at home; rice, pasta, soy sauce, coconut milk, canned tomatoes = buy."
         ),
         "clothes": (
             f"Section={profile.get('clothes', {}).get('section')}. "
@@ -735,34 +741,96 @@ def _local_candidates(
             {
                 "suggestion": "Krämig tomatsås-pasta",
                 "justification": "Varmt, enkelt och klart på 20 minuter.",
-                "meta": {"active_minutes": 20},
+                "meta": {
+                    "active_minutes": 20,
+                    "ingredients": [
+                        "pasta",
+                        "krossade tomater",
+                        "gul lök",
+                        "vitlök",
+                        "parmesan",
+                        "olja",
+                        "salt",
+                        "peppar",
+                        "oregano",
+                    ],
+                },
             },
             {
                 "suggestion": "Etiopisk-inspirerad linsgryta",
-                "justification": "Varm krydda från hyllorna du redan har — äventyr utan specialbutik.",
+                "justification": "Varm krydda hemma — linser, kokosmjölk och grönt på listan.",
                 "wildcard": True,
-                "meta": {"active_minutes": 30, "shopping_list": {
-                    "frukt & grönt": ["gul lök", "vitlök", "spenat"],
-                    "mejeri": [],
-                    "kött/fisk": [],
-                    "skafferi": ["röda linser", "curry", "paprika", "kokosmjölk", "ris"],
-                    "fryst": [],
-                }},
+                "meta": {
+                    "active_minutes": 30,
+                    "ingredients": [
+                        "röda linser",
+                        "gul lök",
+                        "vitlök",
+                        "morot",
+                        "spenat",
+                        "kokosmjölk",
+                        "ris",
+                        "curry",
+                        "olja",
+                        "salt",
+                        "peppar",
+                    ],
+                },
             },
             {
                 "suggestion": "Proteinomelett med grönt",
-                "justification": "Snabb, mättande och håller dig till nästa mål.",
-                "meta": {"active_minutes": 15},
+                "justification": "Snabb, mättande — ägg och grönt på inköpslistan.",
+                "meta": {
+                    "active_minutes": 15,
+                    "ingredients": [
+                        "ägg",
+                        "mjölk",
+                        "tomat",
+                        "spenat",
+                        "ost",
+                        "smör",
+                        "salt",
+                        "peppar",
+                    ],
+                },
             },
             {
                 "suggestion": "Kycklingwok med ris",
-                "justification": "Vardagsfavorit med det som alltid finns i kylen.",
-                "meta": {"active_minutes": 25},
+                "justification": "Vardagsfavorit — kyckling och grönt köps, salt och olja hemma.",
+                "meta": {
+                    "active_minutes": 25,
+                    "ingredients": [
+                        "kycklingfilé",
+                        "gul lök",
+                        "vitlök",
+                        "morot",
+                        "broccoli",
+                        "paprika (färsk)",
+                        "ris",
+                        "sojasås",
+                        "olja",
+                        "salt",
+                        "peppar",
+                    ],
+                },
             },
             {
                 "suggestion": "Klassisk burgare hemma",
-                "justification": "Komfort utan krångel — du vet redan att det funkar.",
-                "meta": {"active_minutes": 25},
+                "justification": "Komfort utan krångel — färs och bröd på listan.",
+                "meta": {
+                    "active_minutes": 25,
+                    "ingredients": [
+                        "nötfärs",
+                        "hamburgerbröd",
+                        "ost",
+                        "sallad",
+                        "tomat",
+                        "gul lök",
+                        "olja",
+                        "salt",
+                        "peppar",
+                    ],
+                },
             },
         ],
         "clothes": [
@@ -844,11 +912,100 @@ def _local_candidates(
     }
     packs_en: dict[str, list[dict[str, Any]]] = {
         "food": [
-            {"suggestion": "Creamy tomato pasta", "justification": "Warm, simple, done in 20 minutes.", "meta": {"active_minutes": 20}},
-            {"suggestion": "Ethiopian-inspired lentil stew", "justification": "Shelf spices only — adventure without specialty shops.", "wildcard": True, "meta": {"active_minutes": 30}},
-            {"suggestion": "Protein omelette with greens", "justification": "Fast, filling, carries you to the next meal.", "meta": {"active_minutes": 15}},
-            {"suggestion": "Chicken stir-fry with rice", "justification": "Weeknight classic from what you already have.", "meta": {"active_minutes": 25}},
-            {"suggestion": "Classic burger at home", "justification": "Comfort without friction.", "meta": {"active_minutes": 25}},
+            {
+                "suggestion": "Creamy tomato pasta",
+                "justification": "Warm, simple, done in 20 minutes.",
+                "meta": {
+                    "active_minutes": 20,
+                    "ingredients": [
+                        "pasta",
+                        "krossade tomater",
+                        "gul lök",
+                        "vitlök",
+                        "parmesan",
+                        "olja",
+                        "salt",
+                        "peppar",
+                        "oregano",
+                    ],
+                },
+            },
+            {
+                "suggestion": "Ethiopian-inspired lentil stew",
+                "justification": "Spices at home — lentils, coconut milk, and veg on the list.",
+                "wildcard": True,
+                "meta": {
+                    "active_minutes": 30,
+                    "ingredients": [
+                        "röda linser",
+                        "gul lök",
+                        "vitlök",
+                        "morot",
+                        "spenat",
+                        "kokosmjölk",
+                        "ris",
+                        "curry",
+                        "olja",
+                        "salt",
+                        "peppar",
+                    ],
+                },
+            },
+            {
+                "suggestion": "Protein omelette with greens",
+                "justification": "Fast and filling — eggs and greens on the shopping list.",
+                "meta": {
+                    "active_minutes": 15,
+                    "ingredients": [
+                        "ägg",
+                        "mjölk",
+                        "tomat",
+                        "spenat",
+                        "ost",
+                        "smör",
+                        "salt",
+                        "peppar",
+                    ],
+                },
+            },
+            {
+                "suggestion": "Chicken stir-fry with rice",
+                "justification": "Weeknight classic — chicken and veg to buy, salt and oil at home.",
+                "meta": {
+                    "active_minutes": 25,
+                    "ingredients": [
+                        "kycklingfilé",
+                        "gul lök",
+                        "vitlök",
+                        "morot",
+                        "broccoli",
+                        "paprika (färsk)",
+                        "ris",
+                        "sojasås",
+                        "olja",
+                        "salt",
+                        "peppar",
+                    ],
+                },
+            },
+            {
+                "suggestion": "Classic burger at home",
+                "justification": "Comfort without friction — mince and buns on the list.",
+                "meta": {
+                    "active_minutes": 25,
+                    "ingredients": [
+                        "nötfärs",
+                        "hamburgerbröd",
+                        "ost",
+                        "sallad",
+                        "tomat",
+                        "gul lök",
+                        "olja",
+                        "salt",
+                        "peppar",
+                    ],
+                },
+            },
         ],
         "clothes": [
             {"suggestion": "Dark jeans + white tee + sneakers", "justification": "Clean, safe, works all day."},
@@ -1056,6 +1213,49 @@ def _fallback_candidate(
     return _local_candidates(domain, language, recent, {})[0]
 
 
+def _ensure_food_shopping(
+    domain: str,
+    suggestion: str,
+    execution: dict[str, Any],
+    top: dict[str, Any],
+    user: dict[str, Any],
+    language: str,
+) -> dict[str, Any]:
+    """Attach structured shopping when feasibility was skipped or execution is thin."""
+    if domain != "food":
+        return execution
+    if execution.get("type") == "map":
+        return execution
+    shop = execution.get("shopping")
+    if not shop and isinstance((top.get("meta") or {}).get("shopping"), dict):
+        shop = top["meta"]["shopping"]
+    if not shop:
+        try:
+            store_name = (feasibility.parse_profile(user, {}).get("food") or {}).get("store") or "ICA"
+        except Exception:
+            store_name = "ICA"
+        shop = shopping.build_shopping(
+            suggestion,
+            meta=top.get("meta") if isinstance(top.get("meta"), dict) else {},
+            store=store_name,
+        )
+    if not shop or not shopping.shopping_valid(shop, suggestion):
+        # Last chance: infer from dish name alone
+        shop = shopping.build_shopping(suggestion, store="ICA")
+    if not shop:
+        return execution
+    out = dict(execution)
+    out["type"] = out.get("type") or "recipe"
+    out["label"] = out.get("label") or ("Gör det nu" if language == "sv" else "Do it now")
+    out["shopping"] = shop
+    out["shopping_list"] = shop.get("to_buy")
+    out["detail"] = shopping.format_assumed_line(
+        list(shop.get("assumed_at_home") or []),
+        language=language,
+    )
+    return out
+
+
 def _execution_for(
     domain: str,
     suggestion: str,
@@ -1066,17 +1266,40 @@ def _execution_for(
     q = quote_plus(suggestion)
     sv = language == "sv"
     if domain == "food":
-        out_words = ("restaurang", "beställ", "bestall", "burger", "sushi", "thai", "order", "takeout")
-        if any(w in suggestion.lower() for w in out_words):
+        eat_out = any(
+            w in suggestion.lower()
+            for w in (
+                "restaurang",
+                "beställ",
+                "bestall",
+                "takeaway",
+                "hämtmat",
+                "hamtmat",
+                "order",
+                "takeout",
+                "äta ute",
+                "eat out",
+            )
+        )
+        if eat_out:
             return {
                 "type": "map",
                 "label": "Öppna karta" if sv else "Open map",
                 "url": f"https://www.google.com/maps/search/{q}",
             }
+        shop = shopping.build_shopping(suggestion, store="ICA")
         return {
             "type": "recipe",
-            "label": "Handla & laga" if sv else "Shop & cook",
-            "url": f"https://www.google.com/search?q={quote_plus(suggestion + ' recept' if sv else suggestion + ' recipe')}",
+            "label": "Gör det nu" if sv else "Do it now",
+            "url": None,
+            "shopping": shop,
+            "shopping_list": (shop or {}).get("to_buy"),
+            "detail": shopping.format_assumed_line(
+                list((shop or {}).get("assumed_at_home") or []),
+                language=language,
+            )
+            if shop
+            else None,
         }
     if domain == "clothes":
         return {

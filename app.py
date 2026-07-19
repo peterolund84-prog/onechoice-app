@@ -31,9 +31,26 @@ PRIMARY_SOFT = "#EAF1FF"
 BG = "#F4F6F8"
 BG_SOFT = "#EEF2F7"
 INK = "#1C1C1E"
-MUTED = "#8A8A96"
+MUTED = "#6B6B76"
 NAVY = "#3E5B84"
 SHADOW = "0 12px 40px rgba(62, 91, 132, 0.08)"
+
+# Lucide-style inline SVGs (stroke icons — no emoji)
+ICON_HOME = (
+    '<svg class="oc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/></svg>'
+)
+ICON_CLOCK = (
+    '<svg class="oc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+)
+ICON_USER = (
+    '<svg class="oc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>'
+)
 
 I18N = {
     "sv": {
@@ -149,12 +166,13 @@ def inject_css() -> None:
     st.markdown(
         f"""
 <style>
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700&display=swap");
 html, body, .stApp, [data-testid="stAppViewContainer"] {{
     background:
-        radial-gradient(110% 70% at 80% -5%, rgba(90,139,255,0.14) 0%, transparent 50%),
+        radial-gradient(110% 70% at 80% -5%, rgba(90,139,255,0.12) 0%, transparent 52%),
         linear-gradient(180deg, {BG} 0%, {BG_SOFT} 100%) !important;
-    font-family: "Pretendard", "Apple SD Gothic Neo", "Helvetica Neue", sans-serif !important;
+    font-family: "Manrope", "Helvetica Neue", sans-serif !important;
+    font-weight: 500;
     color: {INK}; -webkit-font-smoothing: antialiased;
 }}
 #MainMenu, footer, header, [data-testid="stToolbar"],
@@ -174,7 +192,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 }}
 .oc-logo em {{ font-style: normal; color: {PRIMARY}; }}
 .oc-tagline {{
-    text-align: center; color: {MUTED}; font-size: 0.95rem;
+    text-align: center; color: {MUTED}; font-size: 1rem;
     margin: 0 0 1.4rem; letter-spacing: -0.01em;
 }}
 .oc-lang {{
@@ -198,7 +216,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 .oc-domains a {{
     display: flex !important; align-items: center; justify-content: center;
     min-height: 2.7rem; border-radius: 999px; text-decoration: none;
-    background: #fff; color: #444; font-weight: 600; font-size: 0.82rem;
+    background: #fff; color: #444; font-weight: 600; font-size: 0.88rem;
     border: 1px solid rgba(62,91,132,0.08); box-shadow: {SHADOW};
 }}
 div[data-testid="stTextArea"] > div, .stTextArea > div, .stTextArea [data-baseweb="textarea"] {{
@@ -209,56 +227,114 @@ div[data-testid="stTextArea"] > div, .stTextArea > div, .stTextArea [data-basewe
     border-radius: 22px !important; min-height: 110px !important;
     font-size: 1.05rem !important; padding: 1.1rem 1.2rem !important;
     box-shadow: {SHADOW} !important; color: {INK} !important;
+    font-family: "Manrope", sans-serif !important;
 }}
 div.stButton {{ display: flex !important; justify-content: center !important; }}
 div.stButton > button[data-testid="baseButton-primary"] {{
     background: {PRIMARY} !important; color: #fff !important; border: none !important;
-    border-radius: 16px !important; font-weight: 600 !important; font-size: 1.05rem !important;
-    height: 52px !important; width: 100% !important;
+    border-radius: 16px !important; font-weight: 700 !important; font-size: 1.05rem !important;
+    height: 54px !important; width: 100% !important;
     box-shadow: 0 12px 28px rgba(90,139,255,0.32) !important;
+    font-family: "Manrope", sans-serif !important;
 }}
 div.stButton > button[data-testid="baseButton-secondary"] {{
-    background: #fff !important; color: #555 !important;
-    border: 1px solid rgba(62,91,132,0.08) !important;
-    border-radius: 16px !important; font-weight: 500 !important;
-    min-height: 48px !important; width: 100% !important;
+    background: transparent !important; color: {MUTED} !important;
+    border: none !important; box-shadow: none !important;
+    border-radius: 0 !important; font-weight: 500 !important;
+    min-height: 36px !important; width: auto !important;
+    font-size: 0.95rem !important; text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+    font-family: "Manrope", sans-serif !important;
+}}
+div.stButton > button[kind="secondary"] {{
+    background: transparent !important; color: {MUTED} !important;
+    border: none !important; box-shadow: none !important;
 }}
 @media (max-width: 768px) {{
-    div.stButton > button {{ height: 48px !important; font-size: 15px !important; }}
+    div.stButton > button[data-testid="baseButton-primary"] {{
+        height: 52px !important; font-size: 1rem !important;
+    }}
 }}
 .oc-decision {{
-    background: #fff; border-radius: 28px; padding: 1.75rem 1.4rem 1.4rem;
-    box-shadow: {SHADOW}; text-align: center; margin: 0.5rem 0 1rem;
+    background: #fff; border-radius: 28px;
+    padding: 2.4rem 1.5rem 2.1rem;
+    box-shadow: {SHADOW}; text-align: center;
+    margin: 1.1rem 0 1.35rem;
     border: 1px solid rgba(62,91,132,0.04);
 }}
 .oc-decision .label {{
-    font-size: 0.75rem; color: {MUTED}; letter-spacing: 0.04em;
-    text-transform: uppercase; margin-bottom: 0.65rem;
+    font-size: 0.72rem; color: {MUTED}; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 1.15rem; font-weight: 700;
 }}
 .oc-decision h1 {{
-    font-size: clamp(1.55rem, 6vw, 1.95rem); font-weight: 700;
-    letter-spacing: -0.04em; line-height: 1.2; margin: 0 0 0.75rem; color: {INK};
+    font-size: clamp(2.125rem, 7.2vw, 2.45rem); font-weight: 700;
+    letter-spacing: -0.045em; line-height: 1.12; margin: 0 0 1.1rem; color: {INK};
 }}
 .oc-decision p {{
-    font-size: 0.95rem; color: #5c5c66; line-height: 1.45; margin: 0;
+    font-size: 1.05rem; color: #3a3a42; line-height: 1.45; margin: 0;
+    max-width: 22rem; margin-left: auto; margin-right: auto;
 }}
 .oc-lock {{
-    display: inline-block; margin-top: 0.9rem; background: {PRIMARY_SOFT};
-    color: {PRIMARY}; font-weight: 700; font-size: 0.78rem;
+    display: inline-block; margin-top: 1.1rem; background: {PRIMARY_SOFT};
+    color: {PRIMARY}; font-weight: 700; font-size: 0.8rem;
     padding: 0.35rem 0.8rem; border-radius: 999px;
 }}
 .oc-refuse {{
     background: #fff; border-radius: 24px; padding: 1.6rem 1.3rem;
-    text-align: center; box-shadow: {SHADOW}; color: #555; font-size: 1rem;
+    text-align: center; box-shadow: {SHADOW}; color: #3a3a42; font-size: 1.05rem;
     line-height: 1.45; margin: 1rem 0;
 }}
-.oc-meta {{ text-align: center; color: {MUTED}; font-size: 0.8rem; margin: 0.4rem 0 0.8rem; }}
+.oc-meta {{ text-align: center; color: {MUTED}; font-size: 1rem; margin: 0.4rem 0 0.8rem; }}
+.oc-rerolls {{
+    display: flex; justify-content: center; gap: 0.45rem;
+    margin: 0.15rem 0 1.15rem;
+}}
+.oc-rerolls i {{
+    display: block; width: 7px; height: 7px; border-radius: 50%;
+    background: {PRIMARY}; opacity: 1;
+    transition: opacity 0.25s ease;
+}}
+.oc-rerolls i.used {{ opacity: 0.22; background: {MUTED}; }}
+.oc-shop {{
+    background: #fff; border-radius: 22px; padding: 1.25rem 1.2rem 1.1rem;
+    box-shadow: {SHADOW}; margin: 0 0 1.25rem;
+    border: 1px solid rgba(62,91,132,0.04); text-align: left;
+}}
+.oc-shop .oc-shop-title {{
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: {MUTED}; font-weight: 700; margin: 0 0 0.85rem;
+}}
+.oc-shop .oc-sec {{
+    font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
+    color: {MUTED}; font-weight: 700; margin: 0.95rem 0 0.4rem;
+}}
+.oc-shop .oc-sec:first-of-type {{ margin-top: 0; }}
+.oc-shop ul {{ list-style: none; margin: 0; padding: 0; }}
+.oc-shop li {{
+    display: flex; align-items: flex-start; gap: 0.65rem;
+    font-size: 1rem; color: {INK}; line-height: 1.4;
+    padding: 0.38rem 0;
+}}
+.oc-shop li::before {{
+    content: ""; flex: 0 0 1.05rem; width: 1.05rem; height: 1.05rem;
+    margin-top: 0.12rem; border-radius: 50%;
+    border: 1.5px solid rgba(62,91,132,0.28);
+    box-sizing: border-box;
+}}
+.oc-shop .oc-assumed {{
+    margin: 1rem 0 0; padding-top: 0.75rem;
+    border-top: 1px solid rgba(62,91,132,0.08);
+    font-size: 0.92rem; color: {MUTED}; line-height: 1.4;
+}}
+.oc-link-wrap {{
+    text-align: center; margin: 0.35rem 0 0.9rem;
+}}
 .oc-hist {{
     background: #fff; border-radius: 18px; padding: 1rem 1.1rem;
     margin-bottom: 0.7rem; box-shadow: {SHADOW};
 }}
-.oc-hist strong {{ display: block; font-size: 1.02rem; margin-bottom: 0.2rem; }}
-.oc-hist span {{ font-size: 0.74rem; color: #999; }}
+.oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.2rem; }}
+.oc-hist span {{ font-size: 0.9rem; color: {MUTED}; }}
 .oc-pro {{
     background: #fff; border-radius: 28px; padding: 2rem 1.5rem;
     text-align: center; box-shadow: {SHADOW}; margin-top: 1.5rem;
@@ -271,17 +347,17 @@ div.stButton > button[data-testid="baseButton-secondary"] {{
     width: min(360px, calc(100vw - 1.2rem)) !important; z-index: 1100 !important;
     display: grid !important; grid-template-columns: 1fr 1fr 1fr !important;
     gap: 0.15rem !important; background: rgba(255,255,255,0.96) !important;
-    border-radius: 999px !important; padding: 0.3rem 0.35rem !important;
+    border-radius: 999px !important; padding: 0.35rem 0.4rem !important;
     box-shadow: 0 12px 36px rgba(62,91,132,0.14) !important;
     border: 1px solid rgba(62,91,132,0.06) !important;
 }}
 .oc-nav a {{
     display: flex !important; flex-direction: column; align-items: center; justify-content: center;
-    gap: 0.1rem; text-decoration: none; color: {MUTED}; font-size: 0.62rem; font-weight: 500;
-    padding: 0.45rem 0.15rem; border-radius: 999px; line-height: 1.25;
+    gap: 0.2rem; text-decoration: none; color: {MUTED}; font-size: 0.68rem; font-weight: 500;
+    padding: 0.5rem 0.15rem; border-radius: 999px; line-height: 1.2;
 }}
 .oc-nav a.active {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; font-weight: 700; }}
-.oc-nav a span {{ font-size: 1.05rem; line-height: 1; }}
+.oc-nav .oc-ico {{ width: 1.15rem; height: 1.15rem; display: block; }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
 div[data-testid="stHorizontalBlock"] {{
     display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
@@ -467,18 +543,59 @@ def lang_bar() -> None:
 def nav() -> None:
     page = st.session_state.page
     items = (
-        ("home", "\U0001f3e0", t("home"), page in ("home", "result")),
-        ("history", "\U0001f552", t("history"), page == "history"),
-        ("profile", "\U0001f464", t("profile"), page == "profile"),
+        ("home", ICON_HOME, t("home"), page in ("home", "result")),
+        ("history", ICON_CLOCK, t("history"), page == "history"),
+        ("profile", ICON_USER, t("profile"), page == "profile"),
     )
     links = []
     for key, icon, name, active in items:
         cls = "active" if active else ""
         links.append(
-            f'<a class="{cls}" href="?nav={key}"><span>{icon}</span>{html.escape(name)}</a>'
+            f'<a class="{cls}" href="?nav={key}">{icon}<span>{html.escape(name)}</span></a>'
         )
     st.markdown(
         f'<nav class="oc-nav" aria-label="Navigation">{"".join(links)}</nav>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_reroll_dots(reroll_index: int) -> None:
+    """Three dots that fade as rerolls are used — not a game counter."""
+    dots = []
+    for i in range(pipeline.MAX_REROLLS):
+        cls = "used" if i < reroll_index else ""
+        dots.append(f'<i class="{cls}"></i>')
+    st.markdown(
+        f'<div class="oc-rerolls" aria-label="{html.escape(t("rerolls_left").format(n=max(0, pipeline.MAX_REROLLS - reroll_index)))}">'
+        f'{"".join(dots)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_shopping_card(shop: dict[str, Any] | None, language: str) -> None:
+    if not shop or not isinstance(shop, dict):
+        return
+    to_buy = shop.get("to_buy") or {}
+    if not to_buy:
+        return
+    import shopping as shopping_mod
+
+    sections = []
+    title = "Inköpslista" if language == "sv" else "Shopping list"
+    store = shop.get("store") or "ICA"
+    sections.append(f'<div class="oc-shop-title">{html.escape(f"{title} · {store}")}</div>')
+    for section, items in to_buy.items():
+        if not items:
+            continue
+        sections.append(f'<div class="oc-sec">{html.escape(section)}</div><ul>')
+        for item in items:
+            sections.append(f"<li>{html.escape(str(item))}</li>")
+        sections.append("</ul>")
+    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
+    sections.append(f'<p class="oc-assumed">{html.escape(assumed_line)}</p>')
+    st.markdown(
+        f'<div class="oc-shop">{"".join(sections)}</div>',
         unsafe_allow_html=True,
     )
 
@@ -683,6 +800,7 @@ def page_result() -> None:
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     cur = st.session_state.current or {}
+    language = st.session_state.get("language", "sv")
 
     if cur.get("refused"):
         msg = cur.get("refusal_message") or t("refuse")
@@ -698,7 +816,6 @@ def page_result() -> None:
     domain = cur.get("domain") or ""
     locked = bool(cur.get("locked"))
     reroll_index = int(cur.get("reroll_index") or 0)
-    left = max(0, pipeline.MAX_REROLLS - reroll_index)
 
     lock_html = ""
     if locked:
@@ -717,59 +834,63 @@ def page_result() -> None:
     )
 
     if not locked:
-        st.markdown(
-            f'<p class="oc-meta">{html.escape(t("rerolls_left").format(n=left))}</p>',
-            unsafe_allow_html=True,
-        )
+        render_reroll_dots(reroll_index)
 
-    # Execution CTA
+    ctx = cur.get("context") or {}
+    shop = ctx.get("shopping")
+    if domain == "food" and isinstance(shop, dict):
+        render_shopping_card(shop, language)
+    elif domain == "food":
+        # Fallback detail line only when structured list missing
+        exec_detail = ctx.get("execution_detail")
+        if exec_detail:
+            st.markdown(
+                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
+                unsafe_allow_html=True,
+            )
+    else:
+        exec_detail = ctx.get("execution_detail")
+        if exec_detail:
+            st.markdown(
+                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
+                unsafe_allow_html=True,
+            )
+
+    # One primary action — “Gör det nu”
     exec_url = cur.get("execution_url")
     exec_label = cur.get("execution_label") or t("do_it")
-    exec_detail = (cur.get("context") or {}).get("execution_detail")
-    if exec_detail:
-        st.markdown(
-            f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
-            unsafe_allow_html=True,
-        )
-    if exec_url:
-        st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
-    elif exec_detail and not exec_url:
-        st.button(exec_label, type="primary", use_container_width=True, disabled=True)
 
     if locked:
-        if cur.get("decision_id") and st.button(t("accepted"), use_container_width=True):
+        if cur.get("decision_id") and st.button(t("accepted"), type="primary", use_container_width=True):
             pipeline.accept_decision(
                 int(cur["decision_id"]),
                 route_log_id=cur.get("route_log_id") or st.session_state.route_log_id,
             )
             st.toast(t("accepted"))
     else:
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button(t("new"), use_container_width=True):
-                # Reroll stays on same domain; free-text rerolls keep router context
-                via = bool(cur.get("route") or st.session_state.route_log_id)
-                run_decision(
-                    question=st.session_state.last_question,
-                    domain_hint=st.session_state.last_domain_hint or cur.get("domain"),
-                    reroll=True,
-                    via_router=via,
-                )
-        with c2:
-            if st.button(t("do_it"), type="primary", use_container_width=True):
+        if exec_url:
+            st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
+        else:
+            if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
                 if cur.get("decision_id"):
                     pipeline.accept_decision(
                         int(cur["decision_id"]),
                         route_log_id=cur.get("route_log_id") or st.session_state.route_log_id,
                     )
                 st.toast(t("accepted"))
-                if exec_url:
-                    st.markdown(
-                        f'<meta http-equiv="refresh" content="0;url={html.escape(exec_url, quote=True)}">',
-                        unsafe_allow_html=True,
-                    )
 
-    if st.button(t("home"), key="back_home", use_container_width=True):
+        # Secondary: text-link style “Nytt förslag” below primary
+        st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
+        if st.button(t("new"), type="secondary", use_container_width=True, key="reroll_link"):
+            via = bool(cur.get("route") or st.session_state.route_log_id)
+            run_decision(
+                question=st.session_state.last_question,
+                domain_hint=st.session_state.last_domain_hint or cur.get("domain"),
+                reroll=True,
+                via_router=via,
+            )
+
+    if st.button(t("home"), key="back_home", type="secondary", use_container_width=True):
         st.session_state.page = "home"
         st.rerun()
     nav()
