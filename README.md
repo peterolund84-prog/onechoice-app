@@ -1,59 +1,118 @@
-# OneChoice
+# OneChoice + Supabase
 
-AI that makes **one** everyday decision for you — never a list.
+AI that makes **one** everyday decision — never a list.  
+Streamlit UI · Supabase Auth + Postgres · premium mobile design.
 
-## Stack
-
-- Frontend: Streamlit (premium mobile CSS)
-- Database: SQLite (`onechoice.db`)
-- LLM: Grok (xAI) via API — local fallback if no key
-- Payments: Stripe (demo mode without key)
-
-## Files
+## Projektstruktur
 
 ```
-app.py           # Streamlit UI — one decision loop
-pipeline.py      # decide() pipeline
-db.py            # SQLite users / decisions / preferences
-test_pipeline.py # Unit tests
+app.py                 # Streamlit UI (login, beslut, historik)
+pipeline.py            # decide() — shared one-decision pipeline
+feasibility.py         # Domain validators (never show broken decisions)
+mocks.py               # V1 Zalando stock + JustWatch streaming catalogs
+db.py                  # SQLite (demo) + router till Supabase
+supabase_client.py     # Auth (sign up / sign in)
+supabase_store.py      # Profiles, decisions, preferences via Supabase
+supabase/schema.sql    # SQL att köra i Supabase
+DOMAIN_SPEC.md         # Canonical domain specification
+test_pipeline.py       # Unit tests (SQLite)
+test_feasibility.py    # Feasibility unit tests
+.streamlit/secrets.toml
+requirements.txt
 ```
 
-## Data model
+## 1) Skapa Supabase-projekt
 
-- **users** — language, pro, budget, dietary, location, wardrobe
-- **decisions** — domain, suggestion, justification, accepted/rejected/locked, reroll index, context snapshot, execution link
-- **preferences** — scored signals from accepts/rejects (the moat)
+1. Gå till [https://supabase.com](https://supabase.com) → **New project**
+2. Vänta tills projektet är klart
+3. **Project Settings → API**
+   - kopiera **Project URL** → `SUPABASE_URL`
+   - kopiera **anon public** key → `SUPABASE_KEY`
+
+## 2) Kör SQL-schemat
+
+1. Öppna **SQL Editor** i Supabase
+2. Klistra in hela filen `supabase/schema.sql`
+3. Klicka **Run**
+
+Schemat skapar:
+- `profiles` (kopplad till `auth.users`)
+- `decisions`
+- `preferences`
+- trigger som skapar profil vid signup
+- **Row Level Security** så varje användare bara ser sin data
+
+## 3) Auth-inställningar
+
+1. **Authentication → Providers → Email** → aktivera
+2. För snabb demo: **Authentication → Providers → Email**  
+   stäng av “Confirm email” (annars måste användare bekräfta mail innan login)
+
+## 4) Secrets lokalt
+
+```bash
+cp .streamlit/secrets.toml.example .streamlit/secrets.toml
+```
+
+Redigera `.streamlit/secrets.toml`:
+
+```toml
+SUPABASE_URL = "https://xxxx.supabase.co"
+SUPABASE_KEY = "eyJhbGciOi..."   # anon public key
+
+GROK_API_KEY = "xai-..."         # valfritt
+STRIPE_SECRET_KEY = "sk_test-..." # valfritt
+```
+
+> Använd **anon/public** key i Streamlit-klienten (RLS skyddar datan).  
+> Dela aldrig `service_role` key i frontend.
+
+## 5) Installera & kör
+
+```bash
+pip install -r requirements.txt
+python -m streamlit run app.py
+```
+
+- Med Supabase-nycklar → inloggningssida (email/lösenord)
+- Utan nycklar → **gästläge** med lokal SQLite (bra för demo/tester)
+
+## 6) Streamlit Cloud
+
+1. Pusha repo till GitHub
+2. Deploya på Streamlit Cloud
+3. Under **App settings → Secrets** klistra in samma `secrets.toml`-innehåll
 
 ## Decision pipeline
 
 `pipeline.decide(user_id, question, ...)`
 
 1. Classify domain (or refuse high-stakes)
-2. Collect context (time, weekday, weather, location, budget, dietary)
-3. Load history + preferences
+2. Collect context + parse domain profile
+3. Load history + preferences (7-day repetition guard)
 4. Generate ~5 internal candidates (Grok or local)
-5. Rank with bandit (80% safe / 20% explore) + repetition guard
-6. Return **only the top one** + execution step
+5. **Feasibility gate** — discard anything that fails the domain validator
+6. Rank survivors (80% close to history / 20% wildcard)
+7. Return **only the top one** + one-line justification + execution step
 
-Max 3 rerolls → lock: “It’s X. Go.”
+Max 3 rerolls → lock. See `DOMAIN_SPEC.md`.
 
-## Domains
+## Funktioner
 
-Food · Clothes · Movie · Workout · Weekend activity
+| Funktion | Beskrivning |
+|----------|-------------|
+| Login / signup | Supabase Auth |
+| Ett beslut | Aldrig lista — `pipeline.decide()` |
+| Feasibility | Trasiga beslut visas aldrig |
+| Spara beslut | Supabase `decisions` (+ SQLite i gästläge) |
+| Historik | Hämtas per inloggad användare (RLS) |
+| Preferenser | Accept/reject → scored preferences |
+| Design | Premium koreansk estetik, mobil grid-nav |
 
-High-stakes (jobs, relationships, money, health) → hard refuse.
-
-## Run
+## Tester
 
 ```bash
-pip install -r requirements.txt
-python -m streamlit run app.py
-python -m unittest test_pipeline.py
+python -m unittest test_pipeline.py test_feasibility.py
 ```
 
-## Secrets (`.streamlit/secrets.toml`)
-
-```toml
-GROK_API_KEY = "xai-..."
-STRIPE_SECRET_KEY = "sk_test_..."
-```
+Unit tests kör alltid mot SQLite (isolerad temp-db).

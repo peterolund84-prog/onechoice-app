@@ -30,11 +30,13 @@ class OneChoiceTests(unittest.TestCase):
         r = pipeline.decide(
             self.user["id"],
             "Ska jag säga upp mig från jobbet?",
+            language="sv",
             db_path=self.db_path,
         )
         self.assertTrue(r.refused)
         self.assertFalse(r.ok)
-        self.assertIn("everyday decisions", r.refusal_message or "")
+        self.assertIn("vardagsbesluten", r.refusal_message or "")
+        self.assertIn("ditt", r.refusal_message or "")
 
     def test_one_decision_food(self) -> None:
         r = pipeline.decide(
@@ -114,7 +116,9 @@ class OneChoiceTests(unittest.TestCase):
             db_path=self.db_path,
         )
         self.assertTrue(r.execution_type in ("recipe", "map"))
-        self.assertTrue(r.execution_url)
+        # Feasible home cooking may attach shopping detail without external URL
+        self.assertTrue(r.execution_label)
+        self.assertTrue(r.execution_url or (r.context or {}).get("execution_detail"))
 
     def test_swedish_output_not_mixed(self) -> None:
         r = pipeline.decide(
