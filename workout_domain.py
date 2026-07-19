@@ -379,6 +379,16 @@ def get_workout_from_decision(cur: dict[str, Any] | None) -> Workout | None:
     if not isinstance(cur, dict):
         return None
     ctx = cur.get("context") or {}
+    if isinstance(ctx, str):
+        try:
+            import json
+
+            parsed = json.loads(ctx)
+            ctx = parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            ctx = {}
+    if not isinstance(ctx, dict):
+        return None
     w = ctx.get("workout")
     if isinstance(w, dict) and w.get("blocks"):
         return finalize_workout(w, language="sv")

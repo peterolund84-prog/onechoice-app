@@ -617,7 +617,12 @@ def recent_suggestions(
             out: list[str] = []
             for d in decisions:
                 ctx = d.get("context") or {}
-                if ctx.get("meal_type") == meal_type and d.get("suggestion"):
+                if isinstance(ctx, str):
+                    try:
+                        ctx = json.loads(ctx)
+                    except Exception:
+                        ctx = {}
+                if isinstance(ctx, dict) and ctx.get("meal_type") == meal_type and d.get("suggestion"):
                     out.append(d["suggestion"])
             return out
         return rows
