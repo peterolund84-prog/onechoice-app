@@ -1,51 +1,59 @@
 # OneChoice
 
-Generell AI-beslutshjälpare med minimalistisk premium koreansk estetik.
+AI that makes **one** everyday decision for you — never a list.
 
-## Filer
+## Stack
+
+- Frontend: Streamlit (premium mobile CSS)
+- Database: SQLite (`onechoice.db`)
+- LLM: Grok (xAI) via API — local fallback if no key
+- Payments: Stripe (demo mode without key)
+
+## Files
 
 ```
-onechoice/
-├── app.py
-├── requirements.txt
-├── README.md
-└── .streamlit/
-    └── secrets.toml
+app.py           # Streamlit UI — one decision loop
+pipeline.py      # decide() pipeline
+db.py            # SQLite users / decisions / preferences
+test_pipeline.py # Unit tests
 ```
 
-## Starta
+## Data model
+
+- **users** — language, pro, budget, dietary, location, wardrobe
+- **decisions** — domain, suggestion, justification, accepted/rejected/locked, reroll index, context snapshot, execution link
+- **preferences** — scored signals from accepts/rejects (the moat)
+
+## Decision pipeline
+
+`pipeline.decide(user_id, question, ...)`
+
+1. Classify domain (or refuse high-stakes)
+2. Collect context (time, weekday, weather, location, budget, dietary)
+3. Load history + preferences
+4. Generate ~5 internal candidates (Grok or local)
+5. Rank with bandit (80% safe / 20% explore) + repetition guard
+6. Return **only the top one** + execution step
+
+Max 3 rerolls → lock: “It’s X. Go.”
+
+## Domains
+
+Food · Clothes · Movie · Workout · Weekend activity
+
+High-stakes (jobs, relationships, money, health) → hard refuse.
+
+## Run
 
 ```bash
-cd C:\Users\DELL\Projekt\onechoice
 pip install -r requirements.txt
 python -m streamlit run app.py
+python -m unittest test_pipeline.py
 ```
 
-## Hemligheter
-
-`.streamlit/secrets.toml`:
+## Secrets (`.streamlit/secrets.toml`)
 
 ```toml
 GROK_API_KEY = "xai-..."
 STRIPE_SECRET_KEY = "sk_test_..."
 ```
-
-Utan nycklar körs **demo-läge**.
-
-## Funktioner
-
-- SV / EN språkväxlare
-- Ämnesdetektering (mat, kläder, resor, karriär, kväll …)
-- 3 förslag med matchande bilder
-- **Se recept** / **Mer info** + **Beställ nu**
-- Historik + Pro (Stripe)
-- Grok API med chain-of-thought
-
-## Design
-
-- Bakgrund `#F4F6F8` med mjuk blå gradient
-- Primär `#5A8BFF`
-- Pretendard-typografi, runda SV/EN-knappar uppe till höger
-- Stort rent input-fält utan nestlade vita boxar
-- Stora rundade knappar, generös spacing
-- Mobil-först, soft shadow, glass-nav
