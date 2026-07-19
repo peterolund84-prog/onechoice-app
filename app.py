@@ -105,6 +105,9 @@ ICON_USER = (
     '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>'
 )
 
+# Visible on home — confirms Cloud has this build (not a cached old deploy)
+BUILD_ID = "handla-v4-20260719"
+
 I18N = {
     "sv": {
         "tagline": "Ett beslut. Klart.",
@@ -1229,7 +1232,10 @@ def _is_food_cook(cur: dict[str, Any]) -> bool:
 def _is_streamlit_control_flow(exc: BaseException) -> bool:
     """st.rerun() / st.stop() must never be swallowed by the error boundary."""
     name = type(exc).__name__
-    if name in ("RerunException", "StopException") or name.startswith("Rerun"):
+    # Broad match — Cloud Streamlit versions rename/move these classes
+    if "Rerun" in name or name in ("StopException", "StopException"):
+        return True
+    if name.startswith("Stop"):
         return True
     mod = getattr(type(exc), "__module__", "") or ""
     if "scriptrunner" in mod and ("Rerun" in name or "Stop" in name):
@@ -1325,6 +1331,8 @@ def _lock_current_locally(cur: dict[str, Any] | None = None) -> dict[str, Any]:
     if not isinstance(cur, dict):
         cur = {}
     updated = dict(cur)
+    # Heal Cloud/Supabase JSON-string context before any .get() downstream
+    updated["context"] = _as_dict(updated.get("context"))
     updated["locked"] = True
     updated["accepted"] = True
     st.session_state.accepted = True
@@ -1347,9 +1355,7 @@ def _ensure_workout_in_session(cur: dict[str, Any]) -> dict[str, Any]:
                 language=language,
             )
         updated = dict(cur)
-        ctx = dict(updated.get("context") or {})
-        if not isinstance(ctx, dict):
-            ctx = {}
+        ctx = _as_dict(updated.get("context"))
         ctx["workout"] = w
         ctx["execution_detail"] = wd.detail_from_workout(w, language)
         updated["context"] = ctx
@@ -1418,17 +1424,13 @@ def _drain_pending_open_execute() -> None:
 
 
 def open_execute_now(cur: dict[str, Any] | None = None) -> None:
-    """
-    Open execute IMMEDIATELY — never wait for DB/Supabase first.
-
-    Fallback when on_click is ignored. st.rerun() must always propagate.
-    """
+    """Open execute immediately. st.rerun() must always propagate."""
     _prepare_execute_local(cur)
     st.rerun()
 
 
 def _flush_db_accept() -> None:
-    """Best-effort persist accept — sync via pipeline (UI already visible)."""
+    """Best-effort persist accept — sync, only after UI is already visible."""
     if not _session_pop("pending_db_accept", None):
         return
     cur = st.session_state.get("current")
@@ -1438,8 +1440,6 @@ def _flush_db_accept() -> None:
     try:
         if st.session_state.get("guest_mode"):
             db.clear_auth()
-        # Call pipeline directly — accept_current_decision early-returns when
-        # session already has accepted=True from the local lock.
         pipeline.try_accept_decision(did, route_log_id=rid)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
@@ -1448,31 +1448,8 @@ def _flush_db_accept() -> None:
 
 
 def _flush_db_accept_bg() -> None:
-    """Non-blocking DB accept — must not delay execute first paint on Cloud."""
-    if not _session_pop("pending_db_accept", None):
-        return
-    cur = st.session_state.get("current")
-    cur = cur if isinstance(cur, dict) else {}
-    did = cur.get("decision_id") or st.session_state.get("decision_id")
-    rid = cur.get("route_log_id") or st.session_state.get("route_log_id")
-    guest = bool(st.session_state.get("guest_mode"))
-
-    def work() -> None:
-        try:
-            if guest:
-                db.clear_auth()
-            pipeline.try_accept_decision(did, route_log_id=rid)
-        except Exception as exc:
-            log.exception("bg accept failed: %s", exc)
-
-    try:
-        import threading
-
-        threading.Thread(target=work, daemon=True).start()
-    except Exception as exc:
-        log.exception("bg accept thread failed to start: %s", exc)
-        # Sync fallback — still after navigate
-        work()
+    """Deprecated alias — Cloud threading was unsafe; always sync after paint."""
+    _flush_db_accept()
 
 
 def on_accept_primary(cur: dict[str, Any]) -> None:
@@ -1583,12 +1560,21 @@ def render_error_boundary() -> None:
     )
     detail = st.session_state.get("_last_ui_error")
     if detail:
-        st.caption(html.escape(str(detail)[:180]))
+        st.markdown(
+            f'<p class="oc-meta" style="color:#b00020">{html.escape(str(detail)[:240])}</p>',
+            unsafe_allow_html=True,
+        )
+    st.caption(f"build {BUILD_ID}")
     if st.button(t("retry"), type="primary", use_container_width=True, key="ui_error_retry"):
         st.session_state.ui_error = None
         st.session_state._last_ui_error = None
-        # Stay on a safe page
-        if st.session_state.get("page") not in (
+        # Prefer returning to execute if we have a decision (Handla recovery)
+        cur = st.session_state.get("current") or {}
+        if isinstance(cur, dict) and cur.get("suggestion") and (
+            st.session_state.get("accepted") or cur.get("accepted") or cur.get("locked")
+        ):
+            st.session_state.page = "execute"
+        elif st.session_state.get("page") not in (
             "home",
             "result",
             "execute",
@@ -1619,6 +1605,7 @@ def page_home() -> None:
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="oc-tagline">{html.escape(t("tagline"))}</p>', unsafe_allow_html=True)
+    st.caption(f"build {BUILD_ID}")
 
     # Real Streamlit buttons — styled as chips via horizontal-block CSS
     domains = ("food", "clothes", "movie", "workout", "weekend")
@@ -1750,7 +1737,7 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
 
     language = st.session_state.get("language", "sv")
     current = (
-        (cur.get("context") or {}).get("meal_type")
+        _as_dict(cur.get("context")).get("meal_type")
         or st.session_state.get("food_meal_type")
         or fd.default_meal_type()
     )
@@ -1808,6 +1795,12 @@ def page_result() -> None:
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict):
         cur = {}
+    # Normalize context once — Cloud/Supabase may leave a JSON string
+    ctx_norm = _as_dict(cur.get("context"))
+    if cur.get("context") is not ctx_norm:
+        cur = dict(cur)
+        cur["context"] = ctx_norm
+        st.session_state.current = cur
     language = st.session_state.get("language", "sv")
     accepted = bool(st.session_state.get("accepted") or cur.get("accepted"))
     reroll_locked = bool(cur.get("locked"))
@@ -1833,8 +1826,8 @@ def page_result() -> None:
     food_cook = _is_food_cook(cur)
 
     if show_lock_card:
-        # Lock card — share is the distribution channel (icon top-right)
-        if accepted or reroll_locked:
+        # Lock card — share for non-food; food prioritizes Handla reliability
+        if (accepted or reroll_locked) and (domain or "") != "food":
             st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
             render_share_for_decision(cur, key="share_lock_icon", icon=True)
         title = (
@@ -1871,9 +1864,7 @@ def page_result() -> None:
                     type="primary",
                     use_container_width=True,
                     key="handla_reopen",
-                    on_click=_cb_open_execute,
                 ):
-                    # Fallback when host ignores on_click
                     open_execute_now(cur)
             else:
                 label = cur.get("execution_label") or (
@@ -1948,14 +1939,13 @@ def page_result() -> None:
             )
 
     if food_cook and show_shop:
-        # Primary: Handla & laga → accept + execute view (middag)
+        # Primary: Handla & laga → execute (plain button — Cloud-safe)
         label = cur.get("execution_label") or t("handla_laga")
         if st.button(
             label,
             type="primary",
             use_container_width=True,
             key="handla_accept",
-            on_click=_cb_open_execute,
         ):
             open_execute_now(cur)
     elif food_cook and not show_shop:
@@ -2263,7 +2253,7 @@ def _record_workout_feel(
             )
         # Mirror into session context for history visibility
         updated = dict(cur)
-        ctx = dict(updated.get("context") or {})
+        ctx = _as_dict(updated.get("context"))
         ctx["post_feedback"] = "up" if positive else "down"
         updated["context"] = ctx
         st.session_state.current = updated
@@ -2273,13 +2263,8 @@ def _record_workout_feel(
 
 def page_execute() -> None:
     """Execution view: food shopping/recipe OR workout player."""
-    # Persist accept in background so first paint never waits on Supabase
-    try:
-        _flush_db_accept_bg()
-    except BaseException as exc:
-        if _is_streamlit_control_flow(exc):
-            raise
-        log.exception("flush db accept bg failed: %s", exc)
+    # Clear sticky error so Handla always gets a clean paint
+    st.session_state.ui_error = None
 
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
@@ -2289,15 +2274,21 @@ def page_execute() -> None:
         st.rerun()
         return
 
-    # Must be accepted/locked to be here; enforce
+    # Soft-lock if we landed here without accept flag (Cloud race)
     if not (st.session_state.get("accepted") or cur.get("accepted") or cur.get("locked")):
-        st.session_state.page = "result"
-        st.rerun()
-        return
+        try:
+            _lock_current_locally(cur)
+        except Exception:
+            st.session_state.accepted = True
 
     language = st.session_state.get("language", "sv")
-    domain = cur.get("domain") or ""
+    domain = (cur.get("domain") or "").strip()
     ctx = _as_dict(cur.get("context"))
+    # Persist healed context so later renders never see a JSON string
+    if cur.get("context") is not ctx:
+        cur = dict(cur)
+        cur["context"] = ctx
+        st.session_state.current = cur
 
     # ----- Workout player -----
     if domain == "workout" or cur.get("execution_type") == "workout":
@@ -2333,6 +2324,10 @@ def page_execute() -> None:
                 st.session_state.page = "result"
                 st.rerun()
             nav()
+            try:
+                _flush_db_accept()
+            except Exception:
+                pass
             return
         except BaseException as exc:
             if _is_streamlit_control_flow(exc):
@@ -2342,6 +2337,7 @@ def page_execute() -> None:
                 f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
                 unsafe_allow_html=True,
             )
+            st.caption(html.escape(f"{type(exc).__name__}: {exc}")[:180])
             if st.button(t("retry"), type="primary", use_container_width=True, key="wo_exec_retry"):
                 _reset_workout_player()
                 st.rerun()
@@ -2351,20 +2347,23 @@ def page_execute() -> None:
             nav()
             return
 
-    # ----- Food shopping + recipe -----
-    try:
-        suggestion = str(cur.get("suggestion") or "")
-        st.markdown(
-            f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
-            f'<div class="label">{html.escape(domain_label(domain or "food"))}</div>'
-            f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
-            f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+    # ----- Food shopping + recipe (minimal — never escalates to ui_error) -----
+    suggestion = str(cur.get("suggestion") or "")
+    st.markdown(
+        f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
+        f'<div class="label">{html.escape(domain_label(domain or "food"))}</div>'
+        f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
+        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
-        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
-        recipe = ctx.get("recipe") or (shop or {}).get("recipe")
+    shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
+    if not recipe and shop and isinstance(shop.get("recipe"), dict):
+        recipe = shop.get("recipe")
+
+    try:
         import shopping as shopping_mod
 
         active_mins = None
@@ -2373,85 +2372,73 @@ def page_execute() -> None:
                 active_mins = int(recipe["active_minutes"])
             except (TypeError, ValueError):
                 active_mins = None
-
-        # Always rebuild recipe from shopping ingredients so dish-name protein is present
         if shop:
-            recipe = shopping_mod.build_recipe(
-                suggestion,
-                shop.get("ingredients"),
-                active_minutes=active_mins,
-            )
-            ctx = dict(ctx)
-            ctx["recipe"] = recipe
-            if "kyckling" in suggestion.lower() or "chicken" in suggestion.lower():
-                flat: list[str] = []
-                raw_buy = shop.get("to_buy") or {}
-                if isinstance(raw_buy, dict):
-                    for _section, items in raw_buy.items():
-                        if isinstance(items, str):
-                            items = [items]
-                        if not isinstance(items, (list, tuple)):
-                            continue
-                        for i in items:
-                            flat.append(shopping_mod._strip_hint(i))
-                if shopping_mod._missing_main_protein(suggestion, flat):
-                    rebuilt = shopping_mod.build_shopping(
-                        suggestion, meta={"ingredients": shop.get("ingredients") or []}
-                    )
-                    if rebuilt:
-                        shop = rebuilt
-                        ctx["shopping"] = rebuilt
-                        recipe = rebuilt.get("recipe") or recipe
-                        if active_mins is not None and isinstance(recipe, dict):
-                            recipe = dict(recipe)
-                            recipe["active_minutes"] = active_mins
-            cur = dict(cur)
-            cur["context"] = ctx
-            st.session_state.current = cur
+            try:
+                recipe = shopping_mod.build_recipe(
+                    suggestion,
+                    shop.get("ingredients"),
+                    active_minutes=active_mins,
+                )
+            except Exception as exc:
+                log.warning("build_recipe failed: %s", exc)
         elif not recipe:
-            recipe = shopping_mod.build_recipe(suggestion, active_minutes=active_mins)
+            try:
+                recipe = shopping_mod.build_recipe(suggestion, active_minutes=active_mins)
+            except Exception as exc:
+                log.warning("build_recipe empty failed: %s", exc)
+    except Exception as exc:
+        log.warning("shopping import/build failed: %s", exc)
 
-        if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+        try:
             st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
+        except Exception:
+            pass
 
-        did = _active_decision_id(cur)
+    did = _active_decision_id(cur)
+    try:
         render_checkable_shopping(shop, did)
+    except Exception as exc:
+        log.warning("shopping list render failed: %s", exc)
+        if shop and isinstance(shop.get("to_buy"), dict):
+            lines = []
+            for sec, items in shop["to_buy"].items():
+                if not isinstance(items, (list, tuple)):
+                    continue
+                lines.append(f"**{html.escape(str(sec))}**")
+                for it in items:
+                    lines.append(f"- {html.escape(str(it))}")
+            if lines:
+                st.markdown("\n".join(lines))
+
+    try:
         ings_fallback = None
         if isinstance(shop, dict):
             raw_ings = shop.get("ingredients") or []
-            ings_fallback = list(raw_ings) if isinstance(raw_ings, (list, tuple)) else None
+            if isinstance(raw_ings, (list, tuple)):
+                ings_fallback = list(raw_ings)
         render_recipe_block(
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
         )
+    except Exception as exc:
+        log.warning("recipe render failed: %s", exc)
 
-        # Share is lazy (button only) — never runs iframe/DB on first paint
-        render_share_for_decision(cur, key="share_food_execute", icon=False)
+    if st.button(
+        t("back_to_decision"),
+        type="secondary",
+        use_container_width=True,
+        key="exec_back",
+    ):
+        st.session_state.page = "result"
+        st.rerun()
+    nav()
 
-        if st.button(
-            t("back_to_decision"),
-            type="secondary",
-            use_container_width=True,
-            key="exec_back",
-        ):
-            st.session_state.page = "result"
-            st.rerun()
-        nav()
-    except BaseException as exc:
-        if _is_streamlit_control_flow(exc):
-            raise
-        log.exception("food execute failed: %s", exc)
-        st.session_state._last_ui_error = f"{type(exc).__name__}: {exc}"
-        st.markdown(
-            f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
-            unsafe_allow_html=True,
-        )
-        if st.button(t("retry"), type="primary", use_container_width=True, key="food_exec_retry"):
-            st.rerun()
-        if st.button(t("home"), use_container_width=True, key="food_exec_home"):
-            st.session_state.page = "home"
-            st.rerun()
-        nav()
+    # Persist accept AFTER the user can already see the list/recipe
+    try:
+        _flush_db_accept()
+    except Exception as exc:
+        log.warning("post-paint accept failed: %s", exc)
 
 
 def page_history() -> None:
@@ -2918,6 +2905,35 @@ def main() -> None:
         # Never blank the screen — show friendly error
         log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
         st.session_state._last_ui_error = f"{type(exc).__name__}: {exc}"
+        # Soft recover for Handla/execute/result — full boundary was a dead end on Cloud
+        if page_name in ("execute", "result"):
+            st.session_state.ui_error = None
+            st.session_state.page = "execute" if page_name == "execute" else page_name
+            st.markdown(
+                f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown(
+                f'<p class="oc-meta" style="color:#b00020">'
+                f'{html.escape(str(st.session_state._last_ui_error)[:240])}</p>',
+                unsafe_allow_html=True,
+            )
+            st.caption(f"build {BUILD_ID}")
+            cur = st.session_state.get("current") or {}
+            if isinstance(cur, dict) and cur.get("suggestion"):
+                st.markdown(
+                    f'<div class="oc-decision"><h1>{html.escape(str(cur.get("suggestion")))}</h1></div>',
+                    unsafe_allow_html=True,
+                )
+            if st.button(t("retry"), type="primary", use_container_width=True, key="soft_retry"):
+                st.session_state.page = "execute"
+                st.session_state.accepted = True
+                st.rerun()
+            if st.button(t("home"), use_container_width=True, key="soft_home"):
+                st.session_state.page = "home"
+                st.rerun()
+            nav()
+            return
         st.session_state.ui_error = True
         st.rerun()
 
