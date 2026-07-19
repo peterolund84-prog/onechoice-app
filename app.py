@@ -67,6 +67,17 @@ I18N = {
         "loading": "Väljer åt dig…",
         "rerolls_left": "{n} omval kvar",
         "locked_label": "Låst",
+        "login_title": "Logga in",
+        "signup_title": "Skapa konto",
+        "email": "E-post",
+        "password": "Lösenord",
+        "login_cta": "Logga in",
+        "signup_cta": "Registrera",
+        "logout": "Logga ut",
+        "guest": "Fortsätt som gäst (lokal demo)",
+        "auth_hint": "Supabase Auth — spara beslut i molnet",
+        "no_supabase": "Supabase saknas i secrets — kör i lokalt demläge.",
+        "logged_in_as": "Inloggad som",
     },
     "en": {
         "tagline": "One decision. Done.",
@@ -99,6 +110,17 @@ I18N = {
         "loading": "Choosing for you…",
         "rerolls_left": "{n} rerolls left",
         "locked_label": "Locked",
+        "login_title": "Log in",
+        "signup_title": "Create account",
+        "email": "Email",
+        "password": "Password",
+        "login_cta": "Log in",
+        "signup_cta": "Sign up",
+        "logout": "Log out",
+        "guest": "Continue as guest (local demo)",
+        "auth_hint": "Supabase Auth — save decisions in the cloud",
+        "no_supabase": "Supabase missing in secrets — running local demo.",
+        "logged_in_as": "Signed in as",
     },
 }
 
@@ -264,22 +286,42 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
 
 
 def init_state() -> None:
-    db.init_db()
     defaults: dict[str, Any] = {
         "language": "sv",
         "page": "home",
         "user_id": None,
+        "user_email": None,
+        "access_token": None,
+        "refresh_token": None,
+        "auth_mode": "login",  # login | signup
         "is_pro": False,
-        "current": None,  # DecisionResult dict
+        "current": None,
         "reroll_index": 0,
         "last_question": "",
         "last_domain_hint": None,
+        "guest_mode": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+
+    # Restore Supabase auth context for RLS-backed writes
+    if st.session_state.access_token and st.session_state.refresh_token:
+        db.set_auth(st.session_state.access_token, st.session_state.refresh_token)
+    else:
+        db.clear_auth()
+
+    import supabase_client as sb
+
+    if sb.is_configured() and not st.session_state.user_id and not st.session_state.guest_mode:
+        st.session_state.page = "auth"
+        return
+
+    # Local / guest fallback
     if not st.session_state.user_id:
-        st.session_state.user_id = st.session_state.get("_uid") or str(uuid.uuid4())
+        db.init_db()
+        st.session_state.user_id = str(uuid.uuid4())
+        st.session_state.guest_mode = True
         db.ensure_user(st.session_state.user_id, language=st.session_state.language)
 
 
@@ -288,6 +330,109 @@ def get_secret(name: str, default: str = "") -> str:
         return str(st.secrets.get(name, default) or default)
     except Exception:
         return default
+
+
+def require_auth_context() -> None:
+    if st.session_state.access_token and st.session_state.refresh_token:
+        db.set_auth(st.session_state.access_token, st.session_state.refresh_token)
+
+
+def page_auth() -> None:
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="oc-tagline">{html.escape(t("auth_hint"))}</p>',
+        unsafe_allow_html=True,
+    )
+
+    import supabase_client as sb
+
+    if not sb.is_configured():
+        st.warning(t("no_supabase"))
+        if st.button(t("guest"), type="primary", use_container_width=True):
+            db.init_db()
+            st.session_state.guest_mode = True
+            st.session_state.user_id = str(uuid.uuid4())
+            db.ensure_user(st.session_state.user_id, language=st.session_state.language)
+            st.session_state.page = "home"
+            st.rerun()
+        return
+
+    mode = st.session_state.auth_mode
+    title = t("login_title") if mode == "login" else t("signup_title")
+    st.markdown(
+        f'<div class="oc-decision"><h1 style="font-size:1.4rem">{html.escape(title)}</h1></div>',
+        unsafe_allow_html=True,
+    )
+
+    email = st.text_input(t("email"), key="auth_email")
+    password = st.text_input(t("password"), type="password", key="auth_password")
+
+    if mode == "login":
+        if st.button(t("login_cta"), type="primary", use_container_width=True):
+            try:
+                sess = sb.sign_in(email.strip(), password)
+                st.session_state.user_id = sess["user_id"]
+                st.session_state.user_email = sess.get("email")
+                st.session_state.access_token = sess["access_token"]
+                st.session_state.refresh_token = sess["refresh_token"]
+                st.session_state.guest_mode = False
+                db.set_auth(sess["access_token"], sess["refresh_token"])
+                db.ensure_user(
+                    sess["user_id"],
+                    language=st.session_state.language,
+                    email=sess.get("email"),
+                )
+                st.session_state.page = "home"
+                st.rerun()
+            except Exception as exc:
+                st.error(str(exc))
+        if st.button(t("signup_title"), use_container_width=True):
+            st.session_state.auth_mode = "signup"
+            st.rerun()
+    else:
+        if st.button(t("signup_cta"), type="primary", use_container_width=True):
+            try:
+                sess = sb.sign_up(
+                    email.strip(), password, language=st.session_state.language
+                )
+                if sess.get("access_token") and sess.get("refresh_token"):
+                    st.session_state.user_id = sess["user_id"]
+                    st.session_state.user_email = sess.get("email")
+                    st.session_state.access_token = sess["access_token"]
+                    st.session_state.refresh_token = sess["refresh_token"]
+                    st.session_state.guest_mode = False
+                    db.set_auth(sess["access_token"], sess["refresh_token"])
+                    db.ensure_user(
+                        sess["user_id"],
+                        language=st.session_state.language,
+                        email=sess.get("email"),
+                    )
+                    st.session_state.page = "home"
+                    st.success("Konto skapat.")
+                    st.rerun()
+                else:
+                    st.info(
+                        "Konto skapat. Bekräfta e-post i Supabase (om aktiverat), sedan logga in."
+                    )
+                    st.session_state.auth_mode = "login"
+            except Exception as exc:
+                st.error(str(exc))
+        if st.button(t("login_title"), use_container_width=True):
+            st.session_state.auth_mode = "login"
+            st.rerun()
+
+    st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
+    if st.button(t("guest"), use_container_width=True):
+        db.clear_auth()
+        db.init_db()
+        st.session_state.guest_mode = True
+        st.session_state.access_token = None
+        st.session_state.refresh_token = None
+        st.session_state.user_id = str(uuid.uuid4())
+        db.ensure_user(st.session_state.user_id, language=st.session_state.language)
+        st.session_state.page = "home"
+        st.rerun()
 
 
 def lang_bar() -> None:
@@ -321,6 +466,7 @@ def nav() -> None:
 
 
 def run_decision(*, question: str, domain_hint: str | None, reroll: bool) -> None:
+    require_auth_context()
     if reroll:
         st.session_state.reroll_index = int(st.session_state.reroll_index) + 1
     else:
@@ -451,6 +597,7 @@ def page_result() -> None:
 
 def page_history() -> None:
     lang_bar()
+    require_auth_context()
     st.markdown(
         f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("history_title"))}</p>',
         unsafe_allow_html=True,
@@ -471,12 +618,18 @@ def page_history() -> None:
 
 def page_profile() -> None:
     lang_bar()
+    require_auth_context()
     st.markdown(
         f'<div class="oc-pro"><h2>{html.escape(t("pro_title"))}</h2>'
         f'<p>{html.escape(t("pro_desc"))}</p>'
         f'<div class="oc-price">{html.escape(t("pro_price"))}</div></div>',
         unsafe_allow_html=True,
     )
+    if st.session_state.user_email:
+        st.caption(f"{t('logged_in_as')} {st.session_state.user_email}")
+    elif st.session_state.guest_mode:
+        st.caption("Guest / lokal demo")
+
     user = db.ensure_user(st.session_state.user_id)
     if user.get("is_pro") or st.session_state.is_pro:
         st.success(t("pro_on"))
@@ -487,20 +640,48 @@ def page_profile() -> None:
             db.update_user(st.session_state.user_id, is_pro=1)
             st.session_state.is_pro = True
             st.rerun()
+
+    if st.button(t("logout"), use_container_width=True):
+        import supabase_client as sb
+
+        sb.sign_out(st.session_state.access_token, st.session_state.refresh_token)
+        db.clear_auth()
+        for key in (
+            "user_id",
+            "user_email",
+            "access_token",
+            "refresh_token",
+            "current",
+            "guest_mode",
+        ):
+            st.session_state[key] = None if key != "guest_mode" else False
+        st.session_state.page = "auth"
+        st.rerun()
     nav()
 
 
 def handle_query_params() -> None:
+    if st.session_state.page == "auth" and not st.session_state.user_id:
+        # still allow language toggle on auth
+        pass
     qp = st.query_params
     lang = qp.get("lang")
     if lang in ("sv", "en"):
         st.session_state.language = lang
-        db.update_user(st.session_state.user_id, language=lang)
+        if st.session_state.user_id:
+            require_auth_context()
+            try:
+                db.update_user(st.session_state.user_id, language=lang)
+            except Exception:
+                pass
         try:
             del st.query_params["lang"]
         except Exception:
             pass
         st.rerun()
+
+    if st.session_state.page == "auth" and not st.session_state.user_id:
+        return
 
     nav_q = qp.get("nav")
     if nav_q in ("home", "history", "profile"):
@@ -523,8 +704,10 @@ def handle_query_params() -> None:
 def main() -> None:
     init_state()
     inject_css()
+    require_auth_context()
     handle_query_params()
     {
+        "auth": page_auth,
         "result": page_result,
         "history": page_history,
         "profile": page_profile,

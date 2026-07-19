@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""SQLite data model for OneChoice: users, decisions, preferences."""
+"""
+Data access for OneChoice.
+
+- SQLite locally / in unit tests (default)
+- Supabase when configured + auth tokens are set via set_auth()
+"""
 
 from __future__ import annotations
 
@@ -15,6 +20,39 @@ DB_PATH = Path(__file__).resolve().parent / "onechoice.db"
 
 DOMAINS = ("food", "clothes", "movie", "workout", "weekend")
 DECISION_STATUSES = ("shown", "rejected", "accepted", "locked")
+
+# Auth context for Supabase RLS (access_token, refresh_token)
+_AUTH: tuple[str, str] | None = None
+
+
+def set_auth(access_token: str | None, refresh_token: str | None = None) -> None:
+    global _AUTH
+    if access_token and refresh_token:
+        _AUTH = (access_token, refresh_token)
+    else:
+        _AUTH = None
+
+
+def clear_auth() -> None:
+    set_auth(None, None)
+
+
+def _use_supabase(path: Path | str | None = None) -> bool:
+    if path is not None:
+        return False  # explicit sqlite path → tests / local file
+    if _AUTH is None:
+        return False
+    try:
+        import supabase_client as sb
+
+        return sb.is_configured()
+    except Exception:
+        return False
+
+
+def _tokens() -> tuple[str, str]:
+    assert _AUTH is not None
+    return _AUTH
 
 
 def utc_now() -> str:
@@ -102,7 +140,17 @@ def ensure_user(
     *,
     language: str = "sv",
     path: Path | str | None = None,
+    email: str | None = None,
 ) -> dict[str, Any]:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        uid = user_id or ""
+        if not uid:
+            raise ValueError("user_id required for Supabase")
+        return store.ensure_profile(uid, at, rt, language=language, email=email)
+
     uid = user_id or str(uuid.uuid4())
     with get_conn(path) as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
@@ -120,6 +168,13 @@ def ensure_user(
 
 
 def update_user(user_id: str, **fields: Any) -> dict[str, Any]:
+    path = fields.pop("path", None)
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.update_profile(user_id, at, rt, **fields)
+
     allowed = {
         "language",
         "is_pro",
@@ -139,7 +194,7 @@ def update_user(user_id: str, **fields: Any) -> dict[str, Any]:
 
     cols = ", ".join(f"{k} = ?" for k in updates)
     vals = list(updates.values()) + [user_id]
-    with get_conn() as conn:
+    with get_conn(path) as conn:
         conn.execute(f"UPDATE users SET {cols} WHERE id = ?", vals)
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         return dict(row) if row else ensure_user(user_id)
@@ -162,6 +217,25 @@ def create_decision(
 ) -> dict[str, Any]:
     if status not in DECISION_STATUSES:
         raise ValueError(f"invalid status: {status}")
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.create_decision(
+            user_id=user_id,
+            access_token=at,
+            refresh_token=rt,
+            domain=domain,
+            question=question,
+            suggestion=suggestion,
+            justification=justification,
+            status=status,
+            reroll_index=reroll_index,
+            context=context,
+            execution_type=execution_type,
+            execution_label=execution_label,
+            execution_url=execution_url,
+        )
     ctx = json.dumps(context or {}, ensure_ascii=False)
     with get_conn(path) as conn:
         cur = conn.execute(
@@ -201,6 +275,11 @@ def set_decision_status(
 ) -> dict[str, Any]:
     if status not in DECISION_STATUSES:
         raise ValueError(f"invalid status: {status}")
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.set_decision_status(decision_id, status, at, rt)
     with get_conn(path) as conn:
         conn.execute(
             "UPDATE decisions SET status = ? WHERE id = ?",
@@ -222,6 +301,13 @@ def list_decisions(
     limit: int = 50,
     path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.list_decisions(
+            user_id, at, rt, domain=domain, status=status, limit=limit
+        )
     sql = "SELECT * FROM decisions WHERE user_id = ?"
     params: list[Any] = [user_id]
     if domain:
@@ -245,6 +331,11 @@ def recent_suggestions(
     path: Path | str | None = None,
 ) -> list[str]:
     """Suggestions accepted/locked/shown recently — used as repetition guard."""
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.recent_suggestions(user_id, domain, at, rt, days=days)
     with get_conn(path) as conn:
         rows = conn.execute(
             """
@@ -268,6 +359,13 @@ def upsert_preference(
     *,
     path: Path | str | None = None,
 ) -> dict[str, Any]:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.upsert_preference(
+            user_id, domain, key, value, delta, at, rt
+        )
     now = utc_now()
     with get_conn(path) as conn:
         conn.execute(
@@ -296,6 +394,11 @@ def get_preferences(
     *,
     path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.get_preferences(user_id, at, rt, domain=domain)
     sql = "SELECT * FROM preferences WHERE user_id = ?"
     params: list[Any] = [user_id]
     if domain:
@@ -313,6 +416,13 @@ def record_feedback(
     path: Path | str | None = None,
 ) -> dict[str, Any]:
     """Mark decision accepted/rejected and update preference scores."""
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.record_feedback(
+            decision_id, accepted=accepted, access_token=at, refresh_token=rt
+        )
     status = "accepted" if accepted else "rejected"
     decision = set_decision_status(decision_id, status, path=path)
     delta = 1.0 if accepted else -1.0
