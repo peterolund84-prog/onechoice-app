@@ -816,11 +816,17 @@ def _grok_candidates(
     language: str,
     api_key: str,
 ) -> list[dict[str, Any]]:
+    import gdpr as gdpr_mod
+
     lang = "Swedish" if language == "sv" else "English"
     accepted = [h["suggestion"] for h in history if h.get("status") in ("accepted", "locked")][:8]
     rejected = [h["suggestion"] for h in history if h.get("status") == "rejected"][:8]
-    pos = [p for p in preferences if p.get("score", 0) > 0][:8]
-    neg = [p for p in preferences if p.get("score", 0) < 0][:8]
+    # GDPR: never send user_id / email / row ids to the AI provider
+    safe_profile = gdpr_mod.llm_safe_profile(profile)
+    safe_context = gdpr_mod.llm_safe_context(context)
+    safe_prefs = gdpr_mod.llm_safe_preferences(preferences)
+    pos = [p for p in safe_prefs if (p.get("score") or 0) > 0][:8]
+    neg = [p for p in safe_prefs if (p.get("score") or 0) < 0][:8]
 
     system = (
         "You are OneChoice. You make exactly one everyday decision the user can execute TODAY. "
@@ -829,18 +835,18 @@ def _grok_candidates(
         f"Write BOTH suggestion and justification entirely in {lang}. "
         "Output valid JSON only."
     )
-    domain_rules = _domain_prompt_rules(domain, profile)
-    if domain == "food" and str(context.get("source") or "") == "fridge_photo":
+    domain_rules = _domain_prompt_rules(domain, safe_profile)
+    if domain == "food" and str(safe_context.get("source") or "") == "fridge_photo":
         domain_rules = _fridge_prompt_rules(
-            list(context.get("available_ingredients") or []),
+            list(safe_context.get("available_ingredients") or []),
             language,
         )
     user = f"""
 Domain: {domain}
 Question: {question}
 Output language (STRICT): {lang}
-Context: {json.dumps(context, ensure_ascii=False)}
-User profile: {json.dumps(profile, ensure_ascii=False)}
+Context: {json.dumps(safe_context, ensure_ascii=False)}
+Anonymous preferences: {json.dumps(safe_profile, ensure_ascii=False)}
 Recently shown/accepted (avoid repeats within 7 days): {json.dumps(recent[:12], ensure_ascii=False)}
 Accepted before: {json.dumps(accepted, ensure_ascii=False)}
 Rejected before: {json.dumps(rejected, ensure_ascii=False)}

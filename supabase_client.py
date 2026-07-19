@@ -111,3 +111,25 @@ def sign_out(access_token: str | None = None, refresh_token: str | None = None) 
 
 def authed_client(access_token: str, refresh_token: str) -> Client:
     return restore_session(access_token, refresh_token)
+
+
+def admin_delete_user(user_id: str) -> bool:
+    """
+    Delete auth user via service role (optional secret SUPABASE_SERVICE_ROLE_KEY).
+    Prefer RPC delete_own_account() when available — this is a fallback only.
+    Never ship service_role to the browser; Streamlit secrets stay server-side.
+    """
+    url, _anon = get_creds()
+    service = (
+        _secret("SUPABASE_SERVICE_ROLE_KEY")
+        or _secret("SUPABASE_SERVICE_KEY")
+        or ""
+    ).strip()
+    if not url or not service or service.startswith(("din_", "YOUR_")):
+        return False
+    try:
+        admin = create_client(url, service)
+        admin.auth.admin.delete_user(user_id)
+        return True
+    except Exception:
+        return False

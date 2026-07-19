@@ -24,8 +24,9 @@ requirements.txt
 ## 1) Skapa Supabase-projekt
 
 1. Gå till [https://supabase.com](https://supabase.com) → **New project**
-2. Vänta tills projektet är klart
-3. **Project Settings → API**
+2. **Välj EU-region** (t.ex. Frankfurt `eu-central-1` eller Stockholm) — går inte att flytta senare (GDPR)
+3. Vänta tills projektet är klart
+4. **Project Settings → API**
    - kopiera **Project URL** → `SUPABASE_URL`
    - kopiera **anon public** key → `SUPABASE_KEY`
 
@@ -116,18 +117,26 @@ Max 3 rerolls → lock. See `DOMAIN_SPEC.md`.
 
 | Funktion | Beskrivning |
 |----------|-------------|
-| Login / signup | Supabase Auth |
+| Login / signup | Supabase Auth + samtycke till [integritetspolicy](PRIVACY.md) |
 | Ett beslut | Aldrig lista — `pipeline.decide()` |
 | Feasibility | Trasiga beslut visas aldrig |
 | Spara beslut | Supabase `decisions` (+ SQLite i gästläge) |
 | Historik | Hämtas per inloggad användare (RLS) |
 | Preferenser | Accept/reject → scored preferences |
+| GDPR | Exportera JSON + radera konto (Profil); AI får aldrig `user_id`/e-post |
 | Design | Premium koreansk estetik, mobil grid-nav |
+
+## GDPR (före publik lansering)
+
+1. Kör `supabase/schema.sql` (eller `migrations/20260719_gdpr.sql` på äldre projekt)
+2. Bekräfta EU-region i Supabase Dashboard
+3. Schemalägg `purge_routed_query_raw_text(90)` och `purge_expired_user_photos()` (pg_cron / Edge Function)
+4. Läs `PRIVACY.md` — byt till egen `PRIVACY_URL` om policyn hostas externt
 
 ## Tester
 
 ```bash
-python -m unittest test_pipeline.py test_feasibility.py
+python -m unittest test_pipeline.py test_feasibility.py test_gdpr.py test_router.py
 ```
 
 Unit tests kör alltid mot SQLite (isolerad temp-db).
