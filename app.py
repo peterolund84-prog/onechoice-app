@@ -919,7 +919,14 @@ def _is_food_cook(cur: dict[str, Any]) -> bool:
 def _is_streamlit_control_flow(exc: BaseException) -> bool:
     """st.rerun() / st.stop() must never be swallowed by the error boundary."""
     name = type(exc).__name__
-    return name in ("RerunException", "StopException") or "Rerun" in name
+    if name in ("RerunException", "StopException") or name.startswith("Rerun"):
+        return True
+    try:
+        from streamlit.runtime.scriptrunner import RerunException, StopException
+
+        return isinstance(exc, (RerunException, StopException))
+    except Exception:
+        return False
 
 
 def safe_toast(message: str) -> None:
@@ -948,38 +955,79 @@ def accept_current_decision(cur: dict[str, Any] | None = None) -> bool:
     if not isinstance(cur, dict):
         cur = {}
 
-    require_auth_context()
-    if st.session_state.get("guest_mode"):
-        db.clear_auth()
-        st.session_state.access_token = None
-        st.session_state.refresh_token = None
+    try:
+        require_auth_context()
+        if st.session_state.get("guest_mode"):
+            db.clear_auth()
+            st.session_state.access_token = None
+            st.session_state.refresh_token = None
 
-    if st.session_state.get("accepted") or cur.get("accepted"):
+        if st.session_state.get("accepted") or cur.get("accepted"):
+            return True
+
+        did = _active_decision_id(cur)
+        raw_id = did if did is not None else cur.get("decision_id") or st.session_state.get(
+            "decision_id"
+        )
+        route_log_id = cur.get("route_log_id") or st.session_state.get("route_log_id")
+
+        pipeline.try_accept_decision(did, route_log_id=route_log_id)
+
+        st.session_state.accepted = True
+        if raw_id is not None:
+            st.session_state.decision_id = raw_id
+        updated = dict(cur)
+        updated["locked"] = True
+        updated["accepted"] = True
+        if raw_id is not None:
+            updated["decision_id"] = raw_id
+        st.session_state.current = updated
+        return True
+    except Exception as exc:
+        # Last-resort soft-lock — Starta passet / Bygg outfit must never crash UI
+        log.exception("accept_current_decision soft-failed: %s", exc)
+        st.session_state.accepted = True
+        updated = dict(cur)
+        updated["locked"] = True
+        updated["accepted"] = True
+        st.session_state.current = updated
         return True
 
-    did = _active_decision_id(cur)
-    raw_id = did if did is not None else cur.get("decision_id") or st.session_state.get(
-        "decision_id"
-    )
-    route_log_id = cur.get("route_log_id") or st.session_state.get("route_log_id")
 
-    pipeline.try_accept_decision(did, route_log_id=route_log_id)
-
-    st.session_state.accepted = True
-    if raw_id is not None:
-        st.session_state.decision_id = raw_id
-    updated = dict(cur)
-    updated["locked"] = True
-    updated["accepted"] = True
-    if raw_id is not None:
-        updated["decision_id"] = raw_id
-    st.session_state.current = updated
-    return True
+def on_accept_primary(cur: dict[str, Any]) -> None:
+    """Primary accept for any non-execute domain — never raises into Streamlit."""
+    try:
+        accept_current_decision(cur)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("on_accept_primary failed: %s", exc)
+        # Still lock locally so the user is not stuck
+        st.session_state.accepted = True
+        updated = dict(cur) if isinstance(cur, dict) else {}
+        updated["locked"] = True
+        updated["accepted"] = True
+        st.session_state.current = updated
+    try:
+        safe_toast(t("accepted"))
+    except Exception:
+        pass
+    st.rerun()
 
 
 def accept_and_open_execute(cur: dict[str, Any]) -> None:
     """Handla & laga: accept (all-domain pipeline) then open execute view."""
-    accept_current_decision(cur)
+    try:
+        accept_current_decision(cur)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("accept_and_open_execute failed: %s", exc)
+        st.session_state.accepted = True
+        updated = dict(cur) if isinstance(cur, dict) else {}
+        updated["locked"] = True
+        updated["accepted"] = True
+        st.session_state.current = updated
     st.session_state.page = "execute"
     st.rerun()
 
@@ -1094,11 +1142,31 @@ def page_home() -> None:
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="oc-tagline">{html.escape(t("tagline"))}</p>', unsafe_allow_html=True)
 
+    # Real Streamlit buttons — HTML ?domain= links are unreliable on Streamlit Cloud
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    chips = "".join(
-        f'<a href="?domain={d}">{html.escape(domain_label(d))}</a>' for d in domains
-    )
-    st.markdown(f'<div class="oc-domains">{chips}</div>', unsafe_allow_html=True)
+    cols = st.columns(2)
+    for i, d in enumerate(domains):
+        with cols[i % 2]:
+            if st.button(
+                domain_label(d),
+                key=f"domain_chip_{d}",
+                use_container_width=True,
+            ):
+                if d == "clothes":
+                    st.session_state.last_domain_hint = "clothes"
+                    st.session_state.pending_clothes_question = pipeline._default_question(
+                        "clothes", st.session_state.get("language", "sv")
+                    )
+                    st.session_state.clothes_occasion = None
+                    st.session_state.page = "clothes_occasion"
+                    st.rerun()
+                else:
+                    if d == "food":
+                        import food_domain as fd
+
+                        if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
+                            st.session_state.food_meal_type = fd.default_meal_type()
+                    run_decision(question="", domain_hint=d, reroll=False, via_router=False)
 
     q = st.text_area(
         "q",
@@ -1139,15 +1207,32 @@ def page_clothes_occasion() -> None:
     remembered = (st.session_state.get("occasion_by_hour") or {}).get(str(hour))
     preselect = remembered or cd.default_occasion(hour, weekday=now.weekday() < 5)
 
-    # Chip grid via query params — same pattern as domains (one tap)
-    chips = []
-    for key in cd.OCCASION_ORDER:
+    # Streamlit buttons (not HTML links) — visible + reliable on Cloud
+    cols = st.columns(2)
+    for i, key in enumerate(cd.OCCASION_ORDER):
         label = cd.occasion_label(key, language)
-        style = ""
         if key == preselect:
-            style = ' style="background:#EAF1FF;color:#5A8BFF;font-weight:700;"'
-        chips.append(f'<a href="?occasion={key}"{style}>{html.escape(label)}</a>')
-    st.markdown(f'<div class="oc-domains">{"".join(chips)}</div>', unsafe_allow_html=True)
+            label = f"● {label}"
+        with cols[i % 2]:
+            if st.button(label, key=f"occasion_btn_{key}", use_container_width=True):
+                hist = dict(st.session_state.get("occasion_by_hour") or {})
+                hist[str(hour)] = key
+                st.session_state.occasion_by_hour = hist
+                st.session_state.clothes_occasion = key
+                pending = (
+                    st.session_state.get("pending_clothes_question")
+                    or st.session_state.get("last_question")
+                    or pipeline._default_question(
+                        "clothes", st.session_state.get("language", "sv")
+                    )
+                )
+                st.session_state.last_domain_hint = "clothes"
+                run_decision(
+                    question=pending,
+                    domain_hint="clothes",
+                    reroll=False,
+                    via_router=False,
+                )
 
     if st.button(t("home"), use_container_width=True, key="occasion_home"):
         st.session_state.page = "home"
@@ -1177,7 +1262,7 @@ def page_ambiguous() -> None:
 
 
 def render_meal_type_chips(cur: dict[str, Any]) -> None:
-    """Four meal chips above the food decision — preselected from clock, one tap to change."""
+    """Four meal chips above the food decision — Streamlit buttons, not HTML links."""
     import food_domain as fd
 
     language = st.session_state.get("language", "sv")
@@ -1190,17 +1275,34 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
         current = fd.default_meal_type()
     st.session_state.food_meal_type = current
 
-    chips = []
-    for key in fd.MEAL_ORDER:
+    st.caption("Måltid" if language == "sv" else "Meal")
+    cols = st.columns(4)
+    for i, key in enumerate(fd.MEAL_ORDER):
         label = fd.meal_label(key, language)
-        style = ""
-        if key == current:
-            style = ' style="background:#EAF1FF;color:#5A8BFF;font-weight:700;"'
-        chips.append(f'<a href="?meal={key}"{style}>{html.escape(label)}</a>')
-    st.markdown(
-        f'<div class="oc-domains" style="margin-bottom:0.75rem">{"".join(chips)}</div>',
-        unsafe_allow_html=True,
-    )
+        is_sel = key == current
+        with cols[i]:
+            clicked = st.button(
+                f"● {label}" if is_sel else label,
+                key=f"meal_btn_{key}",
+                use_container_width=True,
+                type="primary" if is_sel else "secondary",
+            )
+            if clicked and key != current:
+                st.session_state.food_meal_type = key
+                st.session_state.accepted = False
+                pending = (
+                    st.session_state.get("last_question")
+                    or pipeline._default_question(
+                        "food", st.session_state.get("language", "sv")
+                    )
+                )
+                st.session_state.last_domain_hint = "food"
+                run_decision(
+                    question=pending,
+                    domain_hint="food",
+                    reroll=False,
+                    via_router=False,
+                )
 
 
 def page_not_a_decision() -> None:
@@ -1294,8 +1396,7 @@ def page_result() -> None:
             if exec_url:
                 st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
-                accept_current_decision(cur)
-                safe_toast(t("accepted"))
+                on_accept_primary(cur)
         if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
             st.session_state.page = "home"
             st.rerun()
@@ -1355,16 +1456,12 @@ def page_result() -> None:
         # Frukost / lunch / kvällsmål — accept without shopping execute
         label = cur.get("execution_label") or ("Ät nu" if language == "sv" else "Eat now")
         if st.button(label, type="primary", use_container_width=True, key="eat_now_accept"):
-            accept_current_decision(cur)
-            safe_toast(t("accepted"))
-            st.rerun()
+            on_accept_primary(cur)
     else:
         # Shared accept for clothes / movie / workout / weekend
         exec_label = cur.get("execution_label") or t("do_it")
         if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
-            accept_current_decision(cur)
-            safe_toast(t("accepted"))
-            st.rerun()
+            on_accept_primary(cur)
 
     # Secondary: reroll — hidden once accepted (lock card branch above)
     st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
