@@ -215,15 +215,18 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
     margin: 0 auto !important;
 }}
 @media (max-width: 768px) {{
-    .block-container {{ padding: 1rem 1rem 9rem !important; }}
+    .block-container {{ padding: 1rem 0.5rem 9rem !important; }}
     .oc-hero h1, h1 {{ font-size: 1.8rem !important; }}
     div.stButton > button {{
         height: 48px !important; min-height: 48px !important;
         font-size: 15px !important;
     }}
+    div[data-testid="stHorizontalBlock"] {{
+        flex-wrap: nowrap !important;
+    }}
 }}
 @media (max-width: 480px) {{
-    .block-container {{ padding: 1rem 1rem 9rem !important; }}
+    .block-container {{ padding: 1rem 0.5rem 9rem !important; }}
 }}
 
 /* ----- Brand ----- */
@@ -507,16 +510,18 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     st.markdown(
         """
 <style>
+    /* Mobiloptimering */
     @media (max-width: 768px) {
         .main .block-container {
-            padding: 1rem 1rem;
-        }
-        h1 {
-            font-size: 1.8rem;
+            padding: 1rem 0.5rem;
         }
         .stButton > button {
             height: 48px;
             font-size: 15px;
+        }
+        /* Bottom nav */
+        div[data-testid="stHorizontalBlock"] {
+            flex-wrap: nowrap;
         }
     }
     .stApp {
@@ -529,9 +534,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     .stButton > button {
         border-radius: 16px;
         height: 52px;
-    }
-    .stTextArea textarea {
-        border-radius: 16px;
     }
 </style>
         """,
