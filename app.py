@@ -338,6 +338,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool) -> Non
             st.session_state.user_id,
             st.session_state.last_question or question,
             domain_hint=st.session_state.last_domain_hint or domain_hint,
+            language=st.session_state.language,
             reroll=reroll,
             reroll_index=st.session_state.reroll_index,
             previous_decision_id=prev_id,
