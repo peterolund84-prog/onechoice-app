@@ -521,6 +521,7 @@ def init_state() -> None:
         "clothes_occasion": None,  # jobb|vardag|fest|middag|traffa|barnkalas
         "pending_clothes_question": "",
         "occasion_by_hour": {},  # remembered most-common occasion per hour bucket
+        "food_meal_type": None,  # frukost|lunch|middag|kvallsmal — inferred, confirmable
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -803,6 +804,12 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
     if st.session_state.get("clothes_occasion"):
         context_extra["occasion"] = st.session_state.clothes_occasion
         context_extra["intent"] = "wear"
+    import food_domain as fd
+
+    if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
+        st.session_state.food_meal_type = fd.default_meal_type()
+    # Pass inferred/override meal type into food decisions (confirmable chips on result)
+    context_extra["meal_type"] = st.session_state.food_meal_type
 
     try:
         with st.spinner(t("loading")):
@@ -1169,6 +1176,33 @@ def page_ambiguous() -> None:
     nav()
 
 
+def render_meal_type_chips(cur: dict[str, Any]) -> None:
+    """Four meal chips above the food decision — preselected from clock, one tap to change."""
+    import food_domain as fd
+
+    language = st.session_state.get("language", "sv")
+    current = (
+        (cur.get("context") or {}).get("meal_type")
+        or st.session_state.get("food_meal_type")
+        or fd.default_meal_type()
+    )
+    if current not in fd.MEAL_TYPES:
+        current = fd.default_meal_type()
+    st.session_state.food_meal_type = current
+
+    chips = []
+    for key in fd.MEAL_ORDER:
+        label = fd.meal_label(key, language)
+        style = ""
+        if key == current:
+            style = ' style="background:#EAF1FF;color:#5A8BFF;font-weight:700;"'
+        chips.append(f'<a href="?meal={key}"{style}>{html.escape(label)}</a>')
+    st.markdown(
+        f'<div class="oc-domains" style="margin-bottom:0.75rem">{"".join(chips)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def page_not_a_decision() -> None:
     lang_bar()
     cur = st.session_state.current or {}
@@ -1231,13 +1265,29 @@ def page_result() -> None:
             unsafe_allow_html=True,
         )
         if food_cook:
-            if st.button(
-                t("handla_laga"),
-                type="primary",
-                use_container_width=True,
-                key="handla_reopen",
-            ):
-                accept_and_open_execute(cur)
+            ctx_l = cur.get("context") or {}
+            mt = ctx_l.get("meal_type") or st.session_state.get("food_meal_type")
+            show_shop = True
+            try:
+                import food_domain as fd
+
+                show_shop = fd.show_shopping(str(mt or "middag"))
+            except Exception:
+                pass
+            if show_shop:
+                if st.button(
+                    t("handla_laga"),
+                    type="primary",
+                    use_container_width=True,
+                    key="handla_reopen",
+                ):
+                    accept_and_open_execute(cur)
+            else:
+                label = cur.get("execution_label") or (
+                    "Ät nu" if language == "sv" else "Eat now"
+                )
+                if st.button(label, type="primary", use_container_width=True, key="eat_reopen"):
+                    safe_toast(t("accepted"))
         else:
             exec_url = cur.get("execution_url")
             exec_label = cur.get("execution_label") or t("do_it")
@@ -1253,6 +1303,10 @@ def page_result() -> None:
         return
 
     # Unlocked decision card
+    # Food: meal-type chips ABOVE the decision (inferred, one tap to change)
+    if domain == "food" and not accepted:
+        render_meal_type_chips(cur)
+
     st.markdown(
         f'<div class="oc-decision">'
         f'<div class="label">{html.escape(domain_label(domain))}</div>'
@@ -1263,10 +1317,19 @@ def page_result() -> None:
     )
     render_reroll_dots(reroll_index)
 
-    # Preview shopping on result (read-only) for food
+    # Preview shopping on result (read-only) for dinner only
     ctx = cur.get("context") or {}
     shop = ctx.get("shopping")
-    if food_cook and isinstance(shop, dict):
+    meal_type = ctx.get("meal_type") or st.session_state.get("food_meal_type")
+    show_shop = True
+    if domain == "food":
+        try:
+            import food_domain as fd
+
+            show_shop = fd.show_shopping(str(meal_type or "middag"))
+        except Exception:
+            show_shop = True
+    if food_cook and show_shop and isinstance(shop, dict):
         render_shopping_card(shop, language)
     elif domain == "food":
         exec_detail = ctx.get("execution_detail")
@@ -1283,18 +1346,25 @@ def page_result() -> None:
                 unsafe_allow_html=True,
             )
 
-    if food_cook:
-        # Primary: Handla & laga → accept + execute view
+    if food_cook and show_shop:
+        # Primary: Handla & laga → accept + execute view (middag)
         label = cur.get("execution_label") or t("handla_laga")
         if st.button(label, type="primary", use_container_width=True, key="handla_accept"):
             accept_and_open_execute(cur)
+    elif food_cook and not show_shop:
+        # Frukost / lunch / kvällsmål — accept without shopping execute
+        label = cur.get("execution_label") or ("Ät nu" if language == "sv" else "Eat now")
+        if st.button(label, type="primary", use_container_width=True, key="eat_now_accept"):
+            accept_current_decision(cur)
+            safe_toast(t("accepted"))
+            st.rerun()
     else:
         # Shared accept for clothes / movie / workout / weekend
         exec_label = cur.get("execution_label") or t("do_it")
         if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
             accept_current_decision(cur)
             safe_toast(t("accepted"))
-            st.rerun()  # locked card; never leave a mid-page error under the decision
+            st.rerun()
 
     # Secondary: reroll — hidden once accepted (lock card branch above)
     st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
@@ -1560,6 +1630,7 @@ def handle_query_params() -> None:
 
     # Clothes occasion chips
     import clothes_domain as cd
+    import food_domain as fd
 
     occasion = _qp_one(qp.get("occasion"))
     if occasion in cd.OCCASIONS:
@@ -1586,6 +1657,31 @@ def handle_query_params() -> None:
             reroll=False,
             via_router=False,
         )
+        return
+
+    # Food meal-type override chips (confirm, don't interrogate)
+    meal = _qp_one(qp.get("meal"))
+    if meal in fd.MEAL_TYPES:
+        try:
+            del st.query_params["meal"]
+        except Exception:
+            pass
+        prev = st.session_state.get("food_meal_type")
+        st.session_state.food_meal_type = meal
+        # Only regenerate when user actually changed the inferred type
+        if prev != meal or st.session_state.get("page") == "result":
+            pending = (
+                st.session_state.get("last_question")
+                or pipeline._default_question("food", st.session_state.get("language", "sv"))
+            )
+            st.session_state.last_domain_hint = "food"
+            st.session_state.accepted = False
+            run_decision(
+                question=pending,
+                domain_hint="food",
+                reroll=False,
+                via_router=False,
+            )
         return
 
     # AMBIGUOUS resolution chips

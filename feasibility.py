@@ -239,7 +239,22 @@ def _check_food(
     )
     store = (profile.get("food") or {}).get("store") or "ICA"
     is_weekend = bool(profile.get("is_weekend") or context.get("is_weekend"))
-    max_min = 60 if is_weekend else 30
+    meal_type = str(
+        (candidate.get("meta") or {}).get("meal_type")
+        or context.get("meal_type")
+        or "middag"
+    )
+    try:
+        import food_domain as fd
+
+        max_min = fd.max_minutes(meal_type, is_weekend=is_weekend)
+        show_shop = fd.show_shopping(meal_type)
+        at_home = fd.assume_at_home_only(meal_type)
+    except Exception:
+        max_min = 60 if is_weekend else 30
+        show_shop = meal_type == "middag"
+        at_home = meal_type in ("frukost", "kvallsmal")
+
     active = (candidate.get("meta") or {}).get("active_minutes")
     if active is not None and int(active) > max_min:
         reasons.append("too_long")
@@ -254,10 +269,25 @@ def _check_food(
             "label": "Öppna karta",
             "url": f"https://www.google.com/maps/search/{suggestion}+nära+{loc}",
             "detail": f"Öppet nu · inom rimligt avstånd från {loc}",
+            "meal_type": meal_type,
         }
         return FeasibilityResult(ok=True, execution=execution)
 
-    # Full list → split to_buy / assumed_at_home (hard completeness rule)
+    # Breakfast / evening / quick lunch: no shopping trip
+    if at_home or not show_shop:
+        execution = {
+            "type": "recipe",
+            "label": "Ät nu",
+            "url": None,
+            "detail": "Hemma antas — ingen inköpsrunda.",
+            "shopping": None,
+            "shopping_list": None,
+            "meal_type": meal_type,
+            "max_active_minutes": max_min,
+        }
+        return FeasibilityResult(ok=True, execution=execution)
+
+    # Middag: full list → split to_buy / assumed_at_home
     shop = shopping.build_shopping(
         suggestion,
         meta=candidate.get("meta") or {},
@@ -277,6 +307,7 @@ def _check_food(
         or shopping.build_recipe(suggestion, shop.get("ingredients")),
         "store": store,
         "max_active_minutes": max_min,
+        "meal_type": meal_type,
     }
     return FeasibilityResult(
         ok=True,

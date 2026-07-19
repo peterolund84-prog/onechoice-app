@@ -438,25 +438,55 @@ def recent_suggestions(
     domain: str,
     *,
     days: int = 14,
+    meal_type: str | None = None,
     path: Path | str | None = None,
 ) -> list[str]:
-    """Suggestions accepted/locked/shown recently — used as repetition guard."""
+    """Suggestions accepted/locked/shown recently — used as repetition guard.
+
+    When meal_type is set (food), only count decisions with that meal_type in
+    context — breakfast habits must not block dinner variety and vice versa.
+    """
     if _use_supabase(path):
         import supabase_store as store
 
         at, rt = _tokens()
-        return store.recent_suggestions(user_id, domain, at, rt, days=days)
+        rows = store.recent_suggestions(user_id, domain, at, rt, days=days)
+        # store returns suggestion strings only today — filter via list_decisions
+        if meal_type:
+            decisions = store.list_decisions(
+                user_id, at, rt, domain=domain, limit=80
+            )
+            out: list[str] = []
+            for d in decisions:
+                ctx = d.get("context") or {}
+                if ctx.get("meal_type") == meal_type and d.get("suggestion"):
+                    out.append(d["suggestion"])
+            return out
+        return rows
     with get_conn(path) as conn:
-        rows = conn.execute(
-            """
-            SELECT suggestion FROM decisions
-            WHERE user_id = ? AND domain = ?
-              AND status IN ('accepted', 'locked', 'shown', 'rejected')
-              AND datetime(created_at) >= datetime('now', ?)
-            ORDER BY created_at DESC
-            """,
-            (user_id, domain, f"-{int(days)} days"),
-        ).fetchall()
+        if meal_type and domain == "food":
+            rows = conn.execute(
+                """
+                SELECT suggestion FROM decisions
+                WHERE user_id = ? AND domain = ?
+                  AND status IN ('accepted', 'locked', 'shown', 'rejected')
+                  AND datetime(created_at) >= datetime('now', ?)
+                  AND json_extract(context_json, '$.meal_type') = ?
+                ORDER BY created_at DESC
+                """,
+                (user_id, domain, f"-{int(days)} days", meal_type),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT suggestion FROM decisions
+                WHERE user_id = ? AND domain = ?
+                  AND status IN ('accepted', 'locked', 'shown', 'rejected')
+                  AND datetime(created_at) >= datetime('now', ?)
+                ORDER BY created_at DESC
+                """,
+                (user_id, domain, f"-{int(days)} days"),
+            ).fetchall()
         return [r["suggestion"] for r in rows]
 
 
