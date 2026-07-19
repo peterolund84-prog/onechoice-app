@@ -101,6 +101,79 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertTrue(cands)
         self.assertTrue(all((c.get("meta") or {}).get("no_cook") or (c.get("meta") or {}).get("active_minutes", 99) <= 5 for c in cands))
 
+    def test_kvallsmal_sandwich_has_recipe_no_shopping(self) -> None:
+        """Ät nu must open a recipe view — ingredients + steps (+ nutrition JSON)."""
+        tmp = tempfile.TemporaryDirectory()
+        path = str(Path(tmp.name) / "t.db")
+        db.init_db(path)
+        user = db.ensure_user(language="sv", path=path)
+        r = pipeline.decide(
+            user["id"],
+            "Vad ska jag äta?",
+            domain_hint="food",
+            language="sv",
+            db_path=path,
+            context_extra={"meal_type": "kvallsmal"},
+        )
+        self.assertTrue(r.ok)
+        self.assertEqual((r.context or {}).get("meal_type"), "kvallsmal")
+        self.assertFalse((r.context or {}).get("shopping"))
+        recipe = (r.context or {}).get("recipe") or {}
+        self.assertTrue(isinstance(recipe, dict) and recipe.get("ingredients"), recipe)
+        self.assertTrue(recipe.get("steps"), recipe)
+        self.assertIn("nutrition", recipe)
+        # Prefer the canned sandwich when ranking allows — if not, still require recipe
+        title = (r.suggestion or "").lower()
+        if "smörgås" in title or "ost" in title:
+            ings = " ".join(str(x).lower() for x in recipe.get("ingredients") or [])
+            self.assertTrue("bröd" in ings or "ost" in ings, recipe)
+            steps = " ".join(str(s).lower() for s in recipe.get("steps") or [])
+            self.assertTrue("bröd" in steps or "ost" in steps, recipe["steps"])
+        self.assertEqual(r.execution_label, "Ät nu")
+        tmp.cleanup()
+
+    def test_app_at_nu_opens_recipe_with_nutrition_toggle(self) -> None:
+        """UI proof: Mat + kvällsmål → Ät nu → ingredients + opt-in toggle on execute."""
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=90)
+        at.run()
+        at.session_state["food_meal_type"] = "kvallsmal"
+        for b in at.button:
+            if b.label == "Mat":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
+        hit = False
+        for b in at.button:
+            if b.label and "Ät nu" in b.label:
+                b.click().run()
+                hit = True
+                break
+        self.assertTrue(hit)
+        self.assertEqual(at.session_state["page"], "execute")
+        self.assertFalse(bool(at.session_state["ui_error"]))
+        body = " ".join(str(m.value or "") for m in at.markdown).lower()
+        self.assertIn("recept", body)
+        self.assertTrue("bröd" in body or "ost" in body, body[:500])
+        # Opt-in control lives on recipe page (off by default → no kcal yet)
+        toggle_labels = [t.label or "" for t in at.toggle]
+        self.assertTrue(
+            any("ca-värden" in lab.lower() or "närings" in lab.lower() or "nutrition" in lab.lower()
+                for lab in toggle_labels),
+            toggle_labels,
+        )
+        self.assertNotIn("kcal", body)
+        # Turn on → ca-värden appear
+        for tgl in at.toggle:
+            lab = (tgl.label or "").lower()
+            if "ca-värden" in lab or "närings" in lab or "nutrition" in lab:
+                tgl.set_value(True).run()
+                break
+        body2 = " ".join(str(m.value or "") for m in at.markdown).lower()
+        self.assertIn("ca-värden", body2)
+        self.assertIn("kcal", body2)
+
 
 if __name__ == "__main__":
     unittest.main()

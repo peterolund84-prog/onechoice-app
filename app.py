@@ -109,7 +109,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "nutrition-optin-v12-20260719"
+BUILD_ID = "kvallsmal-recipe-v14-20260719"
 
 I18N = {
     "sv": {
@@ -136,8 +136,10 @@ I18N = {
         "recipe_title": "Recept",
         "ingredients_title": "Ingredienser",
         "steps_title": "Gör så här",
+        "nutrition_section": "Näringsvärden",
         "nutrition_title": "Visa näringsvärden",
         "nutrition_hint": "Ca-värden per portion under receptet — aldrig på beslutskortet. Av som standard.",
+        "nutrition_recipe_toggle": "Visa ca-värden (kcal / protein)",
         "nutrition_saved": "Sparat.",
         "back_to_decision": "Tillbaka",
         "error_friendly": "Något gick fel — försök igen",
@@ -262,8 +264,10 @@ I18N = {
         "recipe_title": "Recipe",
         "ingredients_title": "Ingredients",
         "steps_title": "Steps",
+        "nutrition_section": "Nutrition",
         "nutrition_title": "Show nutrition estimates",
         "nutrition_hint": "Approx. per serving under the recipe — never on the decision card. Off by default.",
+        "nutrition_recipe_toggle": "Show approx. nutrition (kcal / protein)",
         "nutrition_saved": "Saved.",
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
@@ -1880,6 +1884,28 @@ def _profile_show_nutrition() -> bool:
         return False
 
 
+def _set_profile_show_nutrition(enabled: bool) -> None:
+    """Persist opt-in to profile_json.food.show_nutrition."""
+    import json
+
+    uid = st.session_state.get("user_id")
+    if not uid:
+        return
+    user = db.ensure_user(uid)
+    raw = user.get("profile_json") or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    food = dict(raw.get("food") or {})
+    food["show_nutrition"] = bool(enabled)
+    raw["food"] = food
+    db.update_user(uid, profile_json=raw)
+
+
 def render_recipe_block(
     recipe: dict[str, Any] | None,
     fallback_ings: list[str] | None = None,
@@ -2610,11 +2636,12 @@ def page_result() -> None:
                 ):
                     open_execute_now(cur)
             else:
+                # Frukost / kvällsmål — reopen recipe view (no shopping list)
                 label = cur.get("execution_label") or (
                     "Ät nu" if language == "sv" else "Eat now"
                 )
                 if st.button(label, type="primary", use_container_width=True, key="eat_reopen"):
-                    safe_toast(t("accepted"))
+                    open_execute_now(cur)
         else:
             exec_url = cur.get("execution_url")
             exec_label = cur.get("execution_label") or t("do_it")
@@ -2722,10 +2749,10 @@ def page_result() -> None:
         ):
             open_execute_now(cur)
     elif food_cook and not show_shop:
-        # Frukost / lunch / kvällsmål — accept without shopping execute
+        # Frukost / lunch / kvällsmål — recipe view (no shopping), same path as fridge
         label = cur.get("execution_label") or ("Ät nu" if language == "sv" else "Eat now")
         if st.button(label, type="primary", use_container_width=True, key="eat_now_accept"):
-            on_accept_primary(cur)
+            open_execute_now(cur)
     else:
         # Shared accept for clothes / movie / weekend; workout opens execute player
         exec_label = cur.get("execution_label") or t("do_it")
@@ -3136,11 +3163,11 @@ def page_execute() -> None:
     recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
     if not recipe and shop and isinstance(shop.get("recipe"), dict):
         recipe = shop.get("recipe")
+    active_mins: int | None = None
 
     try:
         import shopping as shopping_mod
 
-        active_mins = None
         if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
             try:
                 active_mins = int(recipe["active_minutes"])
@@ -3185,15 +3212,53 @@ def page_execute() -> None:
             if lines:
                 st.markdown("\n".join(lines))
 
+    # Opt-in on the recipe surface (still OFF by default; never on decision card)
+    show_nut = _profile_show_nutrition()
+    if hasattr(st, "toggle"):
+        want_nut = st.toggle(
+            t("nutrition_recipe_toggle"),
+            value=show_nut,
+            key="exec_show_nutrition",
+        )
+    else:
+        want_nut = st.checkbox(
+            t("nutrition_recipe_toggle"),
+            value=show_nut,
+            key="exec_show_nutrition",
+        )
+    if want_nut != show_nut:
+        try:
+            _set_profile_show_nutrition(bool(want_nut))
+        except Exception as exc:
+            log.warning("save nutrition pref failed: %s", exc)
+        st.rerun()
+
     try:
         ings_fallback = None
         if isinstance(shop, dict):
             raw_ings = shop.get("ingredients") or []
             if isinstance(raw_ings, (list, tuple)):
                 ings_fallback = list(raw_ings)
+        elif isinstance(recipe, dict):
+            raw_ings = recipe.get("ingredients") or []
+            if isinstance(raw_ings, (list, tuple)):
+                ings_fallback = list(raw_ings)
+        # Rebuild recipe if context lost it (Cloud / thin payloads)
+        if (not isinstance(recipe, dict) or not recipe.get("ingredients")) and suggestion:
+            try:
+                import shopping as shopping_mod
+
+                recipe = shopping_mod.build_recipe(
+                    suggestion,
+                    ings_fallback,
+                    active_minutes=active_mins,
+                )
+            except Exception as exc:
+                log.warning("execute recipe rebuild failed: %s", exc)
         render_recipe_block(
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
+            show_nutrition=bool(want_nut),
         )
     except Exception as exc:
         log.warning("recipe render failed: %s", exc)
@@ -3315,20 +3380,27 @@ def page_profile() -> None:
         safe_toast(t("clothes_saved"))
         st.rerun()
 
-    # --- Food: opt-in nutrition estimates (recipe view only) ---
+    # --- Opt-in nutrition estimates (recipe view only) ---
     st.markdown(
         f'<p class="oc-logo" style="font-size:1.15rem;margin-top:1.4rem">'
-        f'{html.escape(domain_label("food"))}</p>',
+        f'{html.escape(t("nutrition_section"))}</p>',
         unsafe_allow_html=True,
     )
     food_prof = dict((ensured if isinstance(ensured, dict) else {}).get("food") or {})
     show_nut = bool(food_prof.get("show_nutrition", False))
     st.caption(t("nutrition_hint"))
-    new_show_nut = st.checkbox(
-        t("nutrition_title"),
-        value=show_nut,
-        key="prof_show_nutrition",
-    )
+    if hasattr(st, "toggle"):
+        new_show_nut = st.toggle(
+            t("nutrition_title"),
+            value=show_nut,
+            key="prof_show_nutrition",
+        )
+    else:
+        new_show_nut = st.checkbox(
+            t("nutrition_title"),
+            value=show_nut,
+            key="prof_show_nutrition",
+        )
     if new_show_nut != show_nut:
         new_profile = dict(ensured) if isinstance(ensured, dict) else {}
         food_row = dict(new_profile.get("food") or {})

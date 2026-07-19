@@ -265,6 +265,8 @@ def apply_meal_execution(
     *,
     language: str = "sv",
     location: str = "Sverige",
+    ingredients: list[str] | None = None,
+    active_minutes: int | None = None,
 ) -> dict[str, Any]:
     """Adjust execution payload for meal type (shopping / labels)."""
     out = dict(execution or {})
@@ -280,6 +282,20 @@ def apply_meal_execution(
             if language == "sv"
             else "Assumed at home — no shopping trip."
         )
+        # Keep / build recipe so execute view has ingredients + ca-värden
+        if not isinstance(out.get("recipe"), dict):
+            import shopping as shopping_mod
+
+            ings = list(ingredients or [])
+            mins = active_minutes
+            if mins is None and isinstance(execution, dict):
+                mins = (execution.get("meta") or {}).get("active_minutes")
+            out["recipe"] = shopping_mod.build_recipe(
+                suggestion,
+                ings or None,
+                active_minutes=int(mins) if mins is not None else None,
+                servings=1,
+            )
         return out
     if meal_type == "lunch":
         if out.get("type") == "map" or (execution or {}).get("type") == "map":

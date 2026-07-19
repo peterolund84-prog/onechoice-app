@@ -347,8 +347,18 @@ def _check_food(
         }
         return FeasibilityResult(ok=True, execution=execution)
 
-    # Breakfast / evening / quick lunch: no shopping trip
+    # Breakfast / evening / quick lunch: no shopping trip — still attach recipe
+    # (ingredients + steps + ca-värden) so "Ät nu" can open the recipe view.
     if at_home or not show_shop:
+        meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+        ings = list(meta.get("ingredients") or [])
+        active = meta.get("active_minutes")
+        recipe = shopping.build_recipe(
+            suggestion,
+            ings or None,
+            active_minutes=int(active) if active is not None else None,
+            servings=1 if meal_type in ("frukost", "kvallsmal") else None,
+        )
         execution = {
             "type": "recipe",
             "label": "Ät nu",
@@ -356,6 +366,7 @@ def _check_food(
             "detail": "Hemma antas — ingen inköpsrunda.",
             "shopping": None,
             "shopping_list": None,
+            "recipe": recipe,
             "meal_type": meal_type,
             "max_active_minutes": max_min,
         }

@@ -535,6 +535,24 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Smält 1 tsk smör i en nonstick-panna. Häll i äggblandningen.",
             "När ytan börjar stelna: lägg på grönt och ost, vik ihop. Stek 1 min till. Servera.",
         ]
+    if "smörgås" in s or "macka" in s or ("sandwich" in s and "egg" not in s):
+        return [
+            "Ta fram bröd, ost och smör.",
+            "Bred smör på brödet. Lägg på ostskivor.",
+            "Servera som den är — eller grilla 1–2 min om du vill ha den varm.",
+        ]
+    if "yoghurt" in s or s.startswith("fil ") or "fil eller" in s or "filmjölk" in s:
+        return [
+            "Ta fram fil eller yoghurt.",
+            "Häll upp i en skål. Toppa med sylt, frukt eller müsli om du har.",
+            "Ät direkt.",
+        ]
+    if "värm en rest" in s or "reheat leftover" in s:
+        return [
+            "Ta fram matlådan eller resterna från kylen.",
+            "Värm i mikrougn 2–3 min (eller i panna) tills det är genomsvarmt.",
+            "Smaka av. Klart.",
+        ]
     if "burgare" in s or "burger" in s:
         return [
             "Blanda 400 g nötfärs med salt och peppar. Forma 2–4 biffar (ca 2 cm tjocka).",
