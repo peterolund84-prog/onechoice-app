@@ -132,6 +132,48 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertEqual(r.execution_label, "Ät nu")
         tmp.cleanup()
 
+    def test_app_at_nu_opens_recipe_with_nutrition_toggle(self) -> None:
+        """UI proof: Mat + kvällsmål → Ät nu → ingredients + opt-in toggle on execute."""
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=90)
+        at.run()
+        at.session_state["food_meal_type"] = "kvallsmal"
+        for b in at.button:
+            if b.label == "Mat":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
+        hit = False
+        for b in at.button:
+            if b.label and "Ät nu" in b.label:
+                b.click().run()
+                hit = True
+                break
+        self.assertTrue(hit)
+        self.assertEqual(at.session_state["page"], "execute")
+        self.assertFalse(bool(at.session_state["ui_error"]))
+        body = " ".join(str(m.value or "") for m in at.markdown).lower()
+        self.assertIn("recept", body)
+        self.assertTrue("bröd" in body or "ost" in body, body[:500])
+        # Opt-in control lives on recipe page (off by default → no kcal yet)
+        toggle_labels = [t.label or "" for t in at.toggle]
+        self.assertTrue(
+            any("ca-värden" in lab.lower() or "närings" in lab.lower() or "nutrition" in lab.lower()
+                for lab in toggle_labels),
+            toggle_labels,
+        )
+        self.assertNotIn("kcal", body)
+        # Turn on → ca-värden appear
+        for tgl in at.toggle:
+            lab = (tgl.label or "").lower()
+            if "ca-värden" in lab or "närings" in lab or "nutrition" in lab:
+                tgl.set_value(True).run()
+                break
+        body2 = " ".join(str(m.value or "") for m in at.markdown).lower()
+        self.assertIn("ca-värden", body2)
+        self.assertIn("kcal", body2)
+
 
 if __name__ == "__main__":
     unittest.main()

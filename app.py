@@ -109,7 +109,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "kvallsmal-recipe-v13-20260719"
+BUILD_ID = "kvallsmal-recipe-v14-20260719"
 
 I18N = {
     "sv": {
@@ -138,7 +138,8 @@ I18N = {
         "steps_title": "Gör så här",
         "nutrition_section": "Näringsvärden",
         "nutrition_title": "Visa näringsvärden",
-        "nutrition_hint": "Ca-värden per portion under receptet (efter Ät nu / Handla & laga) — aldrig på beslutskortet. Av som standard.",
+        "nutrition_hint": "Ca-värden per portion under receptet — aldrig på beslutskortet. Av som standard.",
+        "nutrition_recipe_toggle": "Visa ca-värden (kcal / protein)",
         "nutrition_saved": "Sparat.",
         "back_to_decision": "Tillbaka",
         "error_friendly": "Något gick fel — försök igen",
@@ -265,7 +266,8 @@ I18N = {
         "steps_title": "Steps",
         "nutrition_section": "Nutrition",
         "nutrition_title": "Show nutrition estimates",
-        "nutrition_hint": "Approx. per serving under the recipe (after Eat now / Shop & cook) — never on the decision card. Off by default.",
+        "nutrition_hint": "Approx. per serving under the recipe — never on the decision card. Off by default.",
+        "nutrition_recipe_toggle": "Show approx. nutrition (kcal / protein)",
         "nutrition_saved": "Saved.",
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
@@ -1882,6 +1884,28 @@ def _profile_show_nutrition() -> bool:
         return False
 
 
+def _set_profile_show_nutrition(enabled: bool) -> None:
+    """Persist opt-in to profile_json.food.show_nutrition."""
+    import json
+
+    uid = st.session_state.get("user_id")
+    if not uid:
+        return
+    user = db.ensure_user(uid)
+    raw = user.get("profile_json") or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    food = dict(raw.get("food") or {})
+    food["show_nutrition"] = bool(enabled)
+    raw["food"] = food
+    db.update_user(uid, profile_json=raw)
+
+
 def render_recipe_block(
     recipe: dict[str, Any] | None,
     fallback_ings: list[str] | None = None,
@@ -3139,11 +3163,11 @@ def page_execute() -> None:
     recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
     if not recipe and shop and isinstance(shop.get("recipe"), dict):
         recipe = shop.get("recipe")
+    active_mins: int | None = None
 
     try:
         import shopping as shopping_mod
 
-        active_mins = None
         if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
             try:
                 active_mins = int(recipe["active_minutes"])
@@ -3188,15 +3212,53 @@ def page_execute() -> None:
             if lines:
                 st.markdown("\n".join(lines))
 
+    # Opt-in on the recipe surface (still OFF by default; never on decision card)
+    show_nut = _profile_show_nutrition()
+    if hasattr(st, "toggle"):
+        want_nut = st.toggle(
+            t("nutrition_recipe_toggle"),
+            value=show_nut,
+            key="exec_show_nutrition",
+        )
+    else:
+        want_nut = st.checkbox(
+            t("nutrition_recipe_toggle"),
+            value=show_nut,
+            key="exec_show_nutrition",
+        )
+    if want_nut != show_nut:
+        try:
+            _set_profile_show_nutrition(bool(want_nut))
+        except Exception as exc:
+            log.warning("save nutrition pref failed: %s", exc)
+        st.rerun()
+
     try:
         ings_fallback = None
         if isinstance(shop, dict):
             raw_ings = shop.get("ingredients") or []
             if isinstance(raw_ings, (list, tuple)):
                 ings_fallback = list(raw_ings)
+        elif isinstance(recipe, dict):
+            raw_ings = recipe.get("ingredients") or []
+            if isinstance(raw_ings, (list, tuple)):
+                ings_fallback = list(raw_ings)
+        # Rebuild recipe if context lost it (Cloud / thin payloads)
+        if (not isinstance(recipe, dict) or not recipe.get("ingredients")) and suggestion:
+            try:
+                import shopping as shopping_mod
+
+                recipe = shopping_mod.build_recipe(
+                    suggestion,
+                    ings_fallback,
+                    active_minutes=active_mins,
+                )
+            except Exception as exc:
+                log.warning("execute recipe rebuild failed: %s", exc)
         render_recipe_block(
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
+            show_nutrition=bool(want_nut),
         )
     except Exception as exc:
         log.warning("recipe render failed: %s", exc)
