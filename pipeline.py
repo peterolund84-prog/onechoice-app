@@ -156,15 +156,19 @@ def decide(
     After MAX_REROLLS, result is locked.
     """
     db.init_db(db_path)
-    user = db.ensure_user(user_id, path=db_path)
+    if not user_id:
+        raise ValueError("user_id is required")
+    user = db.ensure_user(str(user_id), path=db_path)
     language = language if language in ("sv", "en") else (user.get("language") or "sv")
     if user.get("language") != language:
-        with db.get_conn(db_path) as conn:
-            conn.execute("UPDATE users SET language = ? WHERE id = ?", (language, user_id))
-        user = db.ensure_user(user_id, path=db_path)
+        try:
+            db.update_user(str(user_id), language=language, path=db_path)
+            user = db.ensure_user(str(user_id), path=db_path)
+        except Exception as exc:
+            log.warning("language update failed: %s", exc)
     q = (question or "").strip()
     if not q and domain_hint:
-        q = _default_question(domain_hint, language)
+        q = _default_question(str(domain_hint), language)
 
     domain = classify_domain(q, domain_hint)
     if domain == "refused" or domain is None and _looks_high_stakes(q):
@@ -247,21 +251,24 @@ def decide(
         top = dict(top)
         top["wildcard"] = True
 
-    justification = top["justification"]
+    justification = str(top.get("justification") or "")
     if top.get("wildcard") and language == "sv" and "vildkort" not in justification.lower():
         # Soft tag only in stored context; user-facing stays one confident line
         pass
 
-    execution = top.get("execution") or _execution_for(domain, top["suggestion"], language, user)
-    # Attach shopping list / workout plan into justification only if still one line?
-    # Spec: one-line justification + separate execution step — keep justification as-is.
+    execution = top.get("execution") if isinstance(top.get("execution"), dict) else None
+    if not execution:
+        execution = _execution_for(
+            domain, str(top.get("suggestion") or ""), language, user
+        )
+    suggestion = str(top.get("suggestion") or "")
     status = "locked" if locked else "shown"
 
     decision = db.create_decision(
         user_id=user_id,
         domain=domain,
         question=q,
-        suggestion=top["suggestion"],
+        suggestion=suggestion,
         justification=justification,
         status=status,
         reroll_index=effective_reroll,
@@ -285,7 +292,7 @@ def decide(
             user_id,
             domain,
             "suggestion",
-            top["suggestion"].strip().lower(),
+            suggestion.strip().lower(),
             1.5,
             path=db_path,
         )
@@ -293,7 +300,7 @@ def decide(
     return DecisionResult(
         ok=True,
         domain=domain,
-        suggestion=top["suggestion"],
+        suggestion=suggestion,
         justification=justification,
         execution_type=execution.get("type"),
         execution_label=execution.get("label"),
@@ -354,6 +361,16 @@ def _default_question(domain: str, language: str) -> str:
     return (sv if language == "sv" else en).get(domain, sv["food"])
 
 
+def _usable_grok_key(key: str) -> bool:
+    k = str(key or "").strip()
+    if len(k) < 8:
+        return False
+    low = k.lower()
+    if low.startswith("din_") or "your_" in low or low.endswith("_här") or low.endswith("_har"):
+        return False
+    return True
+
+
 def _generate_candidates(
     *,
     question: str,
@@ -366,7 +383,7 @@ def _generate_candidates(
     language: str,
     grok_api_key: str,
 ) -> list[dict[str, Any]]:
-    if grok_api_key and not grok_api_key.startswith("din_"):
+    if _usable_grok_key(grok_api_key):
         try:
             return _grok_candidates(
                 question,
@@ -457,7 +474,12 @@ Rules:
         timeout=45,
     )
     resp.raise_for_status()
-    raw = resp.json()["choices"][0]["message"]["content"].strip()
+    payload = resp.json()
+    choices = payload.get("choices") or []
+    if not choices:
+        raise ValueError("empty grok choices")
+    content = (choices[0].get("message") or {}).get("content") or ""
+    raw = str(content).strip()
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
     if fence:
         raw = fence.group(1).strip()
@@ -466,16 +488,18 @@ Rules:
         raw = brace.group(0)
     data = json.loads(raw)
     out: list[dict[str, Any]] = []
-    for c in data.get("candidates", []):
-        s = str(c.get("suggestion", "")).strip()
-        j = str(c.get("justification", "")).strip()
+    for c in data.get("candidates") or []:
+        if not isinstance(c, dict):
+            continue
+        s = str(c.get("suggestion") or "").strip()
+        j = str(c.get("justification") or "").strip()
         if s and j:
             out.append(
                 {
                     "suggestion": s,
                     "justification": j,
                     "wildcard": bool(c.get("wildcard")),
-                    "meta": c.get("meta") or {},
+                    "meta": c.get("meta") if isinstance(c.get("meta"), dict) else {},
                 }
             )
     if len(out) < 3:
@@ -669,7 +693,7 @@ def _local_candidates(
     }
     packs = packs_sv if language == "sv" else packs_en
     items = list(packs.get(domain, packs["food"]))
-    recent_l = {r.strip().lower() for r in recent}
+    recent_l = {str(r).strip().lower() for r in recent if r}
     filtered = [c for c in items if c["suggestion"].strip().lower() not in recent_l]
     pool = filtered or items
     random.shuffle(pool)
@@ -741,7 +765,7 @@ def _rank_candidates(
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
-    recent_l = {r.strip().lower() for r in recent}
+    recent_l = {str(r).strip().lower() for r in recent if r}
     pref_map = {
         (p.get("value") or "").strip().lower(): float(p.get("score") or 0)
         for p in preferences
@@ -750,13 +774,15 @@ def _rank_candidates(
 
     scored: list[tuple[float, dict[str, Any]]] = []
     for c in candidates:
-        key = c["suggestion"].strip().lower()
-        score = pref_map.get(key, 0.0)
+        key = str(c.get("suggestion") or "").strip().lower()
+        if not key:
+            continue
+        score = float(pref_map.get(key, 0.0))
         if key in recent_l:
             score -= 5.0
         for pref_val, pref_score in pref_map.items():
             if pref_val and pref_val in key:
-                score += pref_score * 0.25
+                score += float(pref_score) * 0.25
         # Safe bias: non-wildcards rank slightly higher unless exploring
         if c.get("wildcard"):
             score -= 0.15
@@ -785,6 +811,7 @@ def _execution_for(
     language: str,
     user: dict[str, Any],
 ) -> dict[str, Any]:
+    suggestion = str(suggestion or "")
     q = quote_plus(suggestion)
     sv = language == "sv"
     if domain == "food":
