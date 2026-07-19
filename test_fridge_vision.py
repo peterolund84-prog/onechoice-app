@@ -112,6 +112,36 @@ class FridgeVisionStrictTests(unittest.TestCase):
         self.assertEqual(fr.LAST_VISION_DEBUG.get("http_status"), 200)
         self.assertTrue(fr.LAST_VISION_DEBUG.get("image_bytes"))
 
+    def test_empty_ingredients_json_raises(self) -> None:
+        blob = b"\xff\xd8\xff" + b"z" * 200
+        model_raw = '{"ingredients":[]}'
+
+        class FakeResp:
+            status_code = 200
+            text = json.dumps({"choices": [{"message": {"content": model_raw}}]})
+
+            def json(self):
+                return json.loads(self.text)
+
+        with mock.patch("fridge_domain.requests.post", return_value=FakeResp()):
+            with self.assertRaises(fr.FridgeVisionError) as ctx:
+                fr.invent_from_images(
+                    [blob],
+                    api_key="xai-looks-real-enough-abcdefgh",
+                    language="sv",
+                )
+        self.assertIn(ctx.exception.code, ("empty_inventory", "all_models_failed"))
+
+    def test_usable_key_requires_xai_prefix(self) -> None:
+        self.assertTrue(fr.usable_vision_key("xai-" + "a" * 20))
+        self.assertFalse(fr.usable_vision_key("din_grok_api_nyckel_här"))
+        self.assertFalse(fr.usable_vision_key(""))
+        # Quoted secret paste
+        self.assertEqual(
+            fr.resolve_vision_api_key('"xai-' + "b" * 20 + '"'),
+            "xai-" + "b" * 20,
+        )
+
 
 @unittest.skipUnless(
     bool(os.environ.get("GROK_API_KEY") or os.environ.get("XAI_API_KEY")),

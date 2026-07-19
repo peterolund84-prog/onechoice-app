@@ -100,17 +100,43 @@ class FridgeVisionError(RuntimeError):
 
 
 def usable_vision_key(key: str) -> bool:
-    k = (key or "").strip()
-    if len(k) < 8:
+    k = normalize_secret(key)
+    if len(k) < 12:
         return False
     low = k.lower()
-    if low.startswith(("din_", "your_", "sk_test")):
+    if low.startswith(("din_", "your_", "sk_test", "xxx", "paste")):
         return False
-    if low.endswith(("_här", "_har")) or "your_" in low or "nyckel" in low:
+    if "placeholder" in low or "your_project" in low:
         return False
-    if "placeholder" in low or k.startswith("YOUR_"):
+    if low.endswith(("_här", "_har")) or low == "din_grok_api_nyckel_här":
         return False
-    return True
+    # Real xAI keys look like xai-...
+    if low.startswith("xai-") and len(k) >= 16:
+        return True
+    # Opaque long secrets (some teams rename the env)
+    return len(k) >= 32 and "nyckel" not in low
+
+
+def normalize_secret(value: str) -> str:
+    """Strip whitespace and accidental quote characters from Streamlit secrets."""
+    k = (value or "").strip()
+    if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'“”‘’":
+        k = k[1:-1].strip()
+    return k
+
+
+def resolve_vision_api_key(*candidates: str) -> str:
+    """First usable key among candidates (already fetched strings)."""
+    for raw in candidates:
+        k = normalize_secret(str(raw or ""))
+        if usable_vision_key(k):
+            return k
+    # Return first non-empty normalized for error messages / debug
+    for raw in candidates:
+        k = normalize_secret(str(raw or ""))
+        if k:
+            return k
+    return ""
 
 
 def is_fridge_mode(context: dict[str, Any] | None) -> bool:
@@ -269,16 +295,18 @@ def invent_from_images(
     if not blobs:
         raise FridgeVisionError("no_image", "Ingen bild att skicka till vision-modellen.")
 
-    key = (api_key or "").strip()
+    key = normalize_secret(api_key or "")
     if not usable_vision_key(key):
         log.error(
-            "fridge invent ABORT — unusable GROK_API_KEY (len=%s, prefix=%r)",
+            "fridge invent ABORT — unusable API key (len=%s, prefix=%r, startswith_xai=%s)",
             len(key),
             key[:6] if key else "",
+            key.lower().startswith("xai-"),
         )
         raise FridgeVisionError(
             "missing_api_key",
-            "GROK_API_KEY saknas eller är en placeholder — vision-anropet kördes aldrig.",
+            "GROK_API_KEY saknas eller är ogiltig — vision-anropet kördes aldrig. "
+            "I Streamlit Secrets ska det stå GROK_API_KEY = \"xai-...\" (utan extra citationstecken).",
         )
 
     mimes = list(mime_types or [])
@@ -332,6 +360,7 @@ def invent_from_images(
             )
             parsed = parse_inventory_json(raw)
             LAST_VISION_DEBUG["parsed_n"] = len(parsed)
+            LAST_VISION_DEBUG["elapsed_hint"] = "ok"
             log.info(
                 "fridge vision PARSE model=%s received_chars=%s produced_n=%s names=%s",
                 model,
@@ -339,6 +368,15 @@ def invent_from_images(
                 len(parsed),
                 [p["name"] for p in parsed],
             )
+            if not parsed:
+                # Real API call happened — do not pretend success with silent empty
+                raise FridgeVisionError(
+                    "empty_inventory",
+                    "Vision-anropet lyckades men returnerade 0 ingredienser.",
+                    raw=raw,
+                    status=status,
+                    model=model,
+                )
             return parsed
         except FridgeVisionError as exc:
             log.error(
