@@ -82,14 +82,18 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-PRIMARY = "#5A8BFF"
-PRIMARY_SOFT = "#EAF1FF"
-BG = "#F4F6F8"
-BG_SOFT = "#EEF2F7"
-INK = "#1C1C1E"
-MUTED = "#6B6B76"
-NAVY = "#3E5B84"
-SHADOW = "0 12px 40px rgba(62, 91, 132, 0.08)"
+# Design tokens — premium minimal (accent ONLY on CTA, tagline dot, active nav)
+BG = "#FAFAF7"
+INK = "#1A1A1A"
+MUTED = "#6B6B66"
+BORDER = "#E5E5E0"
+ACCENT = "#3B3BC4"
+# Legacy aliases (non-accent UI — never use ACCENT except CTA / tag dot / active nav)
+PRIMARY = INK
+PRIMARY_SOFT = "#F0F0EB"
+BG_SOFT = BG
+NAVY = INK
+SHADOW = "none"
 
 # Lucide-style inline SVGs (stroke icons — no emoji)
 ICON_HOME = (
@@ -108,8 +112,8 @@ ICON_USER = (
     '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>'
 )
 
-# Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fix-execute-recipe-v15-20260719"
+# Server-side only — never render in the consumer UI
+BUILD_ID = "home-premium-minimal-v16-20260719"
 
 I18N = {
     "sv": {
@@ -387,28 +391,42 @@ def inject_css() -> None:
     st.markdown(
         f"""
 <style>
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Sora:wght@600;700&display=swap");
+:root {{
+    --oc-bg: {BG};
+    --oc-ink: {INK};
+    --oc-muted: {MUTED};
+    --oc-border: {BORDER};
+    --oc-accent: {ACCENT};
+}}
+html, body, .stApp, [data-testid="stAppViewContainer"],
+[data-testid="stAppViewContainer"] > .main,
+section.main, .main .block-container {{
+    background: var(--oc-bg) !important;
+    background-color: var(--oc-bg) !important;
+    background-image: none !important;
+}}
 html, body, .stApp, [data-testid="stAppViewContainer"] {{
-    background:
-        radial-gradient(110% 70% at 80% -5%, rgba(90,139,255,0.12) 0%, transparent 52%),
-        linear-gradient(180deg, {BG} 0%, {BG_SOFT} 100%) !important;
-    font-family: "Manrope", "Helvetica Neue", sans-serif !important;
-    font-weight: 500;
-    color: {INK}; -webkit-font-smoothing: antialiased;
+    font-family: "Inter", "Helvetica Neue", sans-serif !important;
+    font-weight: 400;
+    color: var(--oc-ink) !important;
+    -webkit-font-smoothing: antialiased;
+}}
+h1, h2, h3, h4, h5, h6, .oc-logo, .oc-decision h1, .oc-pro h2 {{
+    font-family: "Sora", "Inter", sans-serif !important;
 }}
 #MainMenu, footer, header, [data-testid="stToolbar"],
 [data-testid="stDecoration"], .stDeployButton,
 [data-testid="stSidebar"], [data-testid="stHeader"] {{ display: none !important; }}
 .block-container {{
     max-width: 420px !important;
-    padding: 1.2rem 1.2rem 9rem !important;
+    padding: 1.4rem 1.25rem 7.5rem !important;
     margin: 0 auto !important;
 }}
 @media (max-width: 768px) {{
-    .block-container {{ padding: 1rem 0.75rem 9rem !important; }}
+    .block-container {{ padding: 1.1rem 1rem 7.5rem !important; }}
 }}
-/* Fridge camera: tall preview BUT leave room for Streamlit's Take Photo button under it.
-   Earlier 78vh on the whole WebcamComponent hid the shutter below the fold. */
+/* Fridge camera */
 .block-container:has([data-testid="stCameraInput"]) {{
     max-width: min(100vw, 480px) !important;
     padding-left: 0.5rem !important;
@@ -423,190 +441,206 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
     font-size: 0.95rem !important;
     margin: 0 0 0.25rem !important;
 }}
-div[data-testid="stCameraInput"] {{
-    width: 100% !important;
-}}
-/* Outer wrappers must stay auto-height so the shutter button stays visible */
+div[data-testid="stCameraInput"] {{ width: 100% !important; }}
 div[data-testid="stCameraInputWebcamComponent"],
 div[data-testid="stCameraInput"] > div {{
-    width: 100% !important;
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    aspect-ratio: auto !important;
+    width: 100% !important; height: auto !important;
+    min-height: 0 !important; max-height: none !important; aspect-ratio: auto !important;
 }}
-/* Only the video pane — taller than Streamlit's 16:9, short enough for the button */
 div[data-testid="stCameraInputWebcamStyledBox"] {{
     width: 100% !important;
     height: min(48vh, 380px) !important;
     min-height: min(48vh, 380px) !important;
     max-height: min(48vh, 380px) !important;
-    aspect-ratio: auto !important;
-    display: flex !important;
-    overflow: hidden !important;
-    border-radius: 12px 12px 0 0 !important;
+    aspect-ratio: auto !important; display: flex !important;
+    overflow: hidden !important; border-radius: 12px 12px 0 0 !important;
+    border: 1px solid var(--oc-border) !important; box-shadow: none !important;
 }}
 div[data-testid="stCameraInputWebcamStyledBox"] video,
 div[data-testid="stCameraInputWebcamStyledBox"] img,
 div[data-testid="stCameraInputWebcamStyledBox"] canvas {{
-    width: 100% !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    object-fit: cover !important;
-    object-position: center center !important;
+    width: 100% !important; height: 100% !important;
+    object-fit: cover !important; object-position: center center !important;
 }}
 div[data-testid="stCameraInputButton"],
 div[data-testid="stCameraInput"] button {{
-    width: 100% !important;
-    min-height: 3.1rem !important;
-    margin-top: 0 !important;
-    position: relative !important;
-    z-index: 6 !important;
+    width: 100% !important; min-height: 3.1rem !important;
+    margin-top: 0 !important; position: relative !important; z-index: 6 !important;
 }}
+/* Wordmark — solid ink, Sora, no two-tone */
 .oc-logo {{
-    text-align: center; font-weight: 700; font-size: 1.55rem;
-    letter-spacing: -0.05em; color: {INK}; margin: 0.4rem 0 0.2rem;
+    text-align: center;
+    font-family: "Sora", "Inter", sans-serif !important;
+    font-weight: 700 !important;
+    font-size: 1.65rem !important;
+    letter-spacing: -0.03em !important;
+    color: var(--oc-ink) !important;
+    margin: 0.6rem 0 0.35rem !important;
 }}
-.oc-logo em {{ font-style: normal; color: {PRIMARY}; }}
+.oc-logo em {{ font-style: normal !important; color: var(--oc-ink) !important; }}
 .oc-tagline {{
-    text-align: center; color: {MUTED}; font-size: 1rem;
-    margin: 0 0 1.4rem; letter-spacing: -0.01em;
+    text-align: center;
+    color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 1rem !important;
+    font-weight: 400 !important;
+    margin: 0 0 48px !important;
+    letter-spacing: -0.01em;
 }}
+.oc-tag-dot {{ color: var(--oc-accent) !important; }}
+/* Language: text link SV · EN */
 .oc-lang {{
-    position: fixed !important; top: max(0.75rem, env(safe-area-inset-top)) !important;
-    right: 0.75rem !important; z-index: 1100 !important;
-    display: grid !important; grid-template-columns: auto auto !important; gap: 0.4rem !important;
+    position: fixed !important;
+    top: max(0.85rem, env(safe-area-inset-top)) !important;
+    right: 1rem !important;
+    z-index: 1100 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 14px !important;
+    line-height: 1 !important;
 }}
 .oc-lang a {{
-    display: inline-flex !important; align-items: center; justify-content: center;
-    width: 40px; height: 40px; border-radius: 50%; text-decoration: none;
-    font-size: 0.66rem; font-weight: 700; letter-spacing: 0.04em;
-    box-shadow: 0 4px 14px rgba(62,91,132,0.1);
+    color: var(--oc-muted) !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    border: none !important;
+    width: auto !important; height: auto !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
 }}
-.oc-domains {{
-    display: grid !important; grid-template-columns: 1fr 1fr !important;
-    gap: 0.55rem !important; margin: 0 0 1.1rem !important;
-}}
-@media (min-width: 380px) {{
-    .oc-domains {{ grid-template-columns: repeat(3, 1fr) !important; }}
-}}
-.oc-domains a {{
-    display: flex !important; align-items: center; justify-content: center;
-    min-height: 2.7rem; border-radius: 999px; text-decoration: none;
-    background: #fff; color: #444; font-weight: 600; font-size: 0.88rem;
-    border: 1px solid rgba(62,91,132,0.08); box-shadow: {SHADOW};
-}}
+.oc-lang a.active {{ color: var(--oc-ink) !important; font-weight: 600 !important; }}
+.oc-lang .oc-lang-sep {{ color: var(--oc-muted) !important; user-select: none; }}
+/* Textarea */
 div[data-testid="stTextArea"] > div, .stTextArea > div, .stTextArea [data-baseweb="textarea"] {{
     background: transparent !important; border: none !important; box-shadow: none !important;
 }}
 .stTextArea textarea {{
-    background: #fff !important; border: 1px solid rgba(62,91,132,0.06) !important;
-    border-radius: 22px !important; min-height: 110px !important;
-    font-size: 1.05rem !important; padding: 1.1rem 1.2rem !important;
-    box-shadow: {SHADOW} !important; color: {INK} !important;
-    font-family: "Manrope", sans-serif !important;
+    background: #fff !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 16px !important;
+    min-height: 110px !important;
+    font-size: 1.02rem !important;
+    padding: 1rem 1.1rem !important;
+    box-shadow: none !important;
+    color: var(--oc-ink) !important;
+    font-family: "Inter", sans-serif !important;
+}}
+.stTextArea textarea:focus {{
+    border-color: var(--oc-accent) !important;
+    box-shadow: none !important;
+    outline: none !important;
 }}
 div.stButton {{ display: flex !important; justify-content: center !important; }}
-div.stButton > button[data-testid="baseButton-primary"] {{
-    background: {PRIMARY} !important; color: #fff !important; border: none !important;
-    border-radius: 16px !important; font-weight: 700 !important; font-size: 1.05rem !important;
-    height: 54px !important; width: 100% !important;
-    box-shadow: 0 12px 28px rgba(90,139,255,0.32) !important;
-    font-family: "Manrope", sans-serif !important;
+/* CTA — only place with accent fill + visual weight */
+div.stButton > button[data-testid="baseButton-primary"],
+div.stButton > button[kind="primary"],
+button[data-testid="baseButton-primary"] {{
+    background: {ACCENT} !important;
+    background-color: {ACCENT} !important;
+    background-image: none !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    font-weight: 600 !important;
+    font-size: 1.02rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 16px 1.5rem !important;
+    width: 100% !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
 }}
-/* Link-style secondary ONLY outside chip grids (Hem / Nytt förslag) */
+/* Link-style secondary outside chip grids */
 div.stButton > button[data-testid="baseButton-secondary"],
 div.stButton > button[kind="secondary"] {{
-    background: transparent !important; color: {MUTED} !important;
+    background: transparent !important; color: var(--oc-muted) !important;
     border: none !important; box-shadow: none !important;
     border-radius: 0 !important; font-weight: 500 !important;
     min-height: 36px !important; width: auto !important;
     font-size: 0.95rem !important; text-decoration: underline !important;
     text-underline-offset: 3px !important;
-    font-family: "Manrope", sans-serif !important;
+    font-family: "Inter", sans-serif !important;
 }}
-/* Domain / occasion / meal chips live in horizontal blocks — must look like pills,
-   not ghost underlines (root cause of "inga val syns" on Cloud). */
+/* Non-home chip rows (occasion / meal) — ghost borders, no shadows, no accent fill */
 div[data-testid="stHorizontalBlock"] div.stButton > button,
 div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
 div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
 div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
 div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
-    background: #fff !important;
-    color: #444 !important;
-    border: 1px solid rgba(62,91,132,0.10) !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
     border-radius: 999px !important;
-    box-shadow: {SHADOW} !important;
-    font-weight: 600 !important;
+    box-shadow: none !important;
+    font-weight: 500 !important;
     font-size: 0.88rem !important;
-    min-height: 2.7rem !important;
+    min-height: 2.5rem !important;
     height: auto !important;
     width: 100% !important;
     text-decoration: none !important;
-    padding: 0.55rem 0.6rem !important;
-    font-family: "Manrope", sans-serif !important;
+    padding: 0.5rem 0.75rem !important;
+    font-family: "Inter", sans-serif !important;
 }}
 div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
 div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
-    background: {PRIMARY_SOFT} !important;
-    color: {PRIMARY} !important;
-    font-weight: 700 !important;
-    border-color: rgba(90,139,255,0.35) !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    font-weight: 600 !important;
+    border-color: var(--oc-ink) !important;
     box-shadow: none !important;
 }}
-/* st.pills / button_group — same chip look */
 div[data-testid="stButtonGroup"] button,
 [data-testid="stButtonGroup"] button {{
-    background: #fff !important;
-    color: #444 !important;
-    border: 1px solid rgba(62,91,132,0.10) !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
     border-radius: 999px !important;
-    box-shadow: {SHADOW} !important;
-    font-weight: 600 !important;
+    box-shadow: none !important;
+    font-weight: 500 !important;
     font-size: 0.88rem !important;
     min-height: 2.5rem !important;
     text-decoration: none !important;
-    font-family: "Manrope", sans-serif !important;
+    font-family: "Inter", sans-serif !important;
 }}
 div[data-testid="stButtonGroup"] button[aria-checked="true"],
 [data-testid="stButtonGroup"] button[aria-pressed="true"] {{
-    background: {PRIMARY_SOFT} !important;
-    color: {PRIMARY} !important;
-    font-weight: 700 !important;
-    border-color: rgba(90,139,255,0.35) !important;
-}}
-@media (max-width: 768px) {{
-    div.stButton > button[data-testid="baseButton-primary"] {{
-        height: 52px !important; font-size: 1rem !important;
-    }}
-    div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {{
-        height: auto !important; font-size: 0.88rem !important;
-    }}
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    font-weight: 600 !important;
+    border-color: var(--oc-ink) !important;
 }}
 .oc-decision {{
-    background: #fff; border-radius: 28px;
-    padding: 2.4rem 1.5rem 2.1rem;
-    box-shadow: {SHADOW}; text-align: center;
+    background: #fff; border-radius: 24px;
+    padding: 2.2rem 1.5rem 2rem;
+    box-shadow: none !important; text-align: center;
     margin: 1.1rem 0 1.35rem;
-    border: 1px solid rgba(62,91,132,0.04);
+    border: 1px solid var(--oc-border);
 }}
 .oc-decision .label {{
-    font-size: 0.72rem; color: {MUTED}; letter-spacing: 0.08em;
-    text-transform: uppercase; margin-bottom: 1.15rem; font-weight: 700;
+    font-size: 0.72rem; color: var(--oc-muted); letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 1.15rem; font-weight: 600;
+    font-family: "Inter", sans-serif !important;
 }}
 .oc-decision h1 {{
-    font-size: clamp(2.125rem, 7.2vw, 2.45rem); font-weight: 700;
-    letter-spacing: -0.045em; line-height: 1.12; margin: 0 0 1.1rem; color: {INK};
+    font-family: "Sora", "Inter", sans-serif !important;
+    font-size: clamp(2rem, 7vw, 2.35rem); font-weight: 700;
+    letter-spacing: -0.03em; line-height: 1.12; margin: 0 0 1.1rem; color: var(--oc-ink);
 }}
 .oc-decision p {{
-    font-size: 1.05rem; color: #3a3a42; line-height: 1.45; margin: 0;
+    font-size: 1.02rem; color: var(--oc-muted); line-height: 1.45; margin: 0;
     max-width: 22rem; margin-left: auto; margin-right: auto;
+    font-family: "Inter", sans-serif !important;
 }}
 .oc-lock {{
-    display: inline-block; margin-top: 1.1rem; background: {PRIMARY_SOFT};
-    color: {PRIMARY}; font-weight: 700; font-size: 0.8rem;
-    padding: 0.35rem 0.8rem; border-radius: 999px;
+    display: inline-block; margin-top: 1.1rem;
+    background: transparent;
+    color: var(--oc-ink); font-weight: 600; font-size: 0.8rem;
+    padding: 0.3rem 0.75rem; border-radius: 999px;
+    border: 1px solid var(--oc-border);
 }}
 .oc-share-row {{
     display: flex; justify-content: flex-end; margin: 0 0 0.15rem;
@@ -614,140 +648,139 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 }}
 .oc-share-landing .oc-decision h1 {{ font-size: 1.65rem; }}
 .oc-share-cta-note {{
-    text-align: center; color: {MUTED}; font-size: 0.92rem;
+    text-align: center; color: var(--oc-muted); font-size: 0.92rem;
     margin: 0.2rem 0 0.9rem;
 }}
 .oc-refuse {{
     background: #fff; border-radius: 24px; padding: 1.6rem 1.3rem;
-    text-align: center; box-shadow: {SHADOW}; color: #3a3a42; font-size: 1.05rem;
-    line-height: 1.45; margin: 1rem 0;
+    text-align: center; box-shadow: none !important; color: var(--oc-muted); font-size: 1.05rem;
+    line-height: 1.45; margin: 1rem 0; border: 1px solid var(--oc-border);
 }}
-.oc-meta {{ text-align: center; color: {MUTED}; font-size: 1rem; margin: 0.4rem 0 0.8rem; }}
+.oc-meta {{ text-align: center; color: var(--oc-muted); font-size: 1rem; margin: 0.4rem 0 0.8rem; }}
 .oc-rerolls {{
     display: flex; justify-content: center; gap: 0.45rem;
     margin: 0.15rem 0 1.15rem;
 }}
 .oc-rerolls i {{
     display: block; width: 7px; height: 7px; border-radius: 50%;
-    background: {PRIMARY}; opacity: 1;
-    transition: opacity 0.25s ease;
+    background: var(--oc-ink); opacity: 1;
+    transition: opacity 0.25s ease; box-shadow: none !important;
 }}
-.oc-rerolls i.used {{ opacity: 0.22; background: {MUTED}; }}
-.oc-rerolls i.current {{
-    opacity: 1; background: {PRIMARY};
-    box-shadow: 0 0 0 3px {PRIMARY_SOFT};
+.oc-rerolls i.used {{ opacity: 0.22; background: var(--oc-muted); }}
+.oc-rerolls i.current {{ opacity: 1; background: var(--oc-ink); box-shadow: none !important; }}
+.oc-shop, .oc-recipe, .oc-error, .oc-hist, .oc-pro {{
+    background: #fff; border-radius: 20px;
+    box-shadow: none !important;
+    border: 1px solid var(--oc-border);
 }}
 .oc-shop {{
-    background: #fff; border-radius: 22px; padding: 1.25rem 1.2rem 1.1rem;
-    box-shadow: {SHADOW}; margin: 0 0 1.25rem;
-    border: 1px solid rgba(62,91,132,0.04); text-align: left;
+    padding: 1.25rem 1.2rem 1.1rem; margin: 0 0 1.25rem; text-align: left;
 }}
-.oc-shop .oc-shop-title {{
+.oc-shop .oc-shop-title, .oc-recipe .oc-shop-title {{
     font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: {MUTED}; font-weight: 700; margin: 0 0 0.85rem;
+    color: var(--oc-muted); font-weight: 600; margin: 0 0 0.85rem;
+    font-family: "Inter", sans-serif !important;
 }}
-.oc-shop .oc-sec {{
+.oc-shop .oc-sec, .oc-recipe .oc-sec {{
     font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
-    color: {MUTED}; font-weight: 700; margin: 0.95rem 0 0.4rem;
+    color: var(--oc-muted); font-weight: 600; margin: 0.95rem 0 0.4rem;
 }}
 .oc-shop .oc-sec:first-of-type {{ margin-top: 0; }}
 .oc-shop ul {{ list-style: none; margin: 0; padding: 0; }}
 .oc-shop li {{
     display: flex; align-items: flex-start; gap: 0.65rem;
-    font-size: 1rem; color: {INK}; line-height: 1.4;
-    padding: 0.38rem 0;
+    font-size: 1rem; color: var(--oc-ink); line-height: 1.4; padding: 0.38rem 0;
 }}
 .oc-shop li::before {{
     content: ""; flex: 0 0 1.05rem; width: 1.05rem; height: 1.05rem;
     margin-top: 0.12rem; border-radius: 50%;
-    border: 1.5px solid rgba(62,91,132,0.28);
-    box-sizing: border-box;
+    border: 1.5px solid var(--oc-border); box-sizing: border-box;
 }}
 .oc-shop .oc-assumed {{
     margin: 1rem 0 0; padding-top: 0.75rem;
-    border-top: 1px solid rgba(62,91,132,0.08);
-    font-size: 0.92rem; color: {MUTED}; line-height: 1.4;
+    border-top: 1px solid var(--oc-border);
+    font-size: 0.92rem; color: var(--oc-muted); line-height: 1.4;
 }}
 .oc-recipe {{
-    background: #fff; border-radius: 22px; padding: 1.25rem 1.2rem 1.2rem;
-    box-shadow: {SHADOW}; margin: 0 0 1.25rem;
-    border: 1px solid rgba(62,91,132,0.04); text-align: left;
-}}
-.oc-recipe .oc-shop-title {{
-    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: {MUTED}; font-weight: 700; margin: 0 0 0.85rem;
-}}
-.oc-recipe .oc-sec {{
-    font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
-    color: {MUTED}; font-weight: 700; margin: 0.95rem 0 0.4rem;
+    padding: 1.25rem 1.2rem 1.2rem; margin: 0 0 1.25rem; text-align: left;
 }}
 .oc-recipe ol {{
-    margin: 0; padding-left: 1.2rem; color: {INK}; font-size: 1rem; line-height: 1.45;
+    margin: 0; padding-left: 1.2rem; color: var(--oc-ink); font-size: 1rem; line-height: 1.45;
 }}
 .oc-recipe ol li {{ margin: 0.45rem 0; }}
 .oc-recipe ul {{ list-style: none; margin: 0; padding: 0; }}
 .oc-recipe ul li {{
-    font-size: 1rem; color: {INK}; line-height: 1.4; padding: 0.28rem 0;
+    font-size: 1rem; color: var(--oc-ink); line-height: 1.4; padding: 0.28rem 0;
 }}
 .oc-recipe .oc-nutrition {{
     margin: 0.65rem 0 0.15rem; padding: 0;
-    font-size: 0.88rem; color: {MUTED}; line-height: 1.35;
-    font-weight: 400; letter-spacing: 0;
-    text-transform: none;
+    font-size: 0.88rem; color: var(--oc-muted); line-height: 1.35;
+    font-weight: 400; letter-spacing: 0; text-transform: none;
 }}
 .oc-error {{
-    background: #fff; border-radius: 24px; padding: 1.8rem 1.4rem;
-    text-align: center; box-shadow: {SHADOW}; margin: 2rem 0 1rem;
+    padding: 1.8rem 1.4rem; text-align: center; margin: 2rem 0 1rem;
 }}
-.oc-error p {{ color: #3a3a42; font-size: 1.1rem; margin: 0 0 0.4rem; }}
-.oc-link-wrap {{
-    text-align: center; margin: 0.35rem 0 0.9rem;
-}}
-/* Show checkbox labels (shopping list) — override global widget-label hide */
+.oc-error p {{ color: var(--oc-muted); font-size: 1.1rem; margin: 0 0 0.4rem; }}
+.oc-link-wrap {{ text-align: center; margin: 0.35rem 0 0.9rem; }}
 .oc-checks [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {{
     display: flex !important;
 }}
 div[data-testid="stCheckbox"] label {{
-    font-family: "Manrope", sans-serif !important;
-    color: {INK} !important;
-    font-size: 1rem !important;
+    font-family: "Inter", sans-serif !important;
+    color: var(--oc-ink) !important; font-size: 1rem !important;
 }}
 .oc-sec-label {{
     font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
-    color: {MUTED}; font-weight: 700; margin: 0.85rem 0 0.35rem;
+    color: var(--oc-muted); font-weight: 600; margin: 0.85rem 0 0.35rem;
 }}
 .oc-hist {{
-    background: #fff; border-radius: 18px; padding: 1rem 1.1rem;
-    margin-bottom: 0.7rem; box-shadow: {SHADOW};
+    padding: 1rem 1.1rem; margin-bottom: 0.7rem;
 }}
-.oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.2rem; }}
-.oc-hist span {{ font-size: 0.9rem; color: {MUTED}; }}
+.oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.2rem; color: var(--oc-ink); }}
+.oc-hist span {{ font-size: 0.9rem; color: var(--oc-muted); }}
 .oc-pro {{
-    background: #fff; border-radius: 28px; padding: 2rem 1.5rem;
-    text-align: center; box-shadow: {SHADOW}; margin-top: 1.5rem;
+    padding: 2rem 1.5rem; text-align: center; margin-top: 1.5rem;
 }}
-.oc-pro h2 {{ margin: 0 0 0.5rem; letter-spacing: -0.03em; }}
-.oc-price {{ font-size: 1.6rem; font-weight: 700; color: {PRIMARY}; margin: 1.1rem 0; }}
+.oc-pro h2 {{
+    margin: 0 0 0.5rem; letter-spacing: -0.03em;
+    font-family: "Sora", "Inter", sans-serif !important; color: var(--oc-ink);
+}}
+.oc-price {{
+    font-size: 1.6rem; font-weight: 700; color: var(--oc-ink); margin: 1.1rem 0;
+    font-family: "Sora", "Inter", sans-serif !important;
+}}
+/* Bottom nav — white bar, top border, accent only on active */
 .oc-nav {{
-    position: fixed !important; left: 50% !important; transform: translateX(-50%) !important;
-    bottom: max(0.85rem, env(safe-area-inset-bottom)) !important;
-    width: min(360px, calc(100vw - 1.2rem)) !important; z-index: 1100 !important;
+    position: fixed !important; left: 0 !important; right: 0 !important;
+    transform: none !important;
+    bottom: 0 !important;
+    width: 100% !important; max-width: none !important;
+    z-index: 1100 !important;
     display: grid !important; grid-template-columns: 1fr 1fr 1fr !important;
-    gap: 0.15rem !important; background: rgba(255,255,255,0.96) !important;
-    border-radius: 999px !important; padding: 0.35rem 0.4rem !important;
-    box-shadow: 0 12px 36px rgba(62,91,132,0.14) !important;
-    border: 1px solid rgba(62,91,132,0.06) !important;
+    gap: 0 !important;
+    background: #fff !important;
+    border-radius: 0 !important;
+    padding: 0.55rem 0.5rem max(0.55rem, env(safe-area-inset-bottom)) !important;
+    box-shadow: none !important;
+    border: none !important;
+    border-top: 1px solid var(--oc-border) !important;
 }}
 .oc-nav a {{
     display: flex !important; flex-direction: column; align-items: center; justify-content: center;
-    gap: 0.2rem; text-decoration: none; color: {MUTED}; font-size: 0.68rem; font-weight: 500;
-    padding: 0.5rem 0.15rem; border-radius: 999px; line-height: 1.2;
+    gap: 0.2rem; text-decoration: none; color: var(--oc-muted) !important;
+    font-size: 0.68rem; font-weight: 500;
+    padding: 0.35rem 0.15rem; border-radius: 0; line-height: 1.2;
+    background: transparent !important;
+    font-family: "Inter", sans-serif !important;
 }}
-.oc-nav a.active {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; font-weight: 700; }}
+.oc-nav a.active {{
+    background: transparent !important;
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
 .oc-nav .oc-ico {{ width: 1.15rem; height: 1.15rem; display: block; }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
-/* Profile fields need visible labels */
 div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
 div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] {{
     display: flex !important;
@@ -758,10 +791,49 @@ div[data-testid="stHorizontalBlock"] {{
 div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
     min-width: 0 !important; flex: 1 1 0 !important;
 }}
-/* Ensure chip rows are not collapsed to 0 height on Cloud */
 div[data-testid="stHorizontalBlock"] div.stButton {{
-    width: 100% !important;
-    min-height: 2.7rem !important;
+    width: 100% !important; min-height: 2.5rem !important;
+}}
+/* Home domain chips — HTML flex row (not Streamlit columns) */
+.oc-chip-row {{
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 0 1.25rem !important;
+}}
+a.oc-chip {{
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    text-decoration: none !important;
+    padding: 8px 20px !important;
+}}
+a.oc-chip:hover, a.oc-chip:focus {{
+    border-color: var(--oc-ink) !important;
+    color: var(--oc-ink) !important;
+}}
+/* Kill Streamlit default chrome / shadows */
+[data-testid="stAppViewContainer"] * {{
+    --secondary-background-color: var(--oc-bg);
+    --primary-color: {ACCENT};
+}}
+div[data-baseweb="base-input"],
+div[data-baseweb="textarea"],
+div[data-baseweb="input"] {{
+    box-shadow: none !important;
+    background: transparent !important;
 }}
 </style>
         """,
@@ -1191,7 +1263,7 @@ def require_auth_context() -> None:
 
 def page_auth() -> None:
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("auth_hint"))}</p>',
         unsafe_allow_html=True,
@@ -1302,13 +1374,35 @@ def page_auth() -> None:
 
 def lang_bar() -> None:
     lang = st.session_state.language
-    sv = "background:#5A8BFF;color:#fff;" if lang == "sv" else "background:#fff;color:#8A8A96;border:1px solid rgba(62,91,132,0.1);"
-    en = "background:#5A8BFF;color:#fff;" if lang == "en" else "background:#fff;color:#8A8A96;border:1px solid rgba(62,91,132,0.1);"
+    sv_cls = "active" if lang == "sv" else ""
+    en_cls = "active" if lang == "en" else ""
     st.markdown(
-        f'<div class="oc-lang"><a href="?lang=sv" style="{sv}">SV</a>'
-        f'<a href="?lang=en" style="{en}">EN</a></div>',
+        f'<div class="oc-lang">'
+        f'<a class="{sv_cls}" href="?lang=sv">SV</a>'
+        f'<span class="oc-lang-sep">·</span>'
+        f'<a class="{en_cls}" href="?lang=en">EN</a>'
+        f"</div>",
         unsafe_allow_html=True,
     )
+
+
+def render_logo() -> None:
+    """Solid black wordmark — one word, no two-tone."""
+    st.markdown(
+        '<div class="oc-logo">OneChoice</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_tagline(text: str | None = None) -> None:
+    """Secondary grey tagline; closing period in accent indigo."""
+    raw = text if text is not None else t("tagline")
+    if raw.endswith("."):
+        body = html.escape(raw[:-1])
+        line = f'{body}<span class="oc-tag-dot">.</span>'
+    else:
+        line = html.escape(raw)
+    st.markdown(f'<p class="oc-tagline">{line}</p>', unsafe_allow_html=True)
 
 
 def nav() -> None:
@@ -1958,7 +2052,7 @@ def render_recipe_block(
 def render_error_boundary() -> None:
     """Friendly Swedish error — never show a traceback to the user."""
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
         f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
         unsafe_allow_html=True,
@@ -1969,7 +2063,6 @@ def render_error_boundary() -> None:
             f'<p class="oc-meta" style="color:#b00020">{html.escape(str(detail)[:240])}</p>',
             unsafe_allow_html=True,
         )
-    st.caption(f"build {BUILD_ID}")
     if st.button(t("retry"), type="primary", use_container_width=True, key="ui_error_retry"):
         st.session_state.ui_error = None
         st.session_state._last_ui_error = None
@@ -2008,38 +2101,16 @@ def page_home() -> None:
     import router as rt
 
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
-    st.markdown(f'<p class="oc-tagline">{html.escape(t("tagline"))}</p>', unsafe_allow_html=True)
-    # Build id is debug-only — never on the consumer home screen
-    if _fridge_debug_ui():
-        st.caption(f"build {BUILD_ID}")
+    render_logo()
+    render_tagline()
 
-    # Real Streamlit buttons — styled as chips via horizontal-block CSS
+    # Ghost chips as HTML links (?domain=) — reliable flex-wrap; handler in handle_query_params
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    cols = st.columns(2)
-    for i, d in enumerate(domains):
-        with cols[i % 2]:
-            if st.button(
-                domain_label(d),
-                key=f"domain_chip_{d}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                if d == "clothes":
-                    st.session_state.last_domain_hint = "clothes"
-                    st.session_state.pending_clothes_question = pipeline._default_question(
-                        "clothes", st.session_state.get("language", "sv")
-                    )
-                    st.session_state.clothes_occasion = None
-                    st.session_state.page = "clothes_occasion"
-                    st.rerun()
-                else:
-                    if d == "food":
-                        import food_domain as fd
-
-                        if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
-                            st.session_state.food_meal_type = fd.default_meal_type()
-                    run_decision(question="", domain_hint=d, reroll=False, via_router=False)
+    chips = "".join(
+        f'<a class="oc-chip" href="?domain={d}">{html.escape(domain_label(d))}</a>'
+        for d in domains
+    )
+    st.markdown(f'<div class="oc-chip-row">{chips}</div>', unsafe_allow_html=True)
 
     if st.button(t("fridge_cta"), use_container_width=True, key="home_fridge"):
         st.session_state.fridge_step = "capture"
@@ -2056,7 +2127,9 @@ def page_home() -> None:
         placeholder=t("ask"),
         max_chars=rt.MAX_INPUT_CHARS,
     )
-    st.caption(f"{len(q or '')}/{rt.MAX_INPUT_CHARS}")
+    nchars = len(q or "")
+    if nchars > 150:
+        st.caption(f"{nchars}/{rt.MAX_INPUT_CHARS}")
     if st.button(t("decide"), type="primary", use_container_width=True):
         question = (q or "").strip()
         if not question:
@@ -2120,14 +2193,12 @@ def page_fridge() -> None:
 
     debug = _fridge_debug_ui()
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("fridge_title"))}</p>',
         unsafe_allow_html=True,
     )
     st.caption(t("fridge_hint"))
-    if debug:
-        st.caption(f"build {BUILD_ID}")
 
     api_key = resolve_grok_api_key()
     diag = diagnose_grok_secret()
@@ -2248,8 +2319,6 @@ def page_fridge() -> None:
                 st.warning(t("fridge_need_photo"))
             elif not key_ok:
                 st.error(t("fridge_api_missing"))
-                if debug:
-                    st.caption(f"build {BUILD_ID}")
             else:
                 t0 = time.time()
                 with st.spinner(t("fridge_scanning")):
@@ -2274,7 +2343,6 @@ def page_fridge() -> None:
                             )
                             if exc.raw:
                                 st.caption(html.escape(str(exc.raw)[:280]))
-                            st.caption(f"build {BUILD_ID}")
                         if st.button(t("fridge_manual"), use_container_width=True, key="fridge_manual_btn"):
                             st.session_state.fridge_inventory = []
                             st.session_state.fridge_step = "confirm"
@@ -2290,7 +2358,6 @@ def page_fridge() -> None:
                             f"anropet verkar inte ha gått iväg "
                             f"({elapsed:.2f}s, status={dbg.get('http_status')})."
                         )
-                        st.caption(f"build {BUILD_ID}")
                     nav()
                     return
                 st.session_state.fridge_inventory = invent
@@ -2410,7 +2477,7 @@ def page_clothes_occasion() -> None:
     from datetime import datetime
 
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("occasion_title"))}</p>',
         unsafe_allow_html=True,
@@ -2463,7 +2530,7 @@ def page_clothes_occasion() -> None:
 
 def page_ambiguous() -> None:
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("ambiguous"))}</p>',
         unsafe_allow_html=True,
@@ -2541,7 +2608,7 @@ def page_not_a_decision() -> None:
 
 def page_result() -> None:
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict):
         cur = {}
@@ -3070,7 +3137,7 @@ def page_execute() -> None:
     st.session_state.ui_error = None
 
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict) or not cur.get("suggestion"):
         st.session_state.page = "home"
@@ -3504,7 +3571,7 @@ def page_profile() -> None:
 def page_privacy() -> None:
     """In-app privacy policy (Swedish). Override with PRIVACY_URL secret if hosted elsewhere."""
     lang_bar()
-    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("privacy_link"))}</p>',
         unsafe_allow_html=True,
@@ -3607,6 +3674,11 @@ def handle_query_params() -> None:
             st.session_state.page = "clothes_occasion"
             st.rerun()
             return
+        if domain == "food":
+            import food_domain as fd
+
+            if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
+                st.session_state.food_meal_type = fd.default_meal_type()
         run_decision(question="", domain_hint=domain, reroll=False, via_router=False)
 
     # Clothes occasion chips
@@ -3694,7 +3766,7 @@ def page_shared() -> None:
     """Public read-only decision landing — what recipients see from every share."""
     lang_bar()
     st.markdown(
-        '<div class="oc-logo oc-share-landing"><em>One</em>Choice</div>',
+        '<div class="oc-logo oc-share-landing">OneChoice</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -3887,7 +3959,6 @@ def main() -> None:
                 f'{html.escape(str(st.session_state._last_ui_error)[:240])}</p>',
                 unsafe_allow_html=True,
             )
-            st.caption(f"build {BUILD_ID}")
             cur = st.session_state.get("current") or {}
             if isinstance(cur, dict) and cur.get("suggestion"):
                 st.markdown(

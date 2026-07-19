@@ -152,10 +152,8 @@ class HandlaLagaUiTests(unittest.TestCase):
             at = AppTest.from_file("app.py", default_timeout=60)
             at.run()
             at.session_state["food_meal_type"] = "middag"
-            for b in at.button:
-                if b.label == "Mat":
-                    b.click().run()
-                    break
+            at.query_params["domain"] = "food"
+            at.run()
             hit = False
             for b in at.button:
                 if b.label and "Handla" in b.label:
@@ -183,10 +181,8 @@ class HandlaLagaUiTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
         at.session_state["food_meal_type"] = "middag"
-        for b in at.button:
-            if b.label == "Mat":
-                b.click().run()
-                break
+        at.query_params["domain"] = "food"
+        at.run()
         cur = dict(at.session_state["current"] or {})
         cur["context"] = json.dumps(cur.get("context") or {}, ensure_ascii=False)
         at.session_state["current"] = cur
@@ -207,10 +203,8 @@ class HandlaLagaUiTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
         at.session_state["food_meal_type"] = "middag"
-        for b in at.button:
-            if b.label == "Mat":
-                b.click().run()
-                break
+        at.query_params["domain"] = "food"
+        at.run()
         for b in at.button:
             if b.label and "Handla" in b.label:
                 b.click().run()

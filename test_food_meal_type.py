@@ -138,17 +138,18 @@ class MealTypeInferTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        # Home must NOT leak build / kvällsmål debug text
+        # Home must NOT leak build / debug text; tagline keeps accent period span
         home_body = " ".join(str(m.value or "") for m in at.markdown).lower()
         home_caps = " ".join(str(c.value or "") for c in at.caption).lower()
         self.assertNotIn("build ", home_caps)
         self.assertNotIn("kvallsmal-recipe", home_body + home_caps)
+        self.assertIn("onechoice", home_body)
+        self.assertIn("oc-tag-dot", home_body)
+        self.assertNotIn("<em>one</em>", home_body)
 
         at.session_state["food_meal_type"] = "kvallsmal"
-        for b in at.button:
-            if b.label == "Mat":
-                b.click().run()
-                break
+        at.query_params["domain"] = "food"
+        at.run()
         self.assertEqual(at.session_state["page"], "result")
         hit = False
         for b in at.button:
@@ -192,10 +193,8 @@ class MealTypeInferTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
         at.session_state["food_meal_type"] = "kvallsmal"
-        for b in at.button:
-            if b.label == "Mat":
-                b.click().run()
-                break
+        at.query_params["domain"] = "food"
+        at.run()
         cur = dict(at.session_state["current"] or {})
         ctx = cur.get("context") or {}
         if isinstance(ctx, str):
