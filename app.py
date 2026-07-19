@@ -2,14 +2,67 @@
 """
 OneChoice — one everyday decision. Never a list.
 Premium mobile-first Streamlit UI.
+
+---------------------------------------------------------------------------
+STATE DIAGRAM (pages / session_state / buttons) — keep code in sync
+---------------------------------------------------------------------------
+
+Pages:
+  auth              → login / signup / guest
+  home              → free text + domain chips
+  ambiguous         → domain pick after free-text AMBIGUOUS
+  not_a_decision    → soft refuse (not a decision question)
+  result            → ONE decision card (food / other domains)
+  execute           → food only: checkable shopping + full recipe
+  history | profile
+
+Session keys (all set via setdefault in init_state):
+  page                  str   current page name
+  current               dict  DecisionResult.to_dict() for active decision
+  decision_id           int|None  mirror of current["decision_id"] (explicit)
+  accepted              bool  True after "Handla & laga" accept (permanent lock)
+  shopping_checks       dict  {f"{decision_id}:{item}": bool} checkbox state
+  reroll_index          int
+  last_question         str
+  last_domain_hint      str|None
+  route_log_id          int|None
+  pending_free_text     str|None
+  force_route_domain    str|None
+  user_id, language, guest_mode, auth tokens, …
+
+Button → transition:
+  [home] "Bestäm åt mig" / domain chip
+        → run_decision → page=result  (current set, accepted=False)
+
+  [result] food primary "Handla & laga"  (accepted is False)
+        → accept_decision(decision_id)  # DB status=accepted
+        → current.locked=True, accepted=True, disable rerolls
+        → page=execute
+
+  [result] food primary "Handla & laga"  (accepted is True / locked card)
+        → page=execute only (no second DB write; lock already permanent)
+
+  [result] non-food primary (link / "Gör det nu")
+        → accept_decision if decision_id; toast; stay on result
+
+  [result] "Nytt förslag"  (only if not accepted and not reroll-locked)
+        → run_decision(reroll=True)
+
+  [execute] "Tillbaka"
+        → page=result  (shows Låst: <suggestion> + only Handla & laga)
+
+  [any] error boundary catch
+        → log full traceback server-side; user sees Swedish retry UI
+---------------------------------------------------------------------------
 """
 
 from __future__ import annotations
 
 import html
 import logging
+import traceback
 import uuid
-from typing import Any
+from typing import Any, Callable
 
 import streamlit as st
 
@@ -60,7 +113,16 @@ I18N = {
         "new": "Nytt förslag",
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
+        "handla_laga": "Handla & laga",
         "accepted": "Sparat — bra val.",
+        "locked_title": "Låst: {suggestion}",
+        "shop_title": "Inköpslista",
+        "recipe_title": "Recept",
+        "ingredients_title": "Ingredienser",
+        "steps_title": "Gör så här",
+        "back_to_decision": "Tillbaka",
+        "error_friendly": "Något gick fel — försök igen",
+        "retry": "Försök igen",
         "refuse": "Onechoice tar vardagsbesluten. Det här beslutet är ditt.",
         "home": "Hem",
         "history": "Historik",
@@ -107,7 +169,16 @@ I18N = {
         "new": "New suggestion",
         "lock_msg": "It’s {suggestion}. Go.",
         "do_it": "Do it now",
+        "handla_laga": "Shop & cook",
         "accepted": "Saved — good call.",
+        "locked_title": "Locked: {suggestion}",
+        "shop_title": "Shopping list",
+        "recipe_title": "Recipe",
+        "ingredients_title": "Ingredients",
+        "steps_title": "Steps",
+        "back_to_decision": "Back",
+        "error_friendly": "Something went wrong — try again",
+        "retry": "Try again",
         "refuse": "Onechoice handles everyday decisions. This one is yours.",
         "home": "Home",
         "history": "History",
@@ -326,8 +397,48 @@ div.stButton > button[kind="secondary"] {{
     border-top: 1px solid rgba(62,91,132,0.08);
     font-size: 0.92rem; color: {MUTED}; line-height: 1.4;
 }}
+.oc-recipe {{
+    background: #fff; border-radius: 22px; padding: 1.25rem 1.2rem 1.2rem;
+    box-shadow: {SHADOW}; margin: 0 0 1.25rem;
+    border: 1px solid rgba(62,91,132,0.04); text-align: left;
+}}
+.oc-recipe .oc-shop-title {{
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: {MUTED}; font-weight: 700; margin: 0 0 0.85rem;
+}}
+.oc-recipe .oc-sec {{
+    font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
+    color: {MUTED}; font-weight: 700; margin: 0.95rem 0 0.4rem;
+}}
+.oc-recipe ol {{
+    margin: 0; padding-left: 1.2rem; color: {INK}; font-size: 1rem; line-height: 1.45;
+}}
+.oc-recipe ol li {{ margin: 0.45rem 0; }}
+.oc-recipe ul {{ list-style: none; margin: 0; padding: 0; }}
+.oc-recipe ul li {{
+    font-size: 1rem; color: {INK}; line-height: 1.4; padding: 0.28rem 0;
+}}
+.oc-error {{
+    background: #fff; border-radius: 24px; padding: 1.8rem 1.4rem;
+    text-align: center; box-shadow: {SHADOW}; margin: 2rem 0 1rem;
+}}
+.oc-error p {{ color: #3a3a42; font-size: 1.1rem; margin: 0 0 0.4rem; }}
 .oc-link-wrap {{
     text-align: center; margin: 0.35rem 0 0.9rem;
+}}
+/* Show checkbox labels (shopping list) — override global widget-label hide */
+.oc-checks [data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {{
+    display: flex !important;
+}}
+div[data-testid="stCheckbox"] label {{
+    font-family: "Manrope", sans-serif !important;
+    color: {INK} !important;
+    font-size: 1rem !important;
+}}
+.oc-sec-label {{
+    font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
+    color: {MUTED}; font-weight: 700; margin: 0.85rem 0 0.35rem;
 }}
 .oc-hist {{
     background: #fff; border-radius: 18px; padding: 1rem 1.1rem;
@@ -382,6 +493,9 @@ def init_state() -> None:
         "auth_mode": "login",  # login | signup
         "is_pro": False,
         "current": None,
+        "decision_id": None,  # explicit mirror of current["decision_id"]
+        "accepted": False,  # permanent after Handla & laga
+        "shopping_checks": {},  # checkbox state keyed by decision_id:item
         "reroll_index": 0,
         "last_question": "",
         "last_domain_hint": None,
@@ -389,10 +503,10 @@ def init_state() -> None:
         "route_log_id": None,
         "pending_free_text": None,
         "force_route_domain": None,
+        "ui_error": None,  # set by error boundary; cleared on retry
     }
     for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+        st.session_state.setdefault(k, v)
 
     # Restore Supabase auth context for RLS-backed writes
     if st.session_state.access_token and st.session_state.refresh_token:
@@ -694,13 +808,14 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                 )
         st.session_state.route_log_id = getattr(result, "route_log_id", None)
         st.session_state.current = result.to_dict()
+        st.session_state.decision_id = getattr(result, "decision_id", None)
+        # accepted is ONLY set by Handla & laga — not by max-reroll lock
+        st.session_state.accepted = False
         if result.ok and result.domain:
             st.session_state.last_domain_hint = result.domain
     except Exception as exc:
         log.exception("decide failed: %s", exc)
-        st.error("Kunde inte skapa beslut just nu. Försök igen.")
-        with st.expander("Teknisk detalj"):
-            st.code(f"{type(exc).__name__}: {exc}")
+        st.session_state.ui_error = True
         st.session_state.page = "home"
         return
 
@@ -717,6 +832,145 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
 
     st.session_state.page = "result"
     st.rerun()
+
+
+def _active_decision_id(cur: dict[str, Any] | None = None) -> int | None:
+    """Resolve decision_id from session + current payload (never assume set)."""
+    cur = cur if isinstance(cur, dict) else (st.session_state.get("current") or {})
+    raw = st.session_state.get("decision_id")
+    if raw is None:
+        raw = cur.get("decision_id")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
+def _is_food_cook(cur: dict[str, Any]) -> bool:
+    """Home-cooking food decision (not eat-out map link)."""
+    if (cur.get("domain") or "") != "food":
+        return False
+    if cur.get("execution_type") == "map" or cur.get("execution_url"):
+        return False
+    return True
+
+
+def accept_and_open_execute(cur: dict[str, Any]) -> None:
+    """
+    Handla & laga handler:
+    1) Lock decision (accepted) once — disable rerolls permanently for this decision
+    2) Navigate to execute view (shopping + recipe)
+    Re-tapping after accept only reopens execute (no second accept write).
+    """
+    require_auth_context()
+    if st.session_state.get("guest_mode"):
+        db.clear_auth()
+
+    already = bool(st.session_state.get("accepted") or cur.get("accepted"))
+    did = _active_decision_id(cur)
+
+    if not already:
+        if did is None:
+            raise ValueError(
+                "Handla & laga: decision_id saknas i session_state innan accept"
+            )
+        pipeline.accept_decision(
+            did,
+            route_log_id=cur.get("route_log_id") or st.session_state.get("route_log_id"),
+        )
+        # Permanent accept-lock in session (survives back-nav; disables rerolls)
+        st.session_state.accepted = True
+        st.session_state.decision_id = did
+        updated = dict(cur)
+        updated["locked"] = True
+        updated["accepted"] = True
+        updated["decision_id"] = did
+        st.session_state.current = updated
+
+    st.session_state.page = "execute"
+    st.rerun()
+
+
+def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
+    """Checkable shopping list grouped by store layout."""
+    if not shop or not isinstance(shop, dict):
+        return
+    to_buy = shop.get("to_buy") or {}
+    if not to_buy:
+        return
+    import shopping as shopping_mod
+
+    language = st.session_state.get("language", "sv")
+    store = shop.get("store") or "ICA"
+    st.markdown(
+        f'<div class="oc-shop-title" style="margin:0.4rem 0 0.6rem">'
+        f'{html.escape(t("shop_title"))} · {html.escape(str(store))}</div>',
+        unsafe_allow_html=True,
+    )
+    checks = st.session_state.setdefault("shopping_checks", {})
+    did = decision_id if decision_id is not None else "x"
+    for section, items in to_buy.items():
+        if not items:
+            continue
+        st.markdown(
+            f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
+            unsafe_allow_html=True,
+        )
+        for item in items:
+            key = f"shop:{did}:{section}:{item}"
+            checked = bool(checks.get(key, False))
+            new_val = st.checkbox(str(item), value=checked, key=key)
+            checks[key] = bool(new_val)
+
+    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
+    st.caption(assumed_line)
+
+
+def render_recipe_block(recipe: dict[str, Any] | None, fallback_ings: list[str] | None = None) -> None:
+    if not recipe or not isinstance(recipe, dict):
+        if fallback_ings:
+            recipe = {"ingredients": fallback_ings, "steps": []}
+        else:
+            return
+    ings = recipe.get("ingredients") or fallback_ings or []
+    steps = recipe.get("steps") or []
+    st.markdown(
+        f'<div class="oc-recipe">'
+        f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
+        f'<div class="oc-sec">{html.escape(t("ingredients_title"))}</div>'
+        f'<ul>{"".join(f"<li>{html.escape(str(i))}</li>" for i in ings)}</ul>'
+        f'<div class="oc-sec">{html.escape(t("steps_title"))}</div>'
+        f'<ol>{"".join(f"<li>{html.escape(str(s))}</li>" for s in steps)}</ol>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_error_boundary() -> None:
+    """Friendly Swedish error — never show a traceback to the user."""
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button(t("retry"), type="primary", use_container_width=True, key="ui_error_retry"):
+        st.session_state.ui_error = None
+        # Stay on a safe page
+        if st.session_state.get("page") not in (
+            "home",
+            "result",
+            "execute",
+            "history",
+            "profile",
+            "auth",
+        ):
+            st.session_state.page = "home"
+        st.rerun()
+    nav()
 
 
 def _qp_one(value: Any) -> str | None:
@@ -799,8 +1053,17 @@ def page_not_a_decision() -> None:
 def page_result() -> None:
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
-    cur = st.session_state.current or {}
+    cur = st.session_state.get("current") or {}
+    if not isinstance(cur, dict):
+        cur = {}
     language = st.session_state.get("language", "sv")
+    accepted = bool(st.session_state.get("accepted") or cur.get("accepted"))
+    reroll_locked = bool(cur.get("locked"))
+    # Show lock card when user accepted OR max-reroll locked (no more "Nytt förslag")
+    show_lock_card = accepted or reroll_locked
+    # Keep session mirrors aligned
+    if cur.get("decision_id") is not None and st.session_state.get("decision_id") is None:
+        st.session_state.decision_id = cur.get("decision_id")
 
     if cur.get("refused"):
         msg = cur.get("refusal_message") or t("refuse")
@@ -811,87 +1074,191 @@ def page_result() -> None:
         nav()
         return
 
-    suggestion = html.escape(str(cur.get("suggestion") or ""))
-    justification = html.escape(str(cur.get("justification") or ""))
+    suggestion = str(cur.get("suggestion") or "")
+    justification = str(cur.get("justification") or "")
     domain = cur.get("domain") or ""
-    locked = bool(cur.get("locked"))
     reroll_index = int(cur.get("reroll_index") or 0)
+    food_cook = _is_food_cook(cur)
 
-    lock_html = ""
-    if locked:
-        lock_line = t("lock_msg").format(suggestion=cur.get("suggestion") or "")
-        lock_html = f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-        justification = html.escape(lock_line)
+    if show_lock_card:
+        # Lock card — only Handla & laga to open/reopen execute (no rerolls)
+        title = (
+            t("locked_title").format(suggestion=suggestion)
+            if accepted
+            else suggestion
+        )
+        if accepted:
+            body = ""
+        else:
+            body = f"<p>{html.escape(t('lock_msg').format(suggestion=suggestion))}</p>"
+        st.markdown(
+            f'<div class="oc-decision">'
+            f'<div class="label">{html.escape(domain_label(domain))}</div>'
+            f"<h1>{html.escape(title)}</h1>"
+            f"{body}"
+            f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        if food_cook:
+            if st.button(
+                t("handla_laga"),
+                type="primary",
+                use_container_width=True,
+                key="handla_reopen",
+            ):
+                accept_and_open_execute(cur)
+        else:
+            exec_url = cur.get("execution_url")
+            exec_label = cur.get("execution_label") or t("do_it")
+            if exec_url:
+                st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
+            elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
+                did = _active_decision_id(cur)
+                if did is not None:
+                    pipeline.accept_decision(
+                        did,
+                        route_log_id=cur.get("route_log_id")
+                        or st.session_state.get("route_log_id"),
+                    )
+                    st.session_state.accepted = True
+                st.toast(t("accepted"))
+        if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
+            st.session_state.page = "home"
+            st.rerun()
+        nav()
+        return
 
+    # Unlocked decision card
     st.markdown(
         f'<div class="oc-decision">'
         f'<div class="label">{html.escape(domain_label(domain))}</div>'
-        f"<h1>{suggestion}</h1>"
-        f"<p>{justification}</p>"
-        f"{lock_html}"
+        f"<h1>{html.escape(suggestion)}</h1>"
+        f"<p>{html.escape(justification)}</p>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    render_reroll_dots(reroll_index)
+
+    # Preview shopping on result (read-only) for food
+    ctx = cur.get("context") or {}
+    shop = ctx.get("shopping")
+    if food_cook and isinstance(shop, dict):
+        render_shopping_card(shop, language)
+    elif domain == "food":
+        exec_detail = ctx.get("execution_detail")
+        if exec_detail:
+            st.markdown(
+                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
+                unsafe_allow_html=True,
+            )
+    else:
+        exec_detail = ctx.get("execution_detail")
+        if exec_detail:
+            st.markdown(
+                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
+                unsafe_allow_html=True,
+            )
+
+    if food_cook:
+        # Primary: Handla & laga → accept + execute view
+        label = cur.get("execution_label") or t("handla_laga")
+        if st.button(label, type="primary", use_container_width=True, key="handla_accept"):
+            accept_and_open_execute(cur)
+    else:
+        exec_url = cur.get("execution_url")
+        exec_label = cur.get("execution_label") or t("do_it")
+        if exec_url:
+            st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
+            # Accept on navigate intent (optional persist)
+            if _active_decision_id(cur) and st.button(
+                t("accepted"), type="secondary", use_container_width=True, key="accept_link"
+            ):
+                pipeline.accept_decision(
+                    _active_decision_id(cur),
+                    route_log_id=cur.get("route_log_id") or st.session_state.get("route_log_id"),
+                )
+                st.session_state.accepted = True
+                st.toast(t("accepted"))
+        else:
+            if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
+                did = _active_decision_id(cur)
+                if did is not None:
+                    pipeline.accept_decision(
+                        did,
+                        route_log_id=cur.get("route_log_id")
+                        or st.session_state.get("route_log_id"),
+                    )
+                    st.session_state.accepted = True
+                    st.session_state.decision_id = did
+                st.toast(t("accepted"))
+
+    # Secondary: reroll — disabled once accepted (guarded above); hidden when locked
+    st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
+    if st.button(t("new"), type="secondary", use_container_width=True, key="reroll_link"):
+        via = bool(cur.get("route") or st.session_state.get("route_log_id"))
+        run_decision(
+            question=st.session_state.get("last_question") or "",
+            domain_hint=st.session_state.get("last_domain_hint") or cur.get("domain"),
+            reroll=True,
+            via_router=via,
+        )
+
+    if st.button(t("home"), key="back_home", type="secondary", use_container_width=True):
+        st.session_state.page = "home"
+        st.rerun()
+    nav()
+
+
+def page_execute() -> None:
+    """Execution view after Handla & laga: shopping (checkable) + full recipe."""
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    cur = st.session_state.get("current") or {}
+    if not isinstance(cur, dict) or not cur.get("suggestion"):
+        st.session_state.page = "home"
+        st.rerun()
+        return
+
+    # Must be accepted/locked to be here; enforce
+    if not (st.session_state.get("accepted") or cur.get("accepted") or cur.get("locked")):
+        # User navigated here without accept — send to result
+        st.session_state.page = "result"
+        st.rerun()
+        return
+
+    suggestion = str(cur.get("suggestion") or "")
+    st.markdown(
+        f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
+        f'<div class="label">{html.escape(domain_label(cur.get("domain") or "food"))}</div>'
+        f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
+        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
         f"</div>",
         unsafe_allow_html=True,
     )
 
-    if not locked:
-        render_reroll_dots(reroll_index)
-
     ctx = cur.get("context") or {}
     shop = ctx.get("shopping")
-    if domain == "food" and isinstance(shop, dict):
-        render_shopping_card(shop, language)
-    elif domain == "food":
-        # Fallback detail line only when structured list missing
-        exec_detail = ctx.get("execution_detail")
-        if exec_detail:
-            st.markdown(
-                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
-                unsafe_allow_html=True,
-            )
-    else:
-        exec_detail = ctx.get("execution_detail")
-        if exec_detail:
-            st.markdown(
-                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
-                unsafe_allow_html=True,
-            )
+    recipe = ctx.get("recipe") or (shop or {}).get("recipe")
+    if not recipe and shop:
+        import shopping as shopping_mod
 
-    # One primary action — “Gör det nu”
-    exec_url = cur.get("execution_url")
-    exec_label = cur.get("execution_label") or t("do_it")
+        recipe = shopping_mod.build_recipe(suggestion, shop.get("ingredients"))
 
-    if locked:
-        if cur.get("decision_id") and st.button(t("accepted"), type="primary", use_container_width=True):
-            pipeline.accept_decision(
-                int(cur["decision_id"]),
-                route_log_id=cur.get("route_log_id") or st.session_state.route_log_id,
-            )
-            st.toast(t("accepted"))
-    else:
-        if exec_url:
-            st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
-        else:
-            if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
-                if cur.get("decision_id"):
-                    pipeline.accept_decision(
-                        int(cur["decision_id"]),
-                        route_log_id=cur.get("route_log_id") or st.session_state.route_log_id,
-                    )
-                st.toast(t("accepted"))
+    did = _active_decision_id(cur)
+    render_checkable_shopping(shop if isinstance(shop, dict) else None, did)
+    render_recipe_block(
+        recipe if isinstance(recipe, dict) else None,
+        list((shop or {}).get("ingredients") or []) if isinstance(shop, dict) else None,
+    )
 
-        # Secondary: text-link style “Nytt förslag” below primary
-        st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
-        if st.button(t("new"), type="secondary", use_container_width=True, key="reroll_link"):
-            via = bool(cur.get("route") or st.session_state.route_log_id)
-            run_decision(
-                question=st.session_state.last_question,
-                domain_hint=st.session_state.last_domain_hint or cur.get("domain"),
-                reroll=True,
-                via_router=via,
-            )
-
-    if st.button(t("home"), key="back_home", type="secondary", use_container_width=True):
-        st.session_state.page = "home"
+    if st.button(
+        t("back_to_decision"),
+        type="secondary",
+        use_container_width=True,
+        key="exec_back",
+    ):
+        st.session_state.page = "result"
         st.rerun()
     nav()
 
@@ -1024,15 +1391,42 @@ def main() -> None:
     init_state()
     inject_css()
     require_auth_context()
-    handle_query_params()
-    {
+
+    if st.session_state.get("ui_error"):
+        render_error_boundary()
+        return
+
+    try:
+        handle_query_params()
+    except Exception:
+        log.error("query-param handler failed:\n%s", traceback.format_exc())
+        st.session_state.ui_error = True
+        render_error_boundary()
+        return
+
+    pages: dict[str, Callable[[], None]] = {
         "auth": page_auth,
         "result": page_result,
+        "execute": page_execute,
         "history": page_history,
         "profile": page_profile,
         "ambiguous": page_ambiguous,
         "not_a_decision": page_not_a_decision,
-    }.get(st.session_state.page, page_home)()
+        "home": page_home,
+    }
+    page_name = st.session_state.get("page") or "home"
+    render = pages.get(page_name, page_home)
+    if not callable(render):
+        log.error("page %r mapped to non-callable %r — falling back to home", page_name, render)
+        render = page_home
+
+    try:
+        render()
+    except Exception:
+        # Hard requirement: never show raw traceback to the user
+        log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
+        st.session_state.ui_error = True
+        render_error_boundary()
 
 
 if __name__ == "__main__":

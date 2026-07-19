@@ -258,11 +258,13 @@ def _check_food(
 
     execution = {
         "type": "recipe",
-        "label": "Gör det nu",
+        "label": "Handla & laga",
         "url": None,
         "detail": shopping.format_assumed_line(shop["assumed_at_home"]),
         "shopping": shop,
         "shopping_list": shop["to_buy"],  # legacy key for older UI/tests
+        "recipe": shop.get("recipe")
+        or shopping.build_recipe(suggestion, shop.get("ingredients")),
         "store": store,
         "max_active_minutes": max_min,
     }
