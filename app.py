@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-vision-v3-20260719"
+BUILD_ID = "fridge-vision-v4-20260719"
 
 I18N = {
     "sv": {
@@ -733,17 +733,65 @@ def get_secret(name: str, default: str = "") -> str:
         return default
 
 
+def _normalize_secret_value(value: str) -> str:
+    k = (value or "").strip()
+    if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'“”‘’":
+        k = k[1:-1].strip()
+    return k
+
+
+def _usable_grok_secret(key: str) -> bool:
+    k = _normalize_secret_value(key)
+    if len(k) < 12:
+        return False
+    low = k.lower()
+    if low.startswith(("din_", "your_", "sk_test", "xxx", "paste")):
+        return False
+    if "placeholder" in low or "your_project" in low:
+        return False
+    if low.endswith(("_här", "_har")) or low == "din_grok_api_nyckel_här":
+        return False
+    if low.startswith("xai-") and len(k) >= 16:
+        return True
+    return len(k) >= 32 and "nyckel" not in low
+
+
 def resolve_grok_api_key() -> str:
-    """GROK_API_KEY or XAI_API_KEY from Streamlit secrets / env — normalized."""
-    import fridge_domain as fr
+    """
+    GROK_API_KEY or XAI_API_KEY from Streamlit secrets / env.
+
+    Resolution lives in app.py (not only fridge_domain) so a stale Cloud
+    module cache cannot AttributeError on resolve_vision_api_key.
+    """
     import os
 
-    return fr.resolve_vision_api_key(
+    candidates = (
         get_secret("GROK_API_KEY"),
         get_secret("XAI_API_KEY"),
         os.environ.get("GROK_API_KEY", ""),
         os.environ.get("XAI_API_KEY", ""),
     )
+    # Prefer fridge_domain helper when present (same logic)
+    try:
+        import fridge_domain as fr
+        import importlib
+
+        if not hasattr(fr, "resolve_vision_api_key"):
+            fr = importlib.reload(fr)
+        if hasattr(fr, "resolve_vision_api_key"):
+            return fr.resolve_vision_api_key(*candidates)
+    except Exception as exc:
+        log.warning("fridge_domain key resolve unavailable: %s", exc)
+
+    for raw in candidates:
+        k = _normalize_secret_value(str(raw or ""))
+        if _usable_grok_secret(k):
+            return k
+    for raw in candidates:
+        k = _normalize_secret_value(str(raw or ""))
+        if k:
+            return k
+    return ""
 
 
 def _peek_share_token() -> str | None:
@@ -1753,7 +1801,12 @@ def page_fridge() -> None:
     st.caption(f"build {BUILD_ID}")
 
     api_key = resolve_grok_api_key()
-    if fr.usable_vision_key(api_key):
+    key_ok = False
+    try:
+        key_ok = fr.usable_vision_key(api_key)
+    except Exception:
+        key_ok = _usable_grok_secret(api_key)
+    if key_ok:
         st.caption(f"{t('fridge_api_ok')} · {len(api_key)} tecken · {api_key[:4]}…")
     else:
         st.warning(t("fridge_api_missing"))
@@ -1806,7 +1859,7 @@ def page_fridge() -> None:
             mimes = mimes[: len(blobs)]
             if not blobs:
                 st.warning(t("fridge_need_photo"))
-            elif not fr.usable_vision_key(api_key):
+            elif not key_ok:
                 st.error(t("fridge_api_missing"))
                 st.caption(f"build {BUILD_ID}")
             else:
