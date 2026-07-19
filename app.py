@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-vision-v2-20260719"
+BUILD_ID = "fridge-vision-v3-20260719"
 
 I18N = {
     "sv": {
@@ -203,6 +203,10 @@ I18N = {
         "fridge_empty_scan": "Jag såg inget tydligt — lägg till själv eller ta om foto.",
         "fridge_need_photo": "Lägg till minst ett foto.",
         "fridge_vision_error": "Kunde inte läsa fotot",
+        "fridge_api_ok": "Grok API: kopplad",
+        "fridge_api_missing": "Grok API: saknas — vision körs inte. Secrets → GROK_API_KEY = \"xai-...\"",
+        "fridge_scan_took": "Klart på {secs}s · {n} varor",
+        "fridge_manual": "Fortsätt och lägg till själv",
         "fridge_cook": "Laga nu",
         "fridge_shop_alt": "Föreslå med inköpslista",
         "fridge_remove": "Ta bort",
@@ -300,6 +304,10 @@ I18N = {
         "fridge_empty_scan": "Nothing clear — add items yourself or retake.",
         "fridge_need_photo": "Add at least one photo.",
         "fridge_vision_error": "Couldn’t read the photo",
+        "fridge_api_ok": "Grok API: connected",
+        "fridge_api_missing": "Grok API: missing — vision won’t run. Secrets → GROK_API_KEY = \"xai-...\"",
+        "fridge_scan_took": "Done in {secs}s · {n} items",
+        "fridge_manual": "Continue and add manually",
         "fridge_cook": "Cook now",
         "fridge_shop_alt": "Suggest with shopping list",
         "fridge_remove": "Remove",
@@ -723,6 +731,19 @@ def get_secret(name: str, default: str = "") -> str:
         return str(st.secrets.get(name, default) or default)
     except Exception:
         return default
+
+
+def resolve_grok_api_key() -> str:
+    """GROK_API_KEY or XAI_API_KEY from Streamlit secrets / env — normalized."""
+    import fridge_domain as fr
+    import os
+
+    return fr.resolve_vision_api_key(
+        get_secret("GROK_API_KEY"),
+        get_secret("XAI_API_KEY"),
+        os.environ.get("GROK_API_KEY", ""),
+        os.environ.get("XAI_API_KEY", ""),
+    )
 
 
 def _peek_share_token() -> str | None:
@@ -1718,6 +1739,8 @@ def _clear_fridge_session() -> None:
 
 def page_fridge() -> None:
     """Capture photos → invent inventory → confirm chips → decide (two LLM steps)."""
+    import time
+
     import fridge_domain as fr
 
     lang_bar()
@@ -1727,57 +1750,109 @@ def page_fridge() -> None:
         unsafe_allow_html=True,
     )
     st.caption(t("fridge_hint"))
+    st.caption(f"build {BUILD_ID}")
+
+    api_key = resolve_grok_api_key()
+    if fr.usable_vision_key(api_key):
+        st.caption(f"{t('fridge_api_ok')} · {len(api_key)} tecken · {api_key[:4]}…")
+    else:
+        st.warning(t("fridge_api_missing"))
 
     step = st.session_state.get("fridge_step") or "capture"
 
     if step == "capture":
         cam = st.camera_input(t("fridge_camera"), key="fridge_cam")
+        # Persist bytes across the Scan click (Streamlit can drop widget values)
+        if cam is not None:
+            try:
+                st.session_state["fridge_cam_bytes"] = cam.getvalue()
+                st.session_state["fridge_cam_mime"] = getattr(cam, "type", None) or "image/jpeg"
+            except Exception as exc:
+                log.warning("fridge camera read failed: %s", exc)
         uploads = st.file_uploader(
             t("fridge_upload"),
             type=["jpg", "jpeg", "png", "webp"],
             accept_multiple_files=True,
             key="fridge_uploads",
         )
+        if uploads:
+            ub: list[bytes] = []
+            um: list[str] = []
+            for f in list(uploads)[: fr.MAX_PHOTOS]:
+                try:
+                    ub.append(f.getvalue())
+                    um.append(getattr(f, "type", None) or "image/jpeg")
+                except Exception:
+                    continue
+            if ub:
+                st.session_state["fridge_upload_bytes"] = ub
+                st.session_state["fridge_upload_mimes"] = um
+
         if st.button(t("fridge_scan"), type="primary", use_container_width=True, key="fridge_scan_btn"):
             blobs: list[bytes] = []
             mimes: list[str] = []
-            if cam is not None:
-                try:
-                    blobs.append(cam.getvalue())
-                    mimes.append(getattr(cam, "type", None) or "image/jpeg")
-                except Exception:
-                    pass
-            for f in list(uploads or [])[: fr.MAX_PHOTOS]:
-                try:
-                    blobs.append(f.getvalue())
-                    mimes.append(getattr(f, "type", None) or "image/jpeg")
-                except Exception:
-                    continue
+            cam_b = st.session_state.get("fridge_cam_bytes")
+            if isinstance(cam_b, (bytes, bytearray)) and len(cam_b) > 20:
+                blobs.append(bytes(cam_b))
+                mimes.append(str(st.session_state.get("fridge_cam_mime") or "image/jpeg"))
+            for b, m in zip(
+                list(st.session_state.get("fridge_upload_bytes") or []),
+                list(st.session_state.get("fridge_upload_mimes") or []),
+            ):
+                if isinstance(b, (bytes, bytearray)) and len(b) > 20:
+                    blobs.append(bytes(b))
+                    mimes.append(str(m or "image/jpeg"))
             blobs = blobs[: fr.MAX_PHOTOS]
             mimes = mimes[: len(blobs)]
             if not blobs:
                 st.warning(t("fridge_need_photo"))
+            elif not fr.usable_vision_key(api_key):
+                st.error(t("fridge_api_missing"))
+                st.caption(f"build {BUILD_ID}")
             else:
+                t0 = time.time()
                 with st.spinner(t("fridge_scanning")):
                     try:
                         invent = fr.invent_from_images(
                             blobs,
-                            api_key=get_secret("GROK_API_KEY"),
+                            api_key=api_key,
                             language=st.session_state.get("language", "sv"),
                             mime_types=mimes,
                         )
                     except fr.FridgeVisionError as exc:
-                        # Never pretend the model returned an empty inventory
-                        log.error("fridge invent UI error: %s", exc)
+                        elapsed = time.time() - t0
+                        log.error("fridge invent UI error (%.2fs): %s", elapsed, exc)
                         st.session_state._last_ui_error = f"{exc.code}: {exc}"
                         st.error(f"{t('fridge_vision_error')}: {exc}")
+                        dbg = fr.LAST_VISION_DEBUG or {}
+                        st.caption(
+                            f"{elapsed:.1f}s · status={dbg.get('http_status')} · "
+                            f"model={dbg.get('model')} · endpoint={dbg.get('endpoint')} · "
+                            f"images={dbg.get('image_bytes')}"
+                        )
                         if exc.raw:
-                            st.caption(html.escape(str(exc.raw)[:240]))
+                            st.caption(html.escape(str(exc.raw)[:280]))
                         st.caption(f"build {BUILD_ID}")
+                        if st.button(t("fridge_manual"), use_container_width=True, key="fridge_manual_btn"):
+                            st.session_state.fridge_inventory = []
+                            st.session_state.fridge_step = "confirm"
+                            st.rerun()
                         nav()
                         return
+                elapsed = time.time() - t0
+                dbg = fr.LAST_VISION_DEBUG or {}
+                if not invent or not dbg.get("http_status"):
+                    # Should be unreachable — invent raises — belt & suspenders
+                    st.error(
+                        f"{t('fridge_vision_error')}: anropet verkar inte ha gått iväg "
+                        f"({elapsed:.2f}s, status={dbg.get('http_status')})."
+                    )
+                    st.caption(f"build {BUILD_ID}")
+                    nav()
+                    return
                 st.session_state.fridge_inventory = invent
                 st.session_state.fridge_step = "confirm"
+                st.session_state["fridge_last_scan_secs"] = elapsed
                 st.rerun()
                 return
         if st.button(t("home"), use_container_width=True, key="fridge_home_cap"):
@@ -1790,6 +1865,9 @@ def page_fridge() -> None:
     # ----- confirm inventory -----
     inventory = list(st.session_state.get("fridge_inventory") or [])
     names = fr.names_only(inventory)
+    secs = st.session_state.get("fridge_last_scan_secs")
+    if secs is not None and names:
+        st.caption(t("fridge_scan_took").format(secs=f"{float(secs):.1f}", n=len(names)))
     if not names:
         st.info(t("fridge_empty_scan"))
     else:
