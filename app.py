@@ -483,6 +483,19 @@ def nav() -> None:
     )
 
 
+def _safe_decide(user_id: str, question: str, **kwargs: Any):
+    """Call pipeline.decide with only kwargs the installed signature accepts.
+
+    Protects against Streamlit Cloud rolling deploys where app.py and
+    pipeline.py briefly disagree on keyword arguments.
+    """
+    import inspect
+
+    params = inspect.signature(pipeline.decide).parameters
+    filtered = {k: v for k, v in kwargs.items() if k in params}
+    return pipeline.decide(user_id, question, **filtered)
+
+
 def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_router: bool = False) -> None:
     """
     via_router=True: free-text path — MUST go through handle_free_text (no bypass).
@@ -551,7 +564,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                 )
             else:
                 # Domain chip / resolved pick — direct pipeline (not free-text)
-                result = pipeline.decide(
+                result = _safe_decide(
                     str(st.session_state.user_id),
                     q,
                     domain_hint=str(hint) if hint else None,
@@ -560,9 +573,9 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                     reroll_index=int(st.session_state.reroll_index or 0),
                     previous_decision_id=prev_id,
                     grok_api_key=get_secret("GROK_API_KEY"),
-                    skip_feasibility=(hint == "other"),
+                    skip_feasibility=(str(hint) == "other"),
                 )
-        st.session_state.route_log_id = result.route_log_id
+        st.session_state.route_log_id = getattr(result, "route_log_id", None)
         st.session_state.current = result.to_dict()
         if result.ok and result.domain:
             st.session_state.last_domain_hint = result.domain
@@ -574,13 +587,13 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         st.session_state.page = "home"
         return
 
-    if result.needs_domain_pick:
+    if getattr(result, "needs_domain_pick", False):
         st.session_state.pending_free_text = q
         st.session_state.page = "ambiguous"
         st.rerun()
         return
 
-    if result.ui_message and not result.ok and not result.refused:
+    if getattr(result, "ui_message", None) and not result.ok and not result.refused:
         st.session_state.page = "not_a_decision"
         st.rerun()
         return
