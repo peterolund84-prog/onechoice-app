@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-vision-v6-20260719"
+BUILD_ID = "fridge-honest-v7-20260719"
 
 I18N = {
     "sv": {
@@ -352,6 +352,32 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 }}
 @media (max-width: 768px) {{
     .block-container {{ padding: 1rem 0.75rem 9rem !important; }}
+}}
+/* Fridge capture: almost full phone width + tall camera so more of the fridge fits */
+.block-container:has([data-testid="stCameraInput"]) {{
+    max-width: min(100vw, 720px) !important;
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+}}
+div[data-testid="stCameraInput"] {{
+    width: 100% !important;
+}}
+div[data-testid="stCameraInput"] > div {{
+    width: 100% !important;
+}}
+div[data-testid="stCameraInput"] video,
+div[data-testid="stCameraInput"] img,
+div[data-testid="stCameraInput"] canvas {{
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: min(72vh, 560px) !important;
+    height: auto !important;
+    object-fit: cover !important;
+    border-radius: 12px !important;
+}}
+div[data-testid="stCameraInput"] button {{
+    width: 100% !important;
+    min-height: 3rem !important;
 }}
 .oc-logo {{
     text-align: center; font-weight: 700; font-size: 1.55rem;

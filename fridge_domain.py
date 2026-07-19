@@ -31,7 +31,20 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "lök": ("lök", "gul lök", "rödlök", "onion"),
     "vitlök": ("vitlök", "garlic"),
     "smör": ("smör", "butter"),
-    "bröd": ("bröd", "macka", "toast", "limpa", "bread", "knäckebröd", "knäcke"),
+    "bröd": (
+        "bröd",
+        "macka",
+        "mackor",
+        "smörgås",
+        "toast",
+        "limpa",
+        "bread",
+        "sandwich",
+        "knäckebröd",
+        "knäcke",
+    ),
+    "sylt": ("sylt", "jam", "marmelad"),
+    "saft": ("saft", "juice", "apelsinjuice", "äppeljuice"),
     "pasta": ("pasta", "spaghetti", "penne", "tagliatelle"),
     "ris": ("ris", "rice", "jasminris", "basmatiris"),
     "potatis": ("potatis", "potato", "potatisar"),
@@ -229,6 +242,78 @@ def can_cook(required: list[str], available: list[str]) -> bool:
     if not needed:
         return False
     return all(_covers(n, avail) for n in needed)
+
+
+def ingredients_cued_by_text(text: str) -> list[str]:
+    """Canonical non-staple ingredients clearly named in a dish title/suggestion.
+
+    Catches LLM cheat where meta.ingredients only lists available items but the
+    title says e.g. "Macka med ost" without cheese in the fridge.
+    """
+    blob = normalize_name(text)
+    if not blob:
+        return []
+    tokens = re.findall(r"[a-zåäö]+", blob)
+    found: list[str] = []
+    seen: set[str] = set()
+
+    def add(canonical: str) -> None:
+        c = normalize_name(canonical)
+        if not c or _is_staple(c) or c in seen:
+            return
+        seen.add(c)
+        found.append(c)
+
+    # Sandwich words always imply bread (äggmackor, macka, smörgås…)
+    if re.search(r"mack|smörgås|sandwich|toast", blob):
+        add("bröd")
+
+    for canonical, aliases in _ALIASES.items():
+        if canonical == "bröd":
+            # Already handled via mack/smörgås; still allow explicit "bröd"
+            if re.search(r"(?<![a-zåäö])bröd(?![a-zåäö])", blob) or any(
+                t in ("bread", "limpa", "knäcke", "knäckebröd") for t in tokens
+            ):
+                add("bröd")
+            continue
+        cues = sorted({canonical, *aliases}, key=len, reverse=True)
+        hit = False
+        for cue in cues:
+            c = normalize_name(cue)
+            if len(c) < 3:
+                continue
+            # Whole word (safe for short cues like ost — avoids "kost")
+            if re.search(rf"(?<![a-zåäö]){re.escape(c)}(?![a-zåäö])", blob):
+                hit = True
+                break
+            # Compounds: longer cues as substrings (mozzarella, kycklingfilé)
+            if len(c) >= 4 and any(c in tok or tok == c for tok in tokens):
+                hit = True
+                break
+            # Short produce as compound prefix (ägg in äggmackor)
+            if len(c) == 3 and any(len(tok) > 3 and tok.startswith(c) for tok in tokens):
+                hit = True
+                break
+        if hit:
+            add(canonical)
+    return found
+
+
+def fridge_required_ingredients(
+    suggestion: str,
+    meta_ingredients: list[str] | None,
+) -> list[str]:
+    """Union of declared meta.ingredients and ingredients cued by the title."""
+    declared = [normalize_name(x) for x in (meta_ingredients or []) if normalize_name(x)]
+    cued = ingredients_cued_by_text(suggestion)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in declared + cued:
+        if item in seen:
+            continue
+        seen.add(item)
+        out.append(item)
+    return out
 
 
 def downscale_image(blob: bytes, mime: str = "image/jpeg") -> tuple[bytes, str]:
@@ -709,6 +794,19 @@ def recipe_library(language: str = "sv") -> list[dict[str, Any]]:
             },
         },
         {
+            "suggestion": "Äggröra" if sv else "Scrambled eggs",
+            "justification": (
+                "Du har ägg — enkel äggröra i stekpannan."
+                if sv
+                else "You have eggs — simple scrambled eggs."
+            ),
+            "meta": {
+                "active_minutes": 6,
+                "ingredients": ["ägg", "smör", "salt", "peppar"],
+                "source": SOURCE,
+            },
+        },
+        {
             "suggestion": "Stekt ägg med tomat" if sv else "Fried eggs with tomato",
             "justification": (
                 "Du har ägg och tomat — klart på några minuter."
@@ -718,6 +816,19 @@ def recipe_library(language: str = "sv") -> list[dict[str, Any]]:
             "meta": {
                 "active_minutes": 8,
                 "ingredients": ["ägg", "tomat", "smör", "salt", "peppar"],
+                "source": SOURCE,
+            },
+        },
+        {
+            "suggestion": "Yoghurt med sylt" if sv else "Yoghurt with jam",
+            "justification": (
+                "Du har yoghurt och sylt — klart utan matlagning."
+                if sv
+                else "You have yoghurt and jam — no cooking."
+            ),
+            "meta": {
+                "active_minutes": 1,
+                "ingredients": ["yoghurt", "sylt"],
                 "source": SOURCE,
             },
         },
@@ -897,49 +1008,84 @@ def fridge_fallback(
     language: str = "sv",
 ) -> dict[str, Any]:
     """
-    ONE honest fallback when nothing viable cooks from the inventory.
-    Offers egg sandwiches if eggs are visible, else honesty + shopping escape hatch.
+    ONE honest fallback when nothing in the recipe library matches.
+    Never invent ingredients (no bread/cheese unless seen). Offers shopping escape hatch.
     """
     avail = names_only(available)
     avail_set = set(avail)
     sv = language == "sv"
     has_eggs = _covers("ägg", avail_set)
-    if has_eggs:
+    has_bread = _covers("bröd", avail_set)
+    has_yoghurt = _covers("yoghurt", avail_set)
+    has_jam = _covers("sylt", avail_set)
+
+    if has_eggs and has_bread:
         suggestion = "Äggmackor" if sv else "Egg sandwiches"
         justification = (
-            "Med det här blir det äggmackor — eller vill du ha ett förslag med en kort inköpslista?"
+            "Med ägg och bröd blir det äggmackor — eller vill du ha ett förslag med en kort inköpslista?"
             if sv
-            else "With this, it’s egg sandwiches — or want a suggestion with a short shopping list?"
+            else "With eggs and bread it’s egg sandwiches — or want a short shopping list?"
+        )
+        ings = ["ägg", "bröd", "smör", "salt", "peppar"]
+        minutes = 8
+    elif has_yoghurt and has_jam:
+        suggestion = "Yoghurt med sylt" if sv else "Yoghurt with jam"
+        justification = (
+            "Du har yoghurt och sylt — klart utan matlagning. Vill du hellre ha ett förslag med inköpslista?"
+            if sv
+            else "You have yoghurt and jam — no cooking. Or want a suggestion with a shopping list?"
+        )
+        ings = ["yoghurt", "sylt"]
+        minutes = 1
+    elif has_eggs:
+        suggestion = "Äggröra" if sv else "Scrambled eggs"
+        justification = (
+            "Med äggen blir det äggröra — eller vill du ha ett förslag med en kort inköpslista?"
+            if sv
+            else "With the eggs it’s scrambled eggs — or want a short shopping list?"
+        )
+        ings = ["ägg", "smör", "salt", "peppar"]
+        minutes = 6
+    elif has_yoghurt:
+        suggestion = "Naturell yoghurt" if sv else "Plain yoghurt"
+        justification = (
+            "Du har yoghurt — ät den som den är. Vill du ha ett förslag med en kort inköpslista?"
+            if sv
+            else "You have yoghurt — eat it as is. Want a suggestion with a short shopping list?"
+        )
+        ings = ["yoghurt"]
+        minutes = 0
+    else:
+        suggestion = "Inget klart utan inköp" if sv else "Nothing ready without shopping"
+        justification = (
+            "Med det här räcker det inte till en rätt — vill du ha ett förslag med en kort inköpslista?"
+            if sv
+            else "This isn’t enough for a dish — want a suggestion with a short shopping list?"
         )
         return {
             "suggestion": suggestion,
             "justification": justification,
             "meta": {
-                "active_minutes": 8,
-                "ingredients": ["ägg", "bröd", "smör", "salt", "peppar"],
+                "active_minutes": 0,
+                "ingredients": [],
                 "source": SOURCE,
                 "fridge_fallback": True,
                 "offers_shopping": True,
+                "no_cook_empty": True,
                 "available_ingredients": avail,
                 "assume_at_home_only": True,
             },
         }
-    suggestion = "Inget klart utan inköp" if sv else "Nothing ready without shopping"
-    justification = (
-        "Med det här räcker det inte till en rätt — vill du ha ett förslag med en kort inköpslista?"
-        if sv
-        else "This isn’t enough for a dish — want a suggestion with a short shopping list?"
-    )
+
     return {
         "suggestion": suggestion,
         "justification": justification,
         "meta": {
-            "active_minutes": 0,
-            "ingredients": [],
+            "active_minutes": minutes,
+            "ingredients": ings,
             "source": SOURCE,
             "fridge_fallback": True,
             "offers_shopping": True,
-            "no_cook_empty": True,
             "available_ingredients": avail,
             "assume_at_home_only": True,
         },

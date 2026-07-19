@@ -334,21 +334,24 @@ def decide(
         import fridge_domain as fr
 
         pinned = fr.fridge_candidates(available_ingredients, language=language)
-        # Keep only LLM candidates that declare ingredients cookable from inventory
+        # Keep only LLM candidates cookable from inventory (title + meta.ingredients)
         typed: list[dict[str, Any]] = []
         for c in candidates:
             meta = c.get("meta") if isinstance(c.get("meta"), dict) else {}
             ings = list(meta.get("ingredients") or [])
-            if ings and fr.can_cook(ings, available_ingredients):
+            title = str(c.get("suggestion") or "")
+            required = fr.fridge_required_ingredients(title, ings)
+            if required and fr.can_cook(required, available_ingredients):
                 row = dict(c)
                 m = dict(meta)
+                m["ingredients"] = required
                 m["source"] = fr.SOURCE
                 m["available_ingredients"] = available_ingredients
                 m["assume_at_home_only"] = True
                 row["meta"] = m
                 if not row.get("justification"):
                     row["justification"] = fr.justify_from_inventory(
-                        str(row.get("suggestion") or ""), ings, language
+                        title, required, language
                     )
                 typed.append(row)
         candidates = pinned + typed
@@ -962,11 +965,15 @@ def _fridge_prompt_rules(available: list[str], language: str) -> str:
         "FRIDGE PHOTO MODE — hard constraints:\n"
         f"- Available ingredients (confirmed by user): {json.dumps(available, ensure_ascii=False)}\n"
         "- The dish MUST be cookable from ONLY those ingredients plus assumed staples "
-        "(salt, pepper, oil, butter, sugar, flour, common dried spices).\n"
-        "- Do NOT require any ingredient not in the available list.\n"
+        "(salt, pepper, oil, butter, sugar, flour).\n"
+        "- Do NOT require or NAME any ingredient not in the available list — "
+        "not in the dish title, not in justification, not in meta.ingredients.\n"
+        "- Example: if ost/cheese is not listed, never suggest 'macka med ost' or omelette with cheese.\n"
+        "- If bread is not listed, never suggest a sandwich/macka.\n"
         "- No shopping list. No eating out. No 'buy X on the way'.\n"
-        f"- Put required ingredients in meta.ingredients. Write suggestion + justification in {lang}.\n"
-        "- Justification should reference what they have (e.g. 'Du har ägg, paprika och ost — det blir omelett.')."
+        f"- Put EVERY non-staple ingredient the dish needs in meta.ingredients. "
+        f"Write suggestion + justification in {lang}.\n"
+        "- Justification must only mention ingredients from the available list."
     )
 
 

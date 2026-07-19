@@ -31,11 +31,36 @@ class FridgeDomainUnitTests(unittest.TestCase):
         self.assertIn("ägg", top["justification"].lower())
         self.assertEqual(top["meta"]["source"], fr.SOURCE)
 
-    def test_fallback_with_eggs(self) -> None:
+    def test_fallback_with_eggs_no_bread_is_scramble(self) -> None:
         fb = fr.fridge_fallback(["ägg"], language="sv")
-        self.assertEqual(fb["suggestion"], "Äggmackor")
+        self.assertEqual(fb["suggestion"], "Äggröra")
+        self.assertNotIn("bröd", fb["meta"]["ingredients"])
         self.assertTrue(fb["meta"]["offers_shopping"])
         self.assertIn("inköpslista", fb["justification"])
+
+    def test_fallback_eggs_and_bread_is_sandwich(self) -> None:
+        fb = fr.fridge_fallback(["ägg", "bröd"], language="sv")
+        self.assertEqual(fb["suggestion"], "Äggmackor")
+        self.assertIn("bröd", fb["meta"]["ingredients"])
+
+    def test_yoghurt_jam_candidate(self) -> None:
+        cands = fr.fridge_candidates(
+            ["yoghurt", "ägg", "sylt", "smör", "saft"], language="sv"
+        )
+        names = [c["suggestion"].lower() for c in cands]
+        self.assertTrue(any("yoghurt" in n and "sylt" in n for n in names), names)
+        self.assertFalse(any("ost" in n for n in names), names)
+        self.assertFalse(any("macka" in n for n in names), names)
+
+    def test_title_cues_require_cheese(self) -> None:
+        self.assertIn("ost", fr.ingredients_cued_by_text("Macka med ost"))
+        self.assertIn("bröd", fr.ingredients_cued_by_text("Macka med ost"))
+        self.assertFalse(
+            fr.can_cook(
+                fr.fridge_required_ingredients("Macka med ost", ["ägg", "smör"]),
+                ["yoghurt", "ägg", "sylt", "smör", "saft"],
+            )
+        )
 
     def test_fallback_empty_pantry(self) -> None:
         fb = fr.fridge_fallback(["diskmedel"], language="sv")
@@ -123,6 +148,55 @@ class FridgePipelineTests(unittest.TestCase):
             bad, domain="food", profile=profile, context=ctx
         )
         self.assertFalse(result.ok)
+
+    def test_title_cheese_rejected_when_meta_hides_it(self) -> None:
+        """LLM naming cheese in the title must fail even if meta omits ost."""
+        import feasibility
+
+        profile = feasibility.parse_profile(self.user, {"source": fr.SOURCE})
+        avail = ["yoghurt", "ägg", "sylt", "smör", "saft"]
+        ctx = {
+            "source": fr.SOURCE,
+            "available_ingredients": avail,
+            "meal_type": "frukost",
+            "language": "sv",
+        }
+        sneaky = {
+            "suggestion": "Macka med ost",
+            "justification": "Du har ägg och smör",
+            "meta": {
+                "ingredients": ["ägg", "smör"],
+                "source": fr.SOURCE,
+                "available_ingredients": avail,
+            },
+        }
+        result = feasibility.feasibility_check(
+            sneaky, domain="food", profile=profile, context=ctx
+        )
+        self.assertFalse(result.ok)
+        self.assertIn("fridge_missing_ingredient", result.reasons)
+
+        r = pipeline.decide(
+            self.user["id"],
+            "Vad laga från kylen?",
+            domain_hint="food",
+            language="sv",
+            db_path=self.db_path,
+            context_extra={
+                "source": fr.SOURCE,
+                "available_ingredients": avail,
+                "meal_type": "frukost",
+            },
+        )
+        self.assertTrue(r.ok)
+        title = (r.suggestion or "").lower()
+        self.assertNotIn("ost", title)
+        self.assertFalse("macka" in title and "ost" in title)
+        # Honest dish from what was seen
+        self.assertTrue(
+            "yoghurt" in title or "äggröra" in title or "ägg" in title,
+            r.suggestion,
+        )
 
 
 class FridgeUiTests(unittest.TestCase):
