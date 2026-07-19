@@ -89,6 +89,11 @@ class DecisionResult:
     refusal_message: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
     explore: bool = False
+    # Router outcome (free-text path)
+    route: str | None = None
+    route_log_id: int | None = None
+    ui_message: str | None = None  # NOT_A_DECISION copy etc.
+    needs_domain_pick: bool = False  # AMBIGUOUS
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -148,12 +153,16 @@ def decide(
     context_extra: dict[str, Any] | None = None,
     grok_api_key: str = "",
     db_path: str | None = None,
+    skip_feasibility: bool = False,
+    route_meta: dict[str, Any] | None = None,
 ) -> DecisionResult:
     """
     Full decision pipeline. Returns exactly ONE decision (or a hard refusal).
 
     On reroll: previous decision is marked rejected (negative signal).
     After MAX_REROLLS, result is locked.
+
+    skip_feasibility: used for NEAR_DOMAIN (generic engine, no domain validators).
     """
     db.init_db(db_path)
     if not user_id:
@@ -170,20 +179,13 @@ def decide(
     if not q and domain_hint:
         q = _default_question(str(domain_hint), language)
 
-    domain = classify_domain(q, domain_hint)
-    if domain == "refused" or domain is None and _looks_high_stakes(q):
-        return DecisionResult(
-            ok=False,
-            domain=None,
-            suggestion="",
-            justification="",
-            refused=True,
-            refusal_message=REFUSAL_COPY.get(language, REFUSAL_COPY["en"]),
-        )
-    if domain is None:
-        domain = "food"  # soft default only for empty/ambiguous everyday prompts
-        # If clearly out of scope without keywords, refuse
-        if q and not _looks_everyday(q):
+    # Explicit near-domain / other
+    if domain_hint == db.NEAR_DOMAIN or domain_hint == "other":
+        domain = db.NEAR_DOMAIN
+        skip_feasibility = True
+    else:
+        domain = classify_domain(q, domain_hint)
+        if domain == "refused" or domain is None and _looks_high_stakes(q):
             return DecisionResult(
                 ok=False,
                 domain=None,
@@ -191,7 +193,22 @@ def decide(
                 justification="",
                 refused=True,
                 refusal_message=REFUSAL_COPY.get(language, REFUSAL_COPY["en"]),
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
             )
+        if domain is None:
+            domain = "food"  # soft default only for empty/ambiguous everyday prompts
+            if q and not _looks_everyday(q) and not skip_feasibility:
+                return DecisionResult(
+                    ok=False,
+                    domain=None,
+                    suggestion="",
+                    justification="",
+                    refused=True,
+                    refusal_message=REFUSAL_COPY.get(language, REFUSAL_COPY["en"]),
+                    route=(route_meta or {}).get("route"),
+                    route_log_id=(route_meta or {}).get("route_log_id"),
+                )
 
     # Negative signal from previous shown decision
     if reroll and previous_decision_id:
@@ -204,10 +221,14 @@ def decide(
     effective_reroll = min(reroll_index, MAX_REROLLS)
 
     ctx = collect_context(user, extra=context_extra)
-    # Infer clothes intent from question
     if domain == "clothes" and "intent" not in ctx:
         ql = q.lower()
         ctx["intent"] = "buy" if any(w in ql for w in ("köp", "beställ", "handla", "buy")) else "wear"
+    if route_meta:
+        ctx["route"] = route_meta.get("route")
+        ctx["category_guess"] = route_meta.get("category_guess")
+        ctx["normalized_question"] = route_meta.get("normalized_question")
+
     profile = feasibility.parse_profile(user, ctx)
     history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
     prefs = db.get_preferences(user_id, domain, path=db_path)
@@ -225,19 +246,24 @@ def decide(
         language=language,
         grok_api_key=grok_api_key,
     )
-    # Feasibility gate — regenerate from local feasible pack if all fail
-    survivors = feasibility.filter_feasible(
-        candidates, domain=domain, profile=profile, context=ctx
-    )
-    if not survivors:
-        survivors = feasibility.filter_feasible(
-            _local_candidates(domain, language, recent, ctx, profile),
-            domain=domain,
-            profile=profile,
-            context=ctx,
+
+    if skip_feasibility or domain == db.NEAR_DOMAIN:
+        survivors = list(candidates) or _local_candidates(
+            domain, language, recent, ctx, profile
         )
-    if not survivors:
-        survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
+    else:
+        survivors = feasibility.filter_feasible(
+            candidates, domain=domain, profile=profile, context=ctx
+        )
+        if not survivors:
+            survivors = feasibility.filter_feasible(
+                _local_candidates(domain, language, recent, ctx, profile),
+                domain=domain,
+                profile=profile,
+                context=ctx,
+            )
+        if not survivors:
+            survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
 
     ranked = _rank_candidates(
         survivors,
@@ -247,15 +273,10 @@ def decide(
     )
     top = ranked[0] if ranked else survivors[0]
     if explore or top.get("wildcard"):
-        # Mark exploration as Vildkort in context; never mention alternatives to user
         top = dict(top)
         top["wildcard"] = True
 
     justification = str(top.get("justification") or "")
-    if top.get("wildcard") and language == "sv" and "vildkort" not in justification.lower():
-        # Soft tag only in stored context; user-facing stays one confident line
-        pass
-
     execution = top.get("execution") if isinstance(top.get("execution"), dict) else None
     if not execution:
         execution = _execution_for(
@@ -278,7 +299,9 @@ def decide(
             "wildcard": bool(top.get("wildcard")),
             "candidates_n": len(candidates),
             "feasible_n": len(survivors),
+            "skip_feasibility": skip_feasibility,
             "execution_detail": execution.get("detail"),
+            "route_log_id": (route_meta or {}).get("route_log_id"),
         },
         execution_type=execution.get("type"),
         execution_label=execution.get("label"),
@@ -287,7 +310,6 @@ def decide(
     )
 
     if locked:
-        # Positive lock signal — this is the one
         db.upsert_preference(
             user_id,
             domain,
@@ -311,11 +333,167 @@ def decide(
         refused=False,
         context=decision.get("context") or ctx,
         explore=explore or bool(top.get("wildcard")),
+        route=(route_meta or {}).get("route"),
+        route_log_id=(route_meta or {}).get("route_log_id"),
     )
 
 
-def accept_decision(decision_id: int, *, db_path: str | None = None) -> dict[str, Any]:
-    return db.record_feedback(decision_id, accepted=True, path=db_path)
+def handle_free_text(
+    user_id: str,
+    question: str,
+    *,
+    language: str = "sv",
+    grok_api_key: str = "",
+    db_path: str | None = None,
+    reroll: bool = False,
+    reroll_index: int = 0,
+    previous_decision_id: int | None = None,
+    forced_domain: str | None = None,
+    prior_route_log_id: int | None = None,
+) -> DecisionResult:
+    """
+    Gatekeeper entry for EVERY free-text input.
+
+    forced_domain: when user picked a chip after AMBIGUOUS (incl. 'other'/annat).
+    """
+    import router as rt
+
+    db.init_db(db_path)
+    q = (question or "").strip()[: rt.MAX_INPUT_CHARS]
+    language = language if language in ("sv", "en") else "sv"
+
+    # Reroll of an already-routed decision: do not re-classify
+    if reroll and forced_domain:
+        return decide(
+            user_id,
+            q,
+            domain_hint=forced_domain,
+            language=language,
+            reroll=True,
+            reroll_index=reroll_index,
+            previous_decision_id=previous_decision_id,
+            grok_api_key=grok_api_key,
+            db_path=db_path,
+            skip_feasibility=(forced_domain == db.NEAR_DOMAIN),
+            route_meta={
+                "route": "NEAR_DOMAIN" if forced_domain == db.NEAR_DOMAIN else "IN_DOMAIN",
+                "route_log_id": prior_route_log_id,
+            },
+        )
+
+    if forced_domain in ALLOWED_DOMAINS or forced_domain == db.NEAR_DOMAIN:
+        # User resolved AMBIGUOUS via chip / "annat"
+        classification = rt.RouteResult(
+            route="NEAR_DOMAIN" if forced_domain == db.NEAR_DOMAIN else "IN_DOMAIN",
+            domain=forced_domain,
+            confidence=1.0,
+            category_guess=forced_domain,
+            normalized_question=rt._strip_personal(q) if q else None,
+            raw_text=q,
+        )
+    else:
+        classification = rt.route_question(
+            q, language=language, grok_api_key=grok_api_key
+        )
+
+    log_row = db.log_routed_query(
+        user_id,
+        route=classification.route,
+        domain=classification.domain,
+        confidence=classification.confidence,
+        category_guess=classification.category_guess,
+        normalized_question=classification.normalized_question,
+        raw_text=classification.raw_text,
+        path=db_path,
+    )
+    log_id = log_row.get("id")
+    meta = {
+        "route": classification.route,
+        "route_log_id": log_id,
+        "category_guess": classification.category_guess,
+        "normalized_question": classification.normalized_question,
+        "confidence": classification.confidence,
+    }
+
+    if classification.route == "HIGH_STAKES":
+        return DecisionResult(
+            ok=False,
+            domain=None,
+            suggestion="",
+            justification="",
+            refused=True,
+            refusal_message=rt.REFUSAL_SV if language == "sv" else REFUSAL_COPY["en"],
+            route="HIGH_STAKES",
+            route_log_id=log_id,
+        )
+
+    if classification.route == "NOT_A_DECISION":
+        return DecisionResult(
+            ok=False,
+            domain=None,
+            suggestion="",
+            justification="",
+            refused=False,
+            ui_message=rt.NOT_A_DECISION_SV if language == "sv" else rt.NOT_A_DECISION_EN,
+            route="NOT_A_DECISION",
+            route_log_id=log_id,
+        )
+
+    if classification.route == "AMBIGUOUS":
+        return DecisionResult(
+            ok=False,
+            domain=None,
+            suggestion="",
+            justification="",
+            needs_domain_pick=True,
+            route="AMBIGUOUS",
+            route_log_id=log_id,
+            context={"raw_question": q},
+        )
+
+    # IN_DOMAIN or NEAR_DOMAIN → decision pipeline
+    domain_hint = classification.domain
+    if classification.route == "NEAR_DOMAIN":
+        domain_hint = db.NEAR_DOMAIN
+    question_for_pipeline = classification.normalized_question or q
+
+    result = decide(
+        user_id,
+        question_for_pipeline,
+        domain_hint=domain_hint,
+        language=language,
+        reroll=False,
+        reroll_index=0,
+        grok_api_key=grok_api_key,
+        db_path=db_path,
+        skip_feasibility=(classification.route == "NEAR_DOMAIN"),
+        route_meta=meta,
+    )
+    if result.ok and log_id is not None:
+        try:
+            db.update_routed_query(int(log_id), decision_shown=True, path=db_path)
+        except Exception as exc:
+            log.warning("failed to mark decision_shown: %s", exc)
+    return result
+
+
+def accept_decision(
+    decision_id: int,
+    *,
+    db_path: str | None = None,
+    route_log_id: int | None = None,
+) -> dict[str, Any]:
+    out = db.record_feedback(decision_id, accepted=True, path=db_path)
+    rid = route_log_id
+    if rid is None and isinstance(out, dict):
+        rid = (out.get("context") or {}).get("route_log_id")
+    if rid is not None:
+        try:
+            db.update_routed_query(int(rid), accepted=True, path=db_path)
+        except Exception as exc:
+            log.warning("failed to mark routed accept: %s", exc)
+    return out
+
 
 
 # ---------------------------------------------------------------------------
@@ -350,6 +528,7 @@ def _default_question(domain: str, language: str) -> str:
         "movie": "Vad ska jag titta på?",
         "workout": "Vad ska jag träna idag?",
         "weekend": "Vad ska jag göra i helgen?",
+        "other": "Vad ska jag välja?",
     }
     en = {
         "food": "What should I eat?",
@@ -357,6 +536,7 @@ def _default_question(domain: str, language: str) -> str:
         "movie": "What should I watch?",
         "workout": "What workout should I do?",
         "weekend": "What should I do this weekend?",
+        "other": "What should I pick?",
     }
     return (sv if language == "sv" else en).get(domain, sv["food"])
 
@@ -653,6 +833,13 @@ def _local_candidates(
             {"suggestion": "Museum eller galleri i 90 minuter", "justification": "Lagom stort äventyr."},
             {"suggestion": "Städa ett rum, sen belöning på café", "justification": "Framåtanda plus belöning.", "wildcard": True},
         ],
+        "other": [
+            {"suggestion": "En upplevelse istället för pryl", "justification": "Minns längre — och du slipper gissningsleken."},
+            {"suggestion": "Något personligt och enkelt", "justification": "Varmt utan att bli överdrivet."},
+            {"suggestion": "Ett kort handskrivet kort + en liten grej", "justification": "Insatsen syns mer än prislappen."},
+            {"suggestion": "Fråga vad de saknar — sen bestäm en sak", "justification": "Ett beslut, noll gissningar.", "wildcard": True},
+            {"suggestion": "Ge tid: en planerad fika eller promenad", "justification": "Närvaro vinner oftast."},
+        ],
     }
     packs_en: dict[str, list[dict[str, Any]]] = {
         "food": [
@@ -690,9 +877,21 @@ def _local_candidates(
             {"suggestion": "Museum or gallery for 90 minutes", "justification": "A right-sized adventure."},
             {"suggestion": "Deep-clean one room, then a café reward", "justification": "Progress plus a reward.", "wildcard": True},
         ],
+        "other": [
+            {"suggestion": "An experience instead of a thing", "justification": "Lasts longer — and ends the guessing."},
+            {"suggestion": "Something personal and simple", "justification": "Warm without overdoing it."},
+            {"suggestion": "A short handwritten note + one small item", "justification": "Effort beats price."},
+            {"suggestion": "Ask what they need — then pick one thing", "justification": "One decision, zero guessing.", "wildcard": True},
+            {"suggestion": "Give time: plan a coffee or a walk", "justification": "Presence usually wins."},
+        ],
     }
     packs = packs_sv if language == "sv" else packs_en
-    items = list(packs.get(domain, packs["food"]))
+    # Near-domain: bias pack by category_guess when present
+    cat = str((context or {}).get("category_guess") or "").lower()
+    if domain in ("other", db.NEAR_DOMAIN) and cat:
+        items = _near_domain_pack(cat, language)
+    else:
+        items = list(packs.get(domain, packs["other"] if domain == db.NEAR_DOMAIN else packs["food"]))
     recent_l = {str(r).strip().lower() for r in recent if r}
     filtered = [c for c in items if c["suggestion"].strip().lower() not in recent_l]
     pool = filtered or items
@@ -752,8 +951,59 @@ def _guaranteed_feasible(
             "suggestion": "Kaffepromenad + en bokhandel" if sv else "Coffee walk + one bookstore",
             "justification": "Enkelt, lagom socialt, noll planeringskaos." if sv else "Simple, social enough, zero planning chaos.",
         }
+        if domain in ("other", db.NEAR_DOMAIN):
+            c = {
+                "suggestion": "Något personligt och enkelt" if sv else "Something personal and simple",
+                "justification": "Varmt utan att bli överdrivet." if sv else "Warm without overdoing it.",
+            }
     survivors = feasibility.filter_feasible([c], domain=domain, profile=profile, context=context)
     return survivors[0] if survivors else c
+
+
+def _near_domain_pack(category: str, language: str) -> list[dict[str, Any]]:
+    sv = language == "sv"
+    if "present" in category or "jul" in category or "gift" in category:
+        return [
+            {"suggestion": "En upplevelse istället för pryl" if sv else "An experience instead of a thing",
+             "justification": "Minns längre." if sv else "Lasts longer."},
+            {"suggestion": "En bra bok + handskrivet kort" if sv else "A good book + handwritten note",
+             "justification": "Personligt utan stress." if sv else "Personal without stress."},
+            {"suggestion": "Premiumchoklad och något de nämnt" if sv else "Nice chocolate plus something they mentioned",
+             "justification": "Enkelt och säkert." if sv else "Simple and safe."},
+            {"suggestion": "Ett presentkort till deras favoritställe" if sv else "A gift card to their favorite place",
+             "justification": "De väljer — du har bestämt." if sv else "They choose — you decided."},
+            {"suggestion": "Planera en gemensam grej" if sv else "Plan one shared activity",
+             "justification": "Tid slår pryl." if sv else "Time beats stuff.", "wildcard": True},
+        ]
+    if "husdjur" in category or "namn" in category or "pet" in category:
+        return [
+            {"suggestion": "Maja" if sv else "Maja", "justification": "Kort, mjukt, lätt att ropa." if sv else "Short, soft, easy to call."},
+            {"suggestion": "Bosse" if sv else "Bosse", "justification": "Varmt och jordnära." if sv else "Warm and grounded."},
+            {"suggestion": "Nimbus" if sv else "Nimbus", "justification": "Lite lekfullt utan att bli knepigt." if sv else "Playful without being weird.", "wildcard": True},
+            {"suggestion": "Saga" if sv else "Saga", "justification": "Fint och enkelt." if sv else "Pretty and simple."},
+            {"suggestion": "Kalle" if sv else "Kalle", "justification": "Klassiskt — funkar i vardagen." if sv else "Classic — works every day."},
+        ]
+    if "inred" in category or "färg" in category or "color" in category:
+        return [
+            {"suggestion": "Varm off-white" if sv else "Warm off-white", "justification": "Lugnt och tidlöst." if sv else "Calm and timeless."},
+            {"suggestion": "Mjuk sagegrön" if sv else "Soft sage green", "justification": "Fräscht utan att skrika." if sv else "Fresh without shouting."},
+            {"suggestion": "Dämpad sandbeige" if sv else "Muted sand beige", "justification": "Varmt och tryggt." if sv else "Warm and safe."},
+            {"suggestion": "Matt blågrå" if sv else "Matte blue-gray", "justification": "Ser medvetet ut." if sv else "Looks intentional.", "wildcard": True},
+            {"suggestion": "Ljus lera / terracotta-ton" if sv else "Light clay / terracotta tone", "justification": "Mysfaktor utan kaos." if sv else "Cozy without chaos."},
+        ]
+    # generic other
+    return [
+        {"suggestion": "Välj det enklare alternativet" if sv else "Pick the simpler option",
+         "justification": "Mindre friktion idag." if sv else "Less friction today."},
+        {"suggestion": "Gör det i 20 minuter — sen stopp" if sv else "Do it for 20 minutes — then stop",
+         "justification": "Ett beslut, tydlig gräns." if sv else "One decision, clear boundary."},
+        {"suggestion": "Ta det du redan lutar åt" if sv else "Take the one you’re already leaning toward",
+         "justification": "Du vet redan." if sv else "You already know."},
+        {"suggestion": "Skjut upp tills imorgon bitti — sen bestäm" if sv else "Park it until morning — then decide",
+         "justification": "När det inte är bråttom." if sv else "When it isn’t urgent.", "wildcard": True},
+        {"suggestion": "Fråga en person du litar på — en mening" if sv else "Ask one trusted person — one sentence",
+         "justification": "Sen kör." if sv else "Then go."},
+    ]
 
 
 def _rank_candidates(

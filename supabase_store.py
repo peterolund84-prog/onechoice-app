@@ -270,3 +270,75 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
         d["context"] = {}
     d["context_json"] = json.dumps(d.get("context") or {}, ensure_ascii=False)
     return d
+
+
+def log_routed_query(
+    user_id: str,
+    *,
+    access_token: str,
+    refresh_token: str,
+    route: str,
+    domain: str | None = None,
+    confidence: float | None = None,
+    category_guess: str | None = None,
+    normalized_question: str | None = None,
+    raw_text: str | None = None,
+) -> dict[str, Any]:
+    if route == "HIGH_STAKES":
+        raw_text = None
+        domain = None
+        confidence = None
+        category_guess = None
+        normalized_question = None
+    client = _client(access_token, refresh_token)
+    payload = {
+        "user_id": user_id,
+        "raw_text": raw_text,
+        "route": route,
+        "domain": domain,
+        "confidence": confidence,
+        "category_guess": category_guess,
+        "normalized_question": normalized_question,
+        "decision_shown": False,
+        "accepted": None,
+    }
+    res = client.table("routed_queries").insert(payload).execute()
+    return (res.data or [payload])[0]
+
+
+def update_routed_query(
+    query_id: int,
+    *,
+    access_token: str,
+    refresh_token: str,
+    decision_shown: bool | None = None,
+    accepted: bool | None = None,
+) -> dict[str, Any] | None:
+    updates: dict[str, Any] = {}
+    if decision_shown is not None:
+        updates["decision_shown"] = bool(decision_shown)
+    if accepted is not None:
+        updates["accepted"] = bool(accepted)
+    if not updates:
+        return None
+    client = _client(access_token, refresh_token)
+    client.table("routed_queries").update(updates).eq("id", query_id).execute()
+    res = (
+        client.table("routed_queries").select("*").eq("id", query_id).limit(1).execute()
+    )
+    rows = res.data or []
+    return rows[0] if rows else None
+
+
+def purge_expired_raw_text(
+    *,
+    days: int = 90,
+    access_token: str,
+    refresh_token: str,
+) -> int:
+    client = _client(access_token, refresh_token)
+    try:
+        res = client.rpc("purge_routed_query_raw_text", {"days": int(days)}).execute()
+        return int(res.data or 0)
+    except Exception:
+        return 0
