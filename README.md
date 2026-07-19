@@ -83,7 +83,22 @@ python -m streamlit run app.py
 2. Deploya på Streamlit Cloud
 3. Under **App settings → Secrets** klistra in samma `secrets.toml`-innehåll
 
-## Decision pipeline
+## Free-text router + query logging
+
+Every free-text input goes through `router.route_question` → `pipeline.handle_free_text` (no bypass):
+
+| Route | Behavior |
+|-------|----------|
+| `IN_DOMAIN` | Normal domain pipeline + feasibility |
+| `NEAR_DOMAIN` | Generic one-decision engine, **no** feasibility |
+| `HIGH_STAKES` | Refuse — exact copy; log only route/timestamp/user_id |
+| `AMBIGUOUS` | Show 5 domain chips + **Annat** |
+| `NOT_A_DECISION` | “Jag tar beslut, inte frågor…” |
+
+Logged in `routed_queries` (+ view `near_domain_demand`). Raw text auto-nulls after 90 days.
+
+Max input: **200 characters**.
+
 
 `pipeline.decide(user_id, question, ...)`
 
