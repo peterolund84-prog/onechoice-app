@@ -41,7 +41,13 @@ class FeasibilityTests(unittest.TestCase):
         r = feasibility.feasibility_check(good, domain="food", profile=profile)
         self.assertTrue(r.ok)
         self.assertEqual(r.execution["type"], "recipe")
-        self.assertIn("shopping_list", r.execution)
+        self.assertIn("shopping", r.execution)
+        shop = r.execution["shopping"]
+        self.assertIn("to_buy", shop)
+        self.assertIn("assumed_at_home", shop)
+        # Spices may be assumed; coconut milk / lentils must be on buy list
+        flat = " ".join(i for s in shop["to_buy"].values() for i in s)
+        self.assertTrue("lins" in flat or "kokos" in flat)
 
     def test_clothes_mens_never_gets_dress(self) -> None:
         db.update_user(

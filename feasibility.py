@@ -15,6 +15,7 @@ from datetime import datetime
 from typing import Any
 
 import mocks
+import shopping
 
 # Ingredients that fail the Swedish basic-assortment check (specialty / import)
 EXOTIC_INGREDIENTS = (
@@ -236,10 +237,6 @@ def _check_food(
     if reasons:
         return FeasibilityResult(ok=False, reasons=reasons)
 
-    shopping = (candidate.get("meta") or {}).get("shopping_list")
-    if not shopping and not eating_out:
-        shopping = _default_shopping_list(suggestion)
-
     if eating_out:
         loc = profile.get("location") or "Sverige"
         execution = {
@@ -248,62 +245,60 @@ def _check_food(
             "url": f"https://www.google.com/maps/search/{suggestion}+nära+{loc}",
             "detail": f"Öppet nu · inom rimligt avstånd från {loc}",
         }
-    else:
-        execution = {
-            "type": "recipe",
-            "label": "Handla & laga",
-            "url": None,
-            "detail": _format_shopping(shopping, store),
-            "shopping_list": shopping,
-            "store": store,
-            "max_active_minutes": max_min,
-        }
+        return FeasibilityResult(ok=True, execution=execution)
 
+    # Full list → split to_buy / assumed_at_home (hard completeness rule)
+    shop = shopping.build_shopping(
+        suggestion,
+        meta=candidate.get("meta") or {},
+        store=store,
+    )
+    if not shop or not shopping.shopping_valid(shop, suggestion):
+        return FeasibilityResult(ok=False, reasons=["shopping_incomplete"])
+
+    execution = {
+        "type": "recipe",
+        "label": "Gör det nu",
+        "url": None,
+        "detail": shopping.format_assumed_line(shop["assumed_at_home"]),
+        "shopping": shop,
+        "shopping_list": shop["to_buy"],  # legacy key for older UI/tests
+        "store": store,
+        "max_active_minutes": max_min,
+    }
     return FeasibilityResult(
         ok=True,
         execution=execution,
-        enriched={"wildcard": bool(candidate.get("wildcard")), "meta": {**(candidate.get("meta") or {}), "shopping_list": shopping}},
+        enriched={
+            "wildcard": bool(candidate.get("wildcard")),
+            "meta": {
+                **(candidate.get("meta") or {}),
+                "ingredients": shop["ingredients"],
+                "shopping": shop,
+            },
+        },
     )
 
 
 def _default_shopping_list(suggestion: str) -> dict[str, list[str]]:
-    s = suggestion.lower()
-    base = {
-        "frukt & grönt": ["gul lök", "vitlök"],
-        "mejeri": [],
-        "kött/fisk": [],
-        "skafferi": ["olja", "salt", "peppar"],
-        "fryst": [],
-    }
-    if "pasta" in s or "tomatsås" in s:
-        base["skafferi"] += ["pasta", "krossade tomater"]
-        base["mejeri"] += ["parmesan"]
-    elif "lins" in s:
-        base["skafferi"] += ["röda linser", "curry", "kokosmjölk"]
-        base["frukt & grönt"] += ["morot", "spenat"]
-    elif "omelett" in s or "ägg" in s:
-        base["mejeri"] += ["ägg", "mjölk"]
-        base["frukt & grönt"] += ["tomat", "spenat"]
-    elif "poké" in s or "poke" in s or "lax" in s:
-        base["kött/fisk"] += ["lax"]
-        base["skafferi"] += ["ris", "soja"]
-        base["frukt & grönt"] += ["gurka", "avokado"]
-    elif "burgare" in s:
-        base["kött/fisk"] += ["nötfärs"]
-        base["skafferi"] += ["hamburgerbröd"]
-        base["mejeri"] += ["ost"]
-        base["frukt & grönt"] += ["sallad", "tomat"]
-    else:
-        base["skafferi"] += ["ris eller pasta"]
-        base["frukt & grönt"] += ["säsongsgrönsaker"]
-    return base
+    """Deprecated shim — use shopping.build_shopping."""
+    payload = shopping.build_shopping(suggestion)
+    return (payload or {}).get("to_buy") or {}
 
 
-def _format_shopping(shopping: dict[str, list[str]] | None, store: str) -> str:
-    if not shopping:
+def _format_shopping(shop_or_legacy: dict[str, Any] | None, store: str) -> str:
+    if not shop_or_legacy:
         return f"Handla på {store}."
+    if "to_buy" in shop_or_legacy:
+        parts = [f"Inköpslista ({shop_or_legacy.get('store') or store}):"]
+        for section, items in (shop_or_legacy.get("to_buy") or {}).items():
+            if items:
+                parts.append(f"{section}: {', '.join(items)}")
+        assumed = shop_or_legacy.get("assumed_at_home") or []
+        parts.append(shopping.format_assumed_line(list(assumed)))
+        return " · ".join(parts)
     parts = [f"Inköpslista ({store}):"]
-    for section, items in shopping.items():
+    for section, items in shop_or_legacy.items():
         if items:
             parts.append(f"{section}: {', '.join(items)}")
     return " · ".join(parts)
