@@ -259,6 +259,56 @@ def _check_food(
     if active is not None and int(active) > max_min:
         reasons.append("too_long")
 
+    # Fridge photo mode — hard constraint: only confirmed ingredients + staples
+    fridge_mode = False
+    try:
+        import fridge_domain as fr
+
+        fridge_mode = fr.is_fridge_mode(context) or str(
+            (candidate.get("meta") or {}).get("source") or ""
+        ) == fr.SOURCE
+    except Exception:
+        fridge_mode = str(context.get("source") or "") == "fridge_photo"
+
+    if fridge_mode:
+        if eating_out:
+            reasons.append("fridge_no_eating_out")
+        if reasons:
+            return FeasibilityResult(ok=False, reasons=reasons)
+        import fridge_domain as fr
+
+        available = fr.names_only(
+            context.get("available_ingredients")
+            or (candidate.get("meta") or {}).get("available_ingredients")
+            or []
+        )
+        meta_ings = list((candidate.get("meta") or {}).get("ingredients") or [])
+        is_fallback = bool((candidate.get("meta") or {}).get("fridge_fallback"))
+        if not is_fallback:
+            if not meta_ings or not fr.can_cook(meta_ings, available):
+                return FeasibilityResult(ok=False, reasons=["fridge_missing_ingredient"])
+        language = str(profile.get("language") or context.get("language") or "sv")
+        execution = fr.apply_fridge_execution(
+            suggestion,
+            None,
+            ingredients=meta_ings or available,
+            language=language,
+            fallback=is_fallback and bool((candidate.get("meta") or {}).get("no_cook_empty")),
+        )
+        execution["meal_type"] = meal_type
+        execution["max_active_minutes"] = max_min
+        return FeasibilityResult(
+            ok=True,
+            execution=execution,
+            enriched={
+                "meta": {
+                    **(candidate.get("meta") or {}),
+                    "source": fr.SOURCE,
+                    "available_ingredients": available,
+                }
+            },
+        )
+
     if reasons:
         return FeasibilityResult(ok=False, reasons=reasons)
 

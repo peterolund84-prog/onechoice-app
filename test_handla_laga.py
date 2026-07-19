@@ -29,6 +29,7 @@ class HandlaLagaTests(unittest.TestCase):
             domain_hint="food",
             language="sv",
             db_path=self.db_path,
+            context_extra={"meal_type": "middag"},
         )
         self.assertTrue(r.ok)
         if r.execution_type == "recipe":
@@ -64,6 +65,7 @@ class HandlaLagaTests(unittest.TestCase):
             domain_hint="food",
             language="sv",
             db_path=self.db_path,
+            context_extra={"meal_type": "middag"},
         )
         ctx = r.context or {}
         shop = ctx.get("shopping") or {}
@@ -149,6 +151,7 @@ class HandlaLagaUiTests(unittest.TestCase):
         try:
             at = AppTest.from_file("app.py", default_timeout=60)
             at.run()
+            at.session_state["food_meal_type"] = "middag"
             for b in at.button:
                 if b.label == "Mat":
                     b.click().run()
@@ -179,6 +182,7 @@ class HandlaLagaUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
+        at.session_state["food_meal_type"] = "middag"
         for b in at.button:
             if b.label == "Mat":
                 b.click().run()
@@ -202,6 +206,7 @@ class HandlaLagaUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
+        at.session_state["food_meal_type"] = "middag"
         for b in at.button:
             if b.label == "Mat":
                 b.click().run()
