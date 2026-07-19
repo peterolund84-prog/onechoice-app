@@ -284,16 +284,19 @@ def _check_food(
         )
         meta_ings = list((candidate.get("meta") or {}).get("ingredients") or [])
         is_fallback = bool((candidate.get("meta") or {}).get("fridge_fallback"))
-        if not is_fallback:
-            if not meta_ings or not fr.can_cook(meta_ings, available):
+        no_cook_empty = bool((candidate.get("meta") or {}).get("no_cook_empty"))
+        # Title + meta must both be cookable — blocks "Macka med ost" without ost
+        required = fr.fridge_required_ingredients(suggestion, meta_ings)
+        if not no_cook_empty:
+            if not required or not fr.can_cook(required, available):
                 return FeasibilityResult(ok=False, reasons=["fridge_missing_ingredient"])
         language = str(profile.get("language") or context.get("language") or "sv")
         execution = fr.apply_fridge_execution(
             suggestion,
             None,
-            ingredients=meta_ings or available,
+            ingredients=required or available,
             language=language,
-            fallback=is_fallback and bool((candidate.get("meta") or {}).get("no_cook_empty")),
+            fallback=is_fallback and no_cook_empty,
         )
         execution["meal_type"] = meal_type
         execution["max_active_minutes"] = max_min
