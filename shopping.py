@@ -739,6 +739,17 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
             "salt",
             "peppar",
         ]
+    if "smörgås" in s or "macka" in s or "sandwich" in s:
+        ings = ["bröd", "smör"]
+        if "ost" in s or "cheese" in s:
+            ings.insert(1, "ost")
+        elif "skinka" in s or "ham" in s:
+            ings.insert(1, "skinka")
+        else:
+            ings.insert(1, "ost")
+        return ings
+    if "yoghurt" in s or "fil eller" in s or s.startswith("fil ") or "filmjölk" in s:
+        return ["yoghurt"]
     if "poke" in s or "poké" in s or ("lax" in s and "bowl" in s):
         return [
             "lax",

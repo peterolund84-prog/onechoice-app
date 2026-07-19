@@ -109,7 +109,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "kvallsmal-recipe-v14-20260719"
+BUILD_ID = "fix-execute-recipe-v15-20260719"
 
 I18N = {
     "sv": {
@@ -2010,7 +2010,9 @@ def page_home() -> None:
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="oc-tagline">{html.escape(t("tagline"))}</p>', unsafe_allow_html=True)
-    st.caption(f"build {BUILD_ID}")
+    # Build id is debug-only — never on the consumer home screen
+    if _fridge_debug_ui():
+        st.caption(f"build {BUILD_ID}")
 
     # Real Streamlit buttons — styled as chips via horizontal-block CSS
     domains = ("food", "clothes", "movie", "workout", "weekend")
@@ -3160,35 +3162,56 @@ def page_execute() -> None:
     )
 
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
-    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
+    # Cloud/Supabase may leave recipe as a JSON string — heal before use
+    recipe = ctx.get("recipe")
+    if isinstance(recipe, str):
+        recipe = _as_dict(recipe) or None
+    if not isinstance(recipe, dict):
+        recipe = None
     if not recipe and shop and isinstance(shop.get("recipe"), dict):
         recipe = shop.get("recipe")
-    active_mins: int | None = None
+    elif not recipe and shop and isinstance(shop.get("recipe"), str):
+        recipe = _as_dict(shop.get("recipe")) or None
 
+    active_mins: int | None = None
+    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+        try:
+            active_mins = int(recipe["active_minutes"])
+        except (TypeError, ValueError):
+            active_mins = None
+    if active_mins is None:
+        try:
+            active_mins = int(ctx.get("max_active_minutes") or 0) or None
+        except (TypeError, ValueError):
+            active_mins = None
+
+    # ALWAYS materialize a recipe before any widgets — Cloud must never paint
+    # toggle + Tillbaka with an empty body (st.rerun-before-paint was a dead end).
     try:
         import shopping as shopping_mod
 
-        if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
-            try:
-                active_mins = int(recipe["active_minutes"])
-            except (TypeError, ValueError):
-                active_mins = None
-        if shop:
-            try:
-                recipe = shopping_mod.build_recipe(
-                    suggestion,
-                    shop.get("ingredients"),
-                    active_minutes=active_mins,
-                )
-            except Exception as exc:
-                log.warning("build_recipe failed: %s", exc)
-        elif not recipe:
-            try:
-                recipe = shopping_mod.build_recipe(suggestion, active_minutes=active_mins)
-            except Exception as exc:
-                log.warning("build_recipe empty failed: %s", exc)
+        seed_ings: list[str] | None = None
+        if isinstance(recipe, dict) and recipe.get("ingredients"):
+            seed_ings = [str(x) for x in recipe.get("ingredients") or []]
+        elif isinstance(shop, dict) and shop.get("ingredients"):
+            seed_ings = [str(x) for x in shop.get("ingredients") or []]
+        recipe = shopping_mod.build_recipe(
+            suggestion,
+            seed_ings,
+            active_minutes=active_mins,
+        )
     except Exception as exc:
-        log.warning("shopping import/build failed: %s", exc)
+        log.warning("execute recipe build failed: %s", exc)
+        recipe = {
+            "title": suggestion,
+            "ingredients": ["bröd", "ost", "smör"]
+            if "smörgås" in suggestion.lower() or "ost" in suggestion.lower()
+            else [suggestion],
+            "steps": [
+                "Ta fram det du behöver.",
+                "Gör i ordning och ät.",
+            ],
+        }
 
     if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
         try:
@@ -3201,60 +3224,29 @@ def page_execute() -> None:
         render_checkable_shopping(shop, did)
     except Exception as exc:
         log.warning("shopping list render failed: %s", exc)
-        if shop and isinstance(shop.get("to_buy"), dict):
-            lines = []
-            for sec, items in shop["to_buy"].items():
-                if not isinstance(items, (list, tuple)):
-                    continue
-                lines.append(f"**{html.escape(str(sec))}**")
-                for it in items:
-                    lines.append(f"- {html.escape(str(it))}")
-            if lines:
-                st.markdown("\n".join(lines))
 
-    # Opt-in on the recipe surface (still OFF by default; never on decision card)
+    # Opt-in on the recipe surface — paint recipe THIS run; never rerun-before-paint
     show_nut = _profile_show_nutrition()
+    if "exec_show_nutrition" not in st.session_state:
+        st.session_state.exec_show_nutrition = bool(show_nut)
     if hasattr(st, "toggle"):
         want_nut = st.toggle(
             t("nutrition_recipe_toggle"),
-            value=show_nut,
             key="exec_show_nutrition",
         )
     else:
         want_nut = st.checkbox(
             t("nutrition_recipe_toggle"),
-            value=show_nut,
             key="exec_show_nutrition",
         )
-    if want_nut != show_nut:
+    if bool(want_nut) != bool(show_nut):
         try:
             _set_profile_show_nutrition(bool(want_nut))
         except Exception as exc:
             log.warning("save nutrition pref failed: %s", exc)
-        st.rerun()
 
+    ings_fallback = list(recipe.get("ingredients") or []) if isinstance(recipe, dict) else []
     try:
-        ings_fallback = None
-        if isinstance(shop, dict):
-            raw_ings = shop.get("ingredients") or []
-            if isinstance(raw_ings, (list, tuple)):
-                ings_fallback = list(raw_ings)
-        elif isinstance(recipe, dict):
-            raw_ings = recipe.get("ingredients") or []
-            if isinstance(raw_ings, (list, tuple)):
-                ings_fallback = list(raw_ings)
-        # Rebuild recipe if context lost it (Cloud / thin payloads)
-        if (not isinstance(recipe, dict) or not recipe.get("ingredients")) and suggestion:
-            try:
-                import shopping as shopping_mod
-
-                recipe = shopping_mod.build_recipe(
-                    suggestion,
-                    ings_fallback,
-                    active_minutes=active_mins,
-                )
-            except Exception as exc:
-                log.warning("execute recipe rebuild failed: %s", exc)
         render_recipe_block(
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
@@ -3262,6 +3254,16 @@ def page_execute() -> None:
         )
     except Exception as exc:
         log.warning("recipe render failed: %s", exc)
+        # Last-resort plain markdown so the user is never stuck
+        if ings_fallback:
+            st.markdown("**" + t("ingredients_title") + "**")
+            for item in ings_fallback:
+                st.markdown(f"- {item}")
+        steps = list((recipe or {}).get("steps") or []) if isinstance(recipe, dict) else []
+        if steps:
+            st.markdown("**" + t("steps_title") + "**")
+            for i, step in enumerate(steps, 1):
+                st.markdown(f"{i}. {step}")
 
     if st.button(
         t("back_to_decision"),
