@@ -175,7 +175,6 @@ class HandlaLagaUiTests(unittest.TestCase):
         """Cloud/Supabase can leave context as a JSON string — must not crash execute."""
         import json
 
-        import app as app_mod
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
@@ -194,6 +193,68 @@ class HandlaLagaUiTests(unittest.TestCase):
         self.assertFalse(bool(at.session_state["ui_error"]))
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(at.exception)
+
+    def test_lock_card_survives_string_context(self) -> None:
+        """After accept, lock card must not crash when context is a JSON string."""
+        import json
+
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        for b in at.button:
+            if b.label == "Mat":
+                b.click().run()
+                break
+        for b in at.button:
+            if b.label and "Handla" in b.label:
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "execute")
+        # Simulate Cloud leaving context as a string, then return to lock card
+        cur = dict(at.session_state["current"] or {})
+        ctx = cur.get("context")
+        if not isinstance(ctx, dict):
+            ctx = _as_dict_safe(ctx)
+        cur["context"] = json.dumps(ctx, ensure_ascii=False)
+        at.session_state["current"] = cur
+        at.session_state["accepted"] = True
+        at.session_state["page"] = "result"
+        at.run(timeout=60)
+        last = None
+        try:
+            last = at.session_state["_last_ui_error"]
+        except Exception:
+            last = None
+        self.assertFalse(bool(at.session_state["ui_error"]), last)
+        self.assertEqual(at.session_state["page"], "result")
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(any("Handla" in lab for lab in labels), labels)
+        # Handla again from lock card
+        for b in at.button:
+            if b.label and "Handla" in b.label:
+                b.click().run()
+                break
+        try:
+            last = at.session_state["_last_ui_error"]
+        except Exception:
+            last = None
+        self.assertFalse(bool(at.session_state["ui_error"]), last)
+        self.assertEqual(at.session_state["page"], "execute")
+
+
+def _as_dict_safe(value):  # noqa: ANN001
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str):
+        import json
+
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
 
 
 if __name__ == "__main__":
