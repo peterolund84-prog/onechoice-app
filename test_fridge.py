@@ -202,6 +202,40 @@ class FridgePipelineTests(unittest.TestCase):
 
 
 class FridgeUiTests(unittest.TestCase):
+    def test_fridge_photo_accumulator_caps_at_three(self) -> None:
+        import app as app_mod
+
+        class _SS(dict):
+            def __getattr__(self, k):
+                try:
+                    return self[k]
+                except KeyError as e:
+                    raise AttributeError(k) from e
+
+            def __setattr__(self, k, v):
+                self[k] = v
+
+        ss = _SS()
+        ss.fridge_photos = []
+        # Patch session_state used by helpers
+        import streamlit as st
+
+        old = st.session_state
+        try:
+            st.session_state = ss  # type: ignore[assignment]
+            self.assertTrue(app_mod._fridge_add_photo(b"\xff\xd8\xff" + b"a" * 40))
+            self.assertTrue(app_mod._fridge_add_photo(b"\xff\xd8\xff" + b"b" * 40))
+            self.assertTrue(app_mod._fridge_add_photo(b"\xff\xd8\xff" + b"c" * 40))
+            self.assertFalse(app_mod._fridge_add_photo(b"\xff\xd8\xff" + b"d" * 40))
+            self.assertEqual(len(app_mod._fridge_photos()), 3)
+            # Dedupe
+            same = b"\xff\xd8\xff" + b"a" * 40
+            ss.fridge_photos = []
+            self.assertTrue(app_mod._fridge_add_photo(same))
+            self.assertFalse(app_mod._fridge_add_photo(same))
+        finally:
+            st.session_state = old  # type: ignore[assignment]
+
     def test_home_exposes_fridge_entry(self) -> None:
         from streamlit.testing.v1 import AppTest
 

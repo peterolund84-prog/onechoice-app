@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-camera-tall-v8-20260719"
+BUILD_ID = "fridge-camera-ux-v9-20260719"
 
 I18N = {
     "sv": {
@@ -190,10 +190,14 @@ I18N = {
         "share_open_workout": "Passet",
         "fridge_cta": "Vad finns i kylen?",
         "fridge_title": "Kylskåp & skafferi",
-        "fridge_hint": "1–3 foton — jag listar det jag ser. Du bekräftar innan jag bestämmer.",
+        "fridge_hint": "Fotografera kylen — upp till 3 bilder. Bekräfta listan innan jag bestämmer.",
         "fridge_camera": "Ta foto",
-        "fridge_camera_tip": "Håll telefonen upprätt — förhandsvisningen är hög så hela hyllan får plats.",
-        "fridge_upload": "Ladda upp",
+        "fridge_camera_tip": "Håll telefonen upprätt så hyllan syns.",
+        "fridge_photos_count": "{n} av {max} foton",
+        "fridge_add_another": "Rensa kameran och ta nästa bild (t.ex. annan hylla).",
+        "fridge_photos_full": "Max 3 foton — ta bort ett om du vill byta.",
+        "fridge_clear_photos": "Rensa foton",
+        "fridge_upload": "Ladda upp i stället",
         "fridge_scan": "Läs av",
         "fridge_scanning": "Tittar i kylen…",
         "fridge_confirm_title": "Jag ser",
@@ -293,10 +297,14 @@ I18N = {
         "share_open_workout": "The workout",
         "fridge_cta": "What’s in the fridge?",
         "fridge_title": "Fridge & pantry",
-        "fridge_hint": "1–3 photos — I’ll list what I see. You confirm before I decide.",
+        "fridge_hint": "Photograph the fridge — up to 3 photos. Confirm the list before I decide.",
         "fridge_camera": "Take photo",
-        "fridge_camera_tip": "Hold the phone upright — the preview is tall so a full shelf fits.",
-        "fridge_upload": "Upload",
+        "fridge_camera_tip": "Hold the phone upright so the shelf is visible.",
+        "fridge_photos_count": "{n} of {max} photos",
+        "fridge_add_another": "Clear the camera and take the next photo (e.g. another shelf).",
+        "fridge_photos_full": "Max 3 photos — remove one to replace.",
+        "fridge_clear_photos": "Clear photos",
+        "fridge_upload": "Upload instead",
         "fridge_scan": "Scan",
         "fridge_scanning": "Looking in the fridge…",
         "fridge_confirm_title": "I see",
@@ -355,56 +363,62 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 @media (max-width: 768px) {{
     .block-container {{ padding: 1rem 0.75rem 9rem !important; }}
 }}
-/* Fridge capture: Streamlit hardcodes 16:9 (height = width*9/16). Override to tall portrait. */
+/* Fridge camera: tall preview BUT leave room for Streamlit's Take Photo button under it.
+   Earlier 78vh on the whole WebcamComponent hid the shutter below the fold. */
 .block-container:has([data-testid="stCameraInput"]) {{
-    max-width: min(100vw, 560px) !important;
-    padding-left: 0.3rem !important;
-    padding-right: 0.3rem !important;
-    padding-top: 0.5rem !important;
+    max-width: min(100vw, 480px) !important;
+    padding-left: 0.5rem !important;
+    padding-right: 0.5rem !important;
+    padding-top: 0.4rem !important;
 }}
 .block-container:has([data-testid="stCameraInput"]) .oc-logo {{
-    font-size: 1.15rem !important;
-    margin: 0.15rem 0 0.05rem !important;
+    font-size: 1.2rem !important;
+    margin: 0.1rem 0 0 !important;
 }}
 .block-container:has([data-testid="stCameraInput"]) .oc-tagline {{
-    font-size: 0.88rem !important;
-    margin: 0 0 0.35rem !important;
+    font-size: 0.95rem !important;
+    margin: 0 0 0.25rem !important;
 }}
 div[data-testid="stCameraInput"] {{
     width: 100% !important;
 }}
-/* The box Streamlit sizes as landscape — force fridge-height instead */
-div[data-testid="stCameraInputWebcamStyledBox"],
+/* Outer wrappers must stay auto-height so the shutter button stays visible */
 div[data-testid="stCameraInputWebcamComponent"],
 div[data-testid="stCameraInput"] > div {{
     width: 100% !important;
-    max-width: 100% !important;
-    height: min(78vh, 640px) !important;
-    min-height: min(78vh, 640px) !important;
+    height: auto !important;
+    min-height: 0 !important;
     max-height: none !important;
-    aspect-ratio: 3 / 4 !important;
+    aspect-ratio: auto !important;
 }}
+/* Only the video pane — taller than Streamlit's 16:9, short enough for the button */
 div[data-testid="stCameraInputWebcamStyledBox"] {{
+    width: 100% !important;
+    height: min(48vh, 380px) !important;
+    min-height: min(48vh, 380px) !important;
+    max-height: min(48vh, 380px) !important;
+    aspect-ratio: auto !important;
     display: flex !important;
-    flex-direction: column !important;
     overflow: hidden !important;
     border-radius: 12px 12px 0 0 !important;
 }}
-div[data-testid="stCameraInput"] video,
-div[data-testid="stCameraInput"] img,
-div[data-testid="stCameraInput"] canvas {{
+div[data-testid="stCameraInputWebcamStyledBox"] video,
+div[data-testid="stCameraInputWebcamStyledBox"] img,
+div[data-testid="stCameraInputWebcamStyledBox"] canvas {{
     width: 100% !important;
-    max-width: 100% !important;
     height: 100% !important;
-    min-height: min(78vh, 640px) !important;
+    min-height: 0 !important;
     max-height: none !important;
     object-fit: cover !important;
     object-position: center center !important;
-    border-radius: 12px 12px 0 0 !important;
 }}
+div[data-testid="stCameraInputButton"],
 div[data-testid="stCameraInput"] button {{
     width: 100% !important;
-    min-height: 3rem !important;
+    min-height: 3.1rem !important;
+    margin-top: 0 !important;
+    position: relative !important;
+    z-index: 6 !important;
 }}
 .oc-logo {{
     text-align: center; font-weight: 700; font-size: 1.55rem;
@@ -1921,6 +1935,44 @@ def _clear_fridge_session() -> None:
     st.session_state.fridge_step = "capture"
     st.session_state.fridge_inventory = []
     st.session_state.fridge_mode = False
+    st.session_state.fridge_photos = []
+    st.session_state.pop("fridge_cam_bytes", None)
+    st.session_state.pop("fridge_cam_mime", None)
+    st.session_state.pop("fridge_upload_bytes", None)
+    st.session_state.pop("fridge_upload_mimes", None)
+
+
+def _fridge_debug_ui() -> bool:
+    """Show build/API diagnostics only when ?debug=1 (not for end users)."""
+    try:
+        return str(st.query_params.get("debug", "")).lower() in ("1", "true", "yes")
+    except Exception:
+        return False
+
+
+def _fridge_photos() -> list[dict[str, Any]]:
+    raw = st.session_state.get("fridge_photos")
+    return list(raw) if isinstance(raw, list) else []
+
+
+def _fridge_add_photo(blob: bytes, mime: str = "image/jpeg") -> bool:
+    """Append a unique photo; returns True if added. Caps at MAX_PHOTOS."""
+    import hashlib
+
+    import fridge_domain as fr
+
+    if not isinstance(blob, (bytes, bytearray)) or len(blob) < 20:
+        return False
+    data = bytes(blob)
+    fp = hashlib.sha1(data).hexdigest()
+    photos = _fridge_photos()
+    if any(p.get("fp") == fp for p in photos):
+        return False
+    if len(photos) >= fr.MAX_PHOTOS:
+        return False
+    photos.append({"bytes": data, "mime": mime or "image/jpeg", "fp": fp})
+    st.session_state.fridge_photos = photos
+    return True
 
 
 def page_fridge() -> None:
@@ -1929,6 +1981,7 @@ def page_fridge() -> None:
 
     import fridge_domain as fr
 
+    debug = _fridge_debug_ui()
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     st.markdown(
@@ -1936,89 +1989,130 @@ def page_fridge() -> None:
         unsafe_allow_html=True,
     )
     st.caption(t("fridge_hint"))
-    st.caption(f"build {BUILD_ID}")
+    if debug:
+        st.caption(f"build {BUILD_ID}")
 
     api_key = resolve_grok_api_key()
     diag = diagnose_grok_secret()
     key_ok = bool(diag.get("usable")) or _usable_grok_secret(api_key)
-    if key_ok:
-        st.caption(f"{t('fridge_api_ok')} · {len(api_key)} tecken · {api_key[:4]}…")
-    else:
+    if not key_ok:
         st.warning(t("fridge_api_missing"))
-        names = diag.get("secret_names") or []
-        detail = (
-            f"nycklar={names or '[]'} · "
-            f"GROK_API_KEY={'ja' if diag.get('has_grok_name') else 'nej'} · "
-            f"träff={diag.get('found_name') or 'ingen'} · "
-            f"len={diag.get('len')} · "
-            f"xai-prefix={'ja' if diag.get('startswith_xai') else 'nej'}"
-        )
-        st.caption(t("fridge_api_diag").format(detail=detail))
-        st.caption(
-            "Exakt format i Streamlit Secrets (inga [sektioner] runt nyckeln):\n"
-            'GROK_API_KEY = "xai-din-nyckel-här"'
-        )
+        if debug:
+            names = diag.get("secret_names") or []
+            detail = (
+                f"nycklar={names or '[]'} · "
+                f"GROK_API_KEY={'ja' if diag.get('has_grok_name') else 'nej'} · "
+                f"träff={diag.get('found_name') or 'ingen'} · "
+                f"len={diag.get('len')} · "
+                f"xai-prefix={'ja' if diag.get('startswith_xai') else 'nej'}"
+            )
+            st.caption(t("fridge_api_diag").format(detail=detail))
+            st.caption(
+                "Exakt format i Streamlit Secrets (inga [sektioner] runt nyckeln):\n"
+                'GROK_API_KEY = "xai-din-nyckel-här"'
+            )
+    elif debug:
+        st.caption(f"{t('fridge_api_ok')} · {len(api_key)} tecken · {api_key[:4]}…")
 
     step = st.session_state.get("fridge_step") or "capture"
 
     if step == "capture":
-        st.caption(t("fridge_camera_tip"))
-        cam_kwargs: dict[str, Any] = {"key": "fridge_cam"}
-        try:
-            import inspect as _inspect
-
-            if "resolution" in _inspect.signature(st.camera_input).parameters:
-                cam_kwargs["resolution"] = "1080p"
-        except Exception:
-            pass
-        cam = st.camera_input(t("fridge_camera"), **cam_kwargs)
-        # Persist bytes across the Scan click (Streamlit can drop widget values)
-        if cam is not None:
-            try:
-                st.session_state["fridge_cam_bytes"] = cam.getvalue()
-                st.session_state["fridge_cam_mime"] = getattr(cam, "type", None) or "image/jpeg"
-            except Exception as exc:
-                log.warning("fridge camera read failed: %s", exc)
-        uploads = st.file_uploader(
-            t("fridge_upload"),
-            type=["jpg", "jpeg", "png", "webp"],
-            accept_multiple_files=True,
-            key="fridge_uploads",
+        photos = _fridge_photos()
+        st.caption(
+            t("fridge_photos_count").format(n=len(photos), max=fr.MAX_PHOTOS)
+            + " · "
+            + t("fridge_camera_tip")
         )
-        if uploads:
-            ub: list[bytes] = []
-            um: list[str] = []
-            for f in list(uploads)[: fr.MAX_PHOTOS]:
+
+        if len(photos) < fr.MAX_PHOTOS:
+            cam_kwargs: dict[str, Any] = {"key": "fridge_cam"}
+            try:
+                import inspect as _inspect
+
+                if "resolution" in _inspect.signature(st.camera_input).parameters:
+                    cam_kwargs["resolution"] = "1080p"
+            except Exception:
+                pass
+            cam = st.camera_input(t("fridge_camera"), **cam_kwargs)
+            if cam is not None:
                 try:
-                    ub.append(f.getvalue())
-                    um.append(getattr(f, "type", None) or "image/jpeg")
-                except Exception:
-                    continue
-            if ub:
-                st.session_state["fridge_upload_bytes"] = ub
-                st.session_state["fridge_upload_mimes"] = um
+                    added = _fridge_add_photo(
+                        cam.getvalue(),
+                        getattr(cam, "type", None) or "image/jpeg",
+                    )
+                    # Keep legacy keys for safety
+                    st.session_state["fridge_cam_bytes"] = cam.getvalue()
+                    st.session_state["fridge_cam_mime"] = (
+                        getattr(cam, "type", None) or "image/jpeg"
+                    )
+                    if added:
+                        st.rerun()
+                except Exception as exc:
+                    log.warning("fridge camera read failed: %s", exc)
+            if photos:
+                st.caption(t("fridge_add_another"))
+        else:
+            st.info(t("fridge_photos_full"))
+
+        if photos:
+            cols = st.columns(min(3, len(photos)))
+            for i, photo in enumerate(photos):
+                with cols[i % len(cols)]:
+                    try:
+                        st.image(photo["bytes"], use_container_width=True)
+                    except Exception:
+                        st.caption(f"foto {i + 1}")
+                    if st.button(
+                        f"× {i + 1}",
+                        key=f"fridge_photo_rm_{i}_{photo.get('fp', i)}",
+                        use_container_width=True,
+                    ):
+                        keep = [p for j, p in enumerate(_fridge_photos()) if j != i]
+                        st.session_state.fridge_photos = keep
+                        st.rerun()
+                        return
+            if st.button(t("fridge_clear_photos"), use_container_width=True, key="fridge_clear_photos"):
+                st.session_state.fridge_photos = []
+                st.rerun()
+                return
+
+        with st.expander(t("fridge_upload"), expanded=False):
+            uploads = st.file_uploader(
+                t("fridge_upload"),
+                type=["jpg", "jpeg", "png", "webp"],
+                accept_multiple_files=True,
+                key="fridge_uploads",
+                label_visibility="collapsed",
+            )
+            if uploads:
+                for f in list(uploads)[: fr.MAX_PHOTOS]:
+                    try:
+                        _fridge_add_photo(
+                            f.getvalue(),
+                            getattr(f, "type", None) or "image/jpeg",
+                        )
+                    except Exception:
+                        continue
 
         if st.button(t("fridge_scan"), type="primary", use_container_width=True, key="fridge_scan_btn"):
-            blobs: list[bytes] = []
-            mimes: list[str] = []
-            cam_b = st.session_state.get("fridge_cam_bytes")
-            if isinstance(cam_b, (bytes, bytearray)) and len(cam_b) > 20:
-                blobs.append(bytes(cam_b))
-                mimes.append(str(st.session_state.get("fridge_cam_mime") or "image/jpeg"))
-            for b, m in zip(
-                list(st.session_state.get("fridge_upload_bytes") or []),
-                list(st.session_state.get("fridge_upload_mimes") or []),
-            ):
-                if isinstance(b, (bytes, bytearray)) and len(b) > 20:
-                    blobs.append(bytes(b))
-                    mimes.append(str(m or "image/jpeg"))
-            blobs = blobs[: fr.MAX_PHOTOS]
-            mimes = mimes[: len(blobs)]
+            photos = _fridge_photos()
+            # Fallback: single live camera frame if list empty
+            if not photos:
+                cam_b = st.session_state.get("fridge_cam_bytes")
+                if isinstance(cam_b, (bytes, bytearray)) and len(cam_b) > 20:
+                    _fridge_add_photo(
+                        bytes(cam_b),
+                        str(st.session_state.get("fridge_cam_mime") or "image/jpeg"),
+                    )
+                    photos = _fridge_photos()
+            blobs = [p["bytes"] for p in photos if p.get("bytes")][: fr.MAX_PHOTOS]
+            mimes = [str(p.get("mime") or "image/jpeg") for p in photos[: len(blobs)]]
             if not blobs:
                 st.warning(t("fridge_need_photo"))
             elif not key_ok:
                 st.error(t("fridge_api_missing"))
-                st.caption(f"build {BUILD_ID}")
+                if debug:
+                    st.caption(f"build {BUILD_ID}")
             else:
                 t0 = time.time()
                 with st.spinner(t("fridge_scanning")):
@@ -2034,15 +2128,16 @@ def page_fridge() -> None:
                         log.error("fridge invent UI error (%.2fs): %s", elapsed, exc)
                         st.session_state._last_ui_error = f"{exc.code}: {exc}"
                         st.error(f"{t('fridge_vision_error')}: {exc}")
-                        dbg = fr.LAST_VISION_DEBUG or {}
-                        st.caption(
-                            f"{elapsed:.1f}s · status={dbg.get('http_status')} · "
-                            f"model={dbg.get('model')} · endpoint={dbg.get('endpoint')} · "
-                            f"images={dbg.get('image_bytes')}"
-                        )
-                        if exc.raw:
-                            st.caption(html.escape(str(exc.raw)[:280]))
-                        st.caption(f"build {BUILD_ID}")
+                        if debug:
+                            dbg = fr.LAST_VISION_DEBUG or {}
+                            st.caption(
+                                f"{elapsed:.1f}s · status={dbg.get('http_status')} · "
+                                f"model={dbg.get('model')} · endpoint={dbg.get('endpoint')} · "
+                                f"images={dbg.get('image_bytes')}"
+                            )
+                            if exc.raw:
+                                st.caption(html.escape(str(exc.raw)[:280]))
+                            st.caption(f"build {BUILD_ID}")
                         if st.button(t("fridge_manual"), use_container_width=True, key="fridge_manual_btn"):
                             st.session_state.fridge_inventory = []
                             st.session_state.fridge_step = "confirm"
@@ -2052,12 +2147,13 @@ def page_fridge() -> None:
                 elapsed = time.time() - t0
                 dbg = fr.LAST_VISION_DEBUG or {}
                 if not invent or not dbg.get("http_status"):
-                    # Should be unreachable — invent raises — belt & suspenders
-                    st.error(
-                        f"{t('fridge_vision_error')}: anropet verkar inte ha gått iväg "
-                        f"({elapsed:.2f}s, status={dbg.get('http_status')})."
-                    )
-                    st.caption(f"build {BUILD_ID}")
+                    st.error(t("fridge_vision_error"))
+                    if debug:
+                        st.caption(
+                            f"anropet verkar inte ha gått iväg "
+                            f"({elapsed:.2f}s, status={dbg.get('http_status')})."
+                        )
+                        st.caption(f"build {BUILD_ID}")
                     nav()
                     return
                 st.session_state.fridge_inventory = invent
