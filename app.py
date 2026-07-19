@@ -109,7 +109,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-grounding-v11-20260719"
+BUILD_ID = "nutrition-optin-v12-20260719"
 
 I18N = {
     "sv": {
@@ -136,6 +136,9 @@ I18N = {
         "recipe_title": "Recept",
         "ingredients_title": "Ingredienser",
         "steps_title": "Gör så här",
+        "nutrition_title": "Visa näringsvärden",
+        "nutrition_hint": "Ca-värden per portion under receptet — aldrig på beslutskortet. Av som standard.",
+        "nutrition_saved": "Sparat.",
         "back_to_decision": "Tillbaka",
         "error_friendly": "Något gick fel — försök igen",
         "retry": "Försök igen",
@@ -259,6 +262,9 @@ I18N = {
         "recipe_title": "Recipe",
         "ingredients_title": "Ingredients",
         "steps_title": "Steps",
+        "nutrition_title": "Show nutrition estimates",
+        "nutrition_hint": "Approx. per serving under the recipe — never on the decision card. Off by default.",
+        "nutrition_saved": "Saved.",
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
         "retry": "Try again",
@@ -678,6 +684,12 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 .oc-recipe ul {{ list-style: none; margin: 0; padding: 0; }}
 .oc-recipe ul li {{
     font-size: 1rem; color: {INK}; line-height: 1.4; padding: 0.28rem 0;
+}}
+.oc-recipe .oc-nutrition {{
+    margin: 0.65rem 0 0.15rem; padding: 0;
+    font-size: 0.88rem; color: {MUTED}; line-height: 1.35;
+    font-weight: 400; letter-spacing: 0;
+    text-transform: none;
 }}
 .oc-error {{
     background: #fff; border-radius: 24px; padding: 1.8rem 1.4rem;
@@ -1847,7 +1859,33 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
     st.caption(assumed_line)
 
 
-def render_recipe_block(recipe: dict[str, Any] | None, fallback_ings: list[str] | None = None) -> None:
+def _profile_show_nutrition() -> bool:
+    """Opt-in only — default OFF. Never drives decision-card UI."""
+    import json
+
+    try:
+        uid = st.session_state.get("user_id")
+        if not uid:
+            return False
+        user = db.ensure_user(uid)
+        raw = user.get("profile_json") or {}
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except json.JSONDecodeError:
+                raw = {}
+        food = (raw if isinstance(raw, dict) else {}).get("food") or {}
+        return bool(food.get("show_nutrition"))
+    except Exception:
+        return False
+
+
+def render_recipe_block(
+    recipe: dict[str, Any] | None,
+    fallback_ings: list[str] | None = None,
+    *,
+    show_nutrition: bool | None = None,
+) -> None:
     if not recipe or not isinstance(recipe, dict):
         if fallback_ings:
             recipe = {"ingredients": fallback_ings, "steps": []}
@@ -1855,11 +1893,35 @@ def render_recipe_block(recipe: dict[str, Any] | None, fallback_ings: list[str] 
             return
     ings = recipe.get("ingredients") or fallback_ings or []
     steps = recipe.get("steps") or []
+    nutrition_html = ""
+    if show_nutrition is None:
+        show_nutrition = _profile_show_nutrition()
+    if show_nutrition:
+        import shopping as shopping_mod
+
+        nut = recipe.get("nutrition")
+        if not isinstance(nut, dict) and ings:
+            try:
+                nut = shopping_mod.estimate_nutrition(
+                    list(ings),
+                    suggestion=str(recipe.get("title") or ""),
+                )
+            except Exception:
+                nut = None
+        line = shopping_mod.format_nutrition_line(
+            nut if isinstance(nut, dict) else None,
+            language=st.session_state.get("language", "sv"),
+        )
+        if line:
+            nutrition_html = (
+                f'<p class="oc-nutrition">{html.escape(line)}</p>'
+            )
     st.markdown(
         f'<div class="oc-recipe">'
         f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
         f'<div class="oc-sec">{html.escape(t("ingredients_title"))}</div>'
         f'<ul>{"".join(f"<li>{html.escape(str(i))}</li>" for i in ings)}</ul>'
+        f"{nutrition_html}"
         f'<div class="oc-sec">{html.escape(t("steps_title"))}</div>'
         f'<ol>{"".join(f"<li>{html.escape(str(s))}</li>" for s in steps)}</ol>'
         f"</div>",
@@ -3251,6 +3313,29 @@ def page_profile() -> None:
         }
         db.update_user(st.session_state.user_id, profile_json=new_profile)
         safe_toast(t("clothes_saved"))
+        st.rerun()
+
+    # --- Food: opt-in nutrition estimates (recipe view only) ---
+    st.markdown(
+        f'<p class="oc-logo" style="font-size:1.15rem;margin-top:1.4rem">'
+        f'{html.escape(domain_label("food"))}</p>',
+        unsafe_allow_html=True,
+    )
+    food_prof = dict((ensured if isinstance(ensured, dict) else {}).get("food") or {})
+    show_nut = bool(food_prof.get("show_nutrition", False))
+    st.caption(t("nutrition_hint"))
+    new_show_nut = st.checkbox(
+        t("nutrition_title"),
+        value=show_nut,
+        key="prof_show_nutrition",
+    )
+    if new_show_nut != show_nut:
+        new_profile = dict(ensured) if isinstance(ensured, dict) else {}
+        food_row = dict(new_profile.get("food") or {})
+        food_row["show_nutrition"] = bool(new_show_nut)
+        new_profile["food"] = food_row
+        db.update_user(st.session_state.user_id, profile_json=new_profile)
+        safe_toast(t("nutrition_saved"))
         st.rerun()
 
     # --- GDPR: export + hard delete (Art. 17 / 20) ---

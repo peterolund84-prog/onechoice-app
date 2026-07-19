@@ -107,6 +107,11 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
     food.setdefault("household_size", int(ctx.get("household_size") or 1))
     food.setdefault("allergies", list(dietary) if isinstance(dietary, list) else [])
     food.setdefault("diet", ctx.get("diet") or "omnivore")
+    # Opt-in nutrition estimates in recipe view only (OFF by default — never on decision card)
+    if "show_nutrition" in food:
+        food["show_nutrition"] = bool(food.get("show_nutrition"))
+    else:
+        food["show_nutrition"] = bool(ctx.get("show_nutrition", False))
 
     clothes.setdefault("section", ctx.get("clothing_section") or "båda")  # herr|dam|båda
     clothes.setdefault("sizes", ctx.get("sizes") or {"top": "M", "bottom": "32", "shoes": "42"})
