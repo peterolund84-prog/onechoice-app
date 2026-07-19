@@ -70,8 +70,8 @@ _ALIASES: dict[str, tuple[str, ...]] = {
 
 SOURCE = "fridge_photo"
 MAX_PHOTOS = 3
-# Vision-capable models only — NEVER text-only (e.g. grok-2-latest ignores images)
-VISION_MODELS = ("grok-2-vision-1212", "grok-2-vision-latest", "grok-4.5")
+# Vision-capable models currently offered by xAI (old grok-2-vision-* are gone)
+VISION_MODELS = ("grok-4.5", "grok-4.5-latest", "grok-4.3")
 MAX_IMAGE_EDGE = 1568  # long-edge cap before upload (phone photos are huge)
 XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions"
 XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
@@ -387,6 +387,9 @@ def invent_from_images(
                 exc,
                 (exc.raw or "")[:1500],
             )
+            # Bad key / missing key — do not burn more models
+            if exc.code in ("bad_api_key", "missing_api_key"):
+                raise
             errors.append(f"{model}:{exc.code}:{exc}")
             continue
         except Exception as exc:
@@ -483,6 +486,17 @@ def _call_vision_model(
             )
         return raw, resp.status_code, "chat/completions"
 
+    if _is_bad_api_key_response(resp.text):
+        raise FridgeVisionError(
+            "bad_api_key",
+            "xAI avvisade API-nyckeln (Incorrect API key). "
+            "Skapa en ny nyckel på https://console.x.ai och klistra in i Streamlit Secrets som "
+            'GROK_API_KEY = "xai-...".',
+            raw=resp.text,
+            status=resp.status_code,
+            model=model,
+        )
+
     chat_err = f"{resp.status_code}:{(resp.text or '')[:400]}"
     log.error(
         "fridge chat/completions rejected model=%s %s — trying /responses",
@@ -526,6 +540,16 @@ def _call_vision_model(
         (resp2.text or "")[:500],
     )
     if resp2.status_code >= 400:
+        if _is_bad_api_key_response(resp2.text) or _is_bad_api_key_response(chat_err):
+            raise FridgeVisionError(
+                "bad_api_key",
+                "xAI avvisade API-nyckeln (Incorrect API key). "
+                "Skapa en ny nyckel på https://console.x.ai och klistra in i Streamlit Secrets som "
+                'GROK_API_KEY = "xai-...".',
+                raw=resp2.text or chat_err,
+                status=resp2.status_code,
+                model=model,
+            )
         raise FridgeVisionError(
             "http_error",
             f"Vision HTTP misslyckades chat={chat_err} responses={resp2.status_code}:{(resp2.text or '')[:300]}",
@@ -544,6 +568,16 @@ def _call_vision_model(
             model=model,
         )
     return raw2, resp2.status_code, "responses"
+
+
+def _is_bad_api_key_response(text: str | None) -> bool:
+    blob = (text or "").lower()
+    return (
+        "incorrect api key" in blob
+        or "invalid api key" in blob
+        or "invalid x-api-key" in blob
+        or ("api key" in blob and "invalid" in blob)
+    )
 
 
 def _extract_responses_text(payload: dict[str, Any]) -> str:
