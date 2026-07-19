@@ -1,0 +1,57 @@
+# Fridge vision debug report (2026-07-19)
+
+## Verdict
+**Broken step: #1 + silent failure (#2)** — the vision call often never reached a vision model; failures returned `[]` as if the fridge were empty.
+
+## Step-by-step proof
+
+### 1. Call exists?
+YES — `fridge_domain.invent_from_images`. It was NOT a hardcoded stub, but it **behaved like one** when:
+- `GROK_API_KEY` missing/placeholder (`din_…`) → logged info and `return []`
+- All model HTTP/parse failures → `return []` after warnings
+
+Repo `.streamlit/secrets.toml` still has:
+`GROK_API_KEY = "din_grok_api_nyckel_här"`
+which is rejected by the key gate (`startswith("din_")`).
+
+### 2. Silent swallow?
+CONFIRMED (before fix). After fix: raises `FridgeVisionError`; UI shows error; never pretends empty inventory.
+
+### 3. Vision model?
+OLD list included **`grok-2-latest` (text-only)** after vision models. A text-only model can “succeed” without seeing the image → empty/prose → looked like “found nothing”.
+NEW list: `grok-2-vision-1212`, `grok-2-vision-latest`, `grok-4.5` only.
+Also tries `/v1/chat/completions` then `/v1/responses` (input_image).
+
+### 4. Image encoding?
+Was already `data:{mime};base64,…` with `getvalue()` from camera/upload (bytes). Now also **downscales** to max 1568px long edge and forces JPEG (webp→jpeg).
+
+### 5. Size limits?
+Downscale added (phone 3–8MB → smaller JPEG).
+
+### 6. Known-good sample image
+`fixtures/sample_fridge.jpg` (Unsplash fridge, 800×1200, ~130KB).
+
+Live call requires a real key:
+```bash
+GROK_API_KEY=xai-... python3 scripts/prove_fridge_vision.py
+```
+This environment only has the placeholder → **live call correctly ABORTS** with:
+```
+code=missing_api_key
+message=GROK_API_KEY saknas eller är en placeholder — vision-anropet kördes aldrig.
+models_tried=[]
+raw_response=None
+```
+That is the smoking gun for “hittar inget” when Cloud secrets are wrong/placeholder.
+
+Mocked success path (unit test) proves wiring when HTTP 200 returns JSON:
+raw `{"ingredients":[{"name":"mjölk"...},{"name":"ägg"...},{"name":"ost"...}]}` → parsed ≥1.
+
+### 7. Parsing?
+Prose without JSON now **raises** `parse_json` (no silent `[]`). Empty `ingredients: []` from a real 200 response is allowed (model honestly saw nothing).
+
+## Permanent rule applied
+**No silent AI fallbacks** for fridge invent: missing key / HTTP / parse → user-visible error + loud logs + `LAST_VISION_DEBUG`.
+
+## What you must do on Streamlit Cloud
+Set a **real** `GROK_API_KEY` (xAI) in app secrets. Redeploy build `fridge-vision-v2-20260719`. Then scan again; if it still fails you’ll see the red error with code/status instead of a fake empty list.
