@@ -45,6 +45,29 @@ class FridgeVisionStrictTests(unittest.TestCase):
 
     def test_text_only_model_not_in_list(self) -> None:
         self.assertNotIn("grok-2-latest", fr.VISION_MODELS)
+        self.assertNotIn("grok-2-vision-1212", fr.VISION_MODELS)
+        self.assertIn("grok-4.5", fr.VISION_MODELS)
+
+    def test_bad_api_key_short_circuits(self) -> None:
+        blob = b"\xff\xd8\xff" + b"z" * 200
+
+        class FakeResp:
+            status_code = 400
+            text = '{"code":"invalid-argument","error":"Incorrect API key provided. You can obtain an API key from https://console.x.ai"}'
+
+            def json(self):
+                return json.loads(self.text)
+
+        with mock.patch("fridge_domain.requests.post", return_value=FakeResp()):
+            with self.assertRaises(fr.FridgeVisionError) as ctx:
+                fr.invent_from_images(
+                    [blob],
+                    api_key="xai-looks-real-enough-abcdefgh",
+                    language="sv",
+                )
+        self.assertEqual(ctx.exception.code, "bad_api_key")
+        # Only first model attempted
+        self.assertEqual(fr.LAST_VISION_DEBUG.get("models_tried"), ["grok-4.5"])
 
     def test_downscale_caps_long_edge(self) -> None:
         from io import BytesIO
@@ -63,11 +86,11 @@ class FridgeVisionStrictTests(unittest.TestCase):
         blob = SAMPLE.read_bytes() if SAMPLE.exists() else (b"\xff\xd8\xff" + b"y" * 200)
 
         class FakeResp:
-            status_code = 401
-            text = '{"error":"Invalid API key"}'
+            status_code = 400
+            text = '{"code":"invalid-argument","error":"Model not found: grok-4.5"}'
 
             def json(self):
-                return {"error": "Invalid API key"}
+                return json.loads(self.text)
 
         with mock.patch("fridge_domain.requests.post", return_value=FakeResp()):
             with self.assertRaises(fr.FridgeVisionError) as ctx:
@@ -77,6 +100,7 @@ class FridgeVisionStrictTests(unittest.TestCase):
                     language="sv",
                 )
         self.assertIn(ctx.exception.code, ("all_models_failed", "http_error"))
+        self.assertNotEqual(ctx.exception.code, "bad_api_key")
 
     def test_successful_mock_returns_ingredients_and_logs_raw(self) -> None:
         blob = SAMPLE.read_bytes() if SAMPLE.exists() else (b"\xff\xd8\xff" + b"z" * 200)

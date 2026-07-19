@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-vision-v5-20260719"
+BUILD_ID = "fridge-vision-v6-20260719"
 
 I18N = {
     "sv": {
