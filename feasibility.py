@@ -609,39 +609,40 @@ def _check_workout(
             if any(w in low for w in ("marklyft", "deadlift", "böj med stång")):
                 return FeasibilityResult(ok=False, reasons=["limitation:back"])
 
-    plan = (candidate.get("meta") or {}).get("plan") or _default_workout_plan(suggestion, minutes)
-    execution = {
-        "type": "workout",
-        "label": "Starta passet",
-        "url": None,
-        "detail": plan,
-    }
-    return FeasibilityResult(ok=True, execution=execution, enriched={"meta": {**(candidate.get("meta") or {}), "plan": plan}})
+    plan_minutes = int(meta_min) if meta_min is not None else minutes
+    import workout_domain as wd
+
+    enriched_cand = wd.ensure_workout_on_candidate(
+        candidate,
+        language="sv",
+        budget_minutes=minutes,
+    )
+    # Re-check duration against structured total
+    w = (enriched_cand.get("meta") or {}).get("workout") or {}
+    total_m = int(w.get("total_minutes") or plan_minutes)
+    if total_m > minutes + 5:
+        return FeasibilityResult(ok=False, reasons=["too_long"])
+
+    execution = enriched_cand.get("execution") or wd.execution_from_workout(
+        w, language="sv"
+    )
+    return FeasibilityResult(
+        ok=True,
+        execution=execution,
+        enriched={
+            "meta": enriched_cand.get("meta") or {},
+            "suggestion": enriched_cand.get("suggestion"),
+            "justification": enriched_cand.get("justification"),
+        },
+    )
 
 
 def _default_workout_plan(suggestion: str, minutes: int) -> str:
-    s = suggestion.lower()
-    if "yoga" in s:
-        return (
-            f"Yogaflöde ~{minutes} min: 5 min andning → solhälsningar ×5 → "
-            "krigarposition 3×30s/sida → hund och katt 2 min → avsluta i barnets pose."
-        )
-    if "hiit" in s or "tabata" in s:
-        return (
-            f"HIIT {min(minutes, 20)} min: 40s arbete / 20s vila × 8 — "
-            "knäböj, armhävningar, mountain climbers, jumping jacks. Upprepa."
-        )
-    if "promenad" in s or "zon-2" in s or "zon 2" in s:
-        return f"Zon-2-promenad {minutes} min: jämn takt där du kan prata. Ingen paus behövs."
-    if "armhäv" in s or "knäböj" in s:
-        return (
-            "Stege: armhävningar 5-10-15, knäböj 10-15-20, vila 60s mellan. "
-            "2 varv. Klart."
-        )
-    return (
-        f"Helkropp ~{minutes} min: knäböj 3×12, armhävningar 3×8, planka 3×30s, "
-        "utfall 3×10/ben (eller step-back om knän känsliga). Vila 45s."
-    )
+    """Legacy prose plan — prefer structured workout_domain instead."""
+    import workout_domain as wd
+
+    w = wd.finalize_workout(wd._match_template(suggestion, "sv"), language="sv")
+    return wd.detail_from_workout(w, "sv")
 
 
 # ---------------------------------------------------------------------------

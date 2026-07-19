@@ -240,8 +240,16 @@ def format_assumed_line(assumed: list[str], *, language: str = "sv") -> str:
     return f"Hemma antas: {items}."
 
 
-def build_recipe(suggestion: str, ingredients: list[str] | None = None) -> dict[str, Any]:
-    """Swedish metric recipe: full ingredient list + ordered steps."""
+def build_recipe(
+    suggestion: str,
+    ingredients: list[str] | None = None,
+    *,
+    active_minutes: int | None = None,
+) -> dict[str, Any]:
+    """Swedish metric recipe: full ingredient list + ordered steps.
+
+    active_minutes is the single source of truth for cook time when provided.
+    """
     ings = list(ingredients or _infer_full_ingredients(suggestion) or [])
     if not ings:
         ings = ["gul lök", "vitlök", "olja", "salt", "peppar", "säsongsgrönsaker", "ris"]
@@ -251,13 +259,16 @@ def build_recipe(suggestion: str, ingredients: list[str] | None = None) -> dict[
         miss_n = _norm_item(missing)
         ings = [missing] + [i for i in ings if _norm_item(i) != miss_n]
     steps = _recipe_steps(suggestion, ings)
-    return {
+    out: dict[str, Any] = {
         "title": suggestion,
         "ingredients": ings,
         "steps": steps,
         "unit_system": "metric",
         "language": "sv",
     }
+    if active_minutes is not None:
+        out["active_minutes"] = int(active_minutes)
+    return out
 
 
 def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:

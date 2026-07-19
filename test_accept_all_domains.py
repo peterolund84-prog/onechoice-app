@@ -176,6 +176,8 @@ class AppAcceptUiTests(unittest.TestCase):
             self.assertFalse(at.exception, domain)
             self.assertTrue(at.session_state["accepted"], domain)
             self.assertFalse(bool(at.session_state["ui_error"]), domain)
+            if domain == "workout":
+                self.assertEqual(at.session_state["page"], "execute", domain)
             err = any("Något gick fel" in (m.value or "") for m in at.markdown)
             self.assertFalse(err, domain)
 
@@ -277,11 +279,12 @@ class AppAcceptUiTests(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertTrue(at.session_state["accepted"])
         self.assertFalse(bool(at.session_state["ui_error"]))
+        self.assertEqual(at.session_state["page"], "execute")
         err = any("Något gick fel" in (m.value or "") for m in at.markdown)
         self.assertFalse(err)
-        # Locked card title
-        locked = any("Låst:" in (m.value or "") for m in at.markdown)
-        self.assertTrue(locked)
+        # Overview — Kör button, not dead-end lock card
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(any(lab == "Kör" for lab in labels), labels)
 
     def test_e2e_clothes_occasion_from_home(self) -> None:
         from streamlit.testing.v1 import AppTest

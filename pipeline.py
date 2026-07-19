@@ -345,6 +345,29 @@ def decide(
     execution = top.get("execution") if isinstance(top.get("execution"), dict) else None
     if not execution:
         execution = _execution_for(domain, suggestion, language, user)
+
+    # Workout: structure first — derive title/detail/minutes from blocks
+    workout_payload: dict[str, Any] | None = None
+    if domain == "workout":
+        import workout_domain as wd
+
+        budget = None
+        try:
+            budget = int((profile.get("workout") or {}).get("default_minutes") or 30)
+        except (TypeError, ValueError):
+            budget = 30
+        top = wd.ensure_workout_on_candidate(
+            top, language=language, budget_minutes=budget
+        )
+        suggestion = str(top.get("suggestion") or suggestion)
+        justification = str(top.get("justification") or justification)
+        execution = top.get("execution") or wd.execution_from_workout(
+            (top.get("meta") or {}).get("workout") or {}, language=language
+        )
+        workout_payload = (execution or {}).get("workout") or (top.get("meta") or {}).get(
+            "workout"
+        )
+
     execution = _ensure_food_shopping(domain, suggestion, execution, top, user, language)
     if domain == "food" and meal_type:
         import food_domain as fd
@@ -360,6 +383,17 @@ def decide(
         if not fd.show_shopping(meal_type):
             execution["shopping"] = None
             execution["shopping_list"] = None
+        # One source of truth for cook time on recipe
+        active = (top.get("meta") or {}).get("active_minutes")
+        if active is not None and isinstance(execution.get("recipe"), dict):
+            execution["recipe"] = dict(execution["recipe"])
+            execution["recipe"]["active_minutes"] = int(active)
+        elif active is not None and isinstance(execution.get("shopping"), dict):
+            shop = dict(execution["shopping"])
+            rec = dict(shop.get("recipe") or {})
+            rec["active_minutes"] = int(active)
+            shop["recipe"] = rec
+            execution["shopping"] = shop
     status = "locked" if locked else "shown"
 
     decision = db.create_decision(
@@ -382,6 +416,7 @@ def decide(
             "shopping": execution.get("shopping"),
             "recipe": execution.get("recipe")
             or (execution.get("shopping") or {}).get("recipe"),
+            "workout": workout_payload or execution.get("workout"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
         },
         execution_type=execution.get("type"),
@@ -832,7 +867,10 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
             f"equipment={profile.get('workout', {}).get('equipment')}, "
             f"minutes={profile.get('workout', {}).get('default_minutes')}, "
             f"limitations={profile.get('workout', {}).get('limitations')!r}. "
-            "Home users never 'go to gym'. Outdoor respects weather/dark. Write workout plan in meta.plan."
+            "Home users never 'go to gym'. Outdoor respects weather/dark. "
+            "REQUIRED: put structured workout in meta.workout as "
+            "{title, blocks:[{name, type:'reps'|'time', sets, reps, seconds, rest_seconds, cue}]}. "
+            "Do NOT invent a separate duration in the suggestion text — total_minutes is computed from blocks."
         ),
         "weekend": (
             f"Car={profile.get('weekend', {}).get('has_car')}, "
@@ -1167,7 +1205,11 @@ def _local_candidates(
     packs = packs_sv if language == "sv" else packs_en
     # Near-domain: bias pack by category_guess when present
     cat = str((context or {}).get("category_guess") or "").lower()
-    if domain in ("other", db.NEAR_DOMAIN) and cat:
+    if domain == "workout":
+        import workout_domain as wd
+
+        items = wd.local_candidates(language)
+    elif domain in ("other", db.NEAR_DOMAIN) and cat:
         items = _near_domain_pack(cat, language)
     else:
         items = list(packs.get(domain, packs["other"] if domain == db.NEAR_DOMAIN else packs["food"]))
@@ -1220,11 +1262,9 @@ def _guaranteed_feasible(
             "meta": {"title": "seinfeld"},
         }
     elif domain == "workout":
-        c = {
-            "suggestion": "Armhävningar + knäböj-stege" if sv else "Push-ups + squats ladder",
-            "justification": "Ingen utrustning. Inga ursäkter." if sv else "No equipment. No excuses.",
-            "meta": {"minutes": 20},
-        }
+        import workout_domain as wd
+
+        c = wd.local_candidates(language)[-1]  # short equipment-free ladder
     else:
         c = {
             "suggestion": "Kaffepromenad + en bokhandel" if sv else "Coffee walk + one bookstore",
