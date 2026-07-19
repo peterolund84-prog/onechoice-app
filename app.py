@@ -115,6 +115,16 @@ I18N = {
         "do_it": "Gör det nu",
         "handla_laga": "Handla & laga",
         "accepted": "Sparat — bra val.",
+        "workout_go": "Kör",
+        "workout_next": "Nästa",
+        "workout_next_set": "Nästa set",
+        "workout_skip": "Hoppa över",
+        "workout_done_title": "Klart.",
+        "workout_rest": "Vila",
+        "workout_overview": "Översikt",
+        "workout_awake_note": "Håll skärmen vaken under passet (bäst i PWA/native).",
+        "workout_feedback_q": "Hur kändes passet?",
+        "recipe_mins": "Ca {mins} min",
         "locked_title": "Låst: {suggestion}",
         "shop_title": "Inköpslista",
         "recipe_title": "Recept",
@@ -178,6 +188,16 @@ I18N = {
         "do_it": "Do it now",
         "handla_laga": "Shop & cook",
         "accepted": "Saved — good call.",
+        "workout_go": "Go",
+        "workout_next": "Next",
+        "workout_next_set": "Next set",
+        "workout_skip": "Skip",
+        "workout_done_title": "Done.",
+        "workout_rest": "Rest",
+        "workout_overview": "Overview",
+        "workout_awake_note": "Keep the screen awake during the session (best in PWA/native).",
+        "workout_feedback_q": "How did it feel?",
+        "recipe_mins": "About {mins} min",
         "locked_title": "Locked: {suggestion}",
         "shop_title": "Shopping list",
         "recipe_title": "Recipe",
@@ -431,6 +451,10 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
     transition: opacity 0.25s ease;
 }}
 .oc-rerolls i.used {{ opacity: 0.22; background: {MUTED}; }}
+.oc-rerolls i.current {{
+    opacity: 1; background: {PRIMARY};
+    box-shadow: 0 0 0 3px {PRIMARY_SOFT};
+}}
 .oc-shop {{
     background: #fff; border-radius: 22px; padding: 1.25rem 1.2rem 1.1rem;
     box-shadow: {SHADOW}; margin: 0 0 1.25rem;
@@ -583,6 +607,12 @@ def init_state() -> None:
         "pending_clothes_question": "",
         "occasion_by_hour": {},  # remembered most-common occasion per hour bucket
         "food_meal_type": None,  # frukost|lunch|middag|kvallsmal — inferred, confirmable
+        # Workout player (execute view)
+        "workout_phase": "overview",  # overview|play|rest|done
+        "workout_block_i": 0,
+        "workout_set_i": 0,
+        "workout_timer_end": None,  # epoch seconds
+        "workout_timer_total": 0,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -1466,6 +1496,10 @@ def page_result() -> None:
             exec_label = cur.get("execution_label") or t("do_it")
             if exec_url:
                 st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
+            elif (cur.get("domain") or "") == "workout" or cur.get("execution_type") == "workout":
+                if st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
+                    _reset_workout_player()
+                    accept_and_open_execute(cur)
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
                 on_accept_primary(cur)
         if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
@@ -1529,9 +1563,13 @@ def page_result() -> None:
         if st.button(label, type="primary", use_container_width=True, key="eat_now_accept"):
             on_accept_primary(cur)
     else:
-        # Shared accept for clothes / movie / workout / weekend
+        # Shared accept for clothes / movie / weekend; workout opens execute player
         exec_label = cur.get("execution_label") or t("do_it")
-        if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
+        if (domain == "workout" or cur.get("execution_type") == "workout"):
+            if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
+                _reset_workout_player()
+                accept_and_open_execute(cur)
+        elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
             on_accept_primary(cur)
 
     # Secondary: reroll — hidden once accepted (lock card branch above)
@@ -1551,8 +1589,288 @@ def page_result() -> None:
     nav()
 
 
+def _reset_workout_player() -> None:
+    st.session_state.workout_phase = "overview"
+    st.session_state.workout_block_i = 0
+    st.session_state.workout_set_i = 0
+    st.session_state.workout_timer_end = None
+    st.session_state.workout_timer_total = 0
+
+
+def _inject_wake_lock() -> None:
+    """Best-effort Screen Wake Lock — fully reliable only in PWA/native."""
+    import streamlit.components.v1 as components
+
+    components.html(
+        """
+        <script>
+        (async () => {
+          try {
+            if (navigator.wakeLock) {
+              await navigator.wakeLock.request('screen');
+            }
+          } catch (e) {}
+        })();
+        </script>
+        """,
+        height=0,
+    )
+
+
+def _start_timer(seconds: int) -> None:
+    import time as _time
+
+    sec = max(1, int(seconds))
+    st.session_state.workout_timer_total = sec
+    st.session_state.workout_timer_end = _time.time() + sec
+
+
+def _timer_remaining() -> int:
+    import time as _time
+
+    end = st.session_state.get("workout_timer_end")
+    if not end:
+        return 0
+    return max(0, int(round(float(end) - _time.time())))
+
+
+def _advance_workout_after_block(workout: dict[str, Any]) -> None:
+    """Move to next set, rest, next block, or done."""
+    import workout_domain as wd
+
+    blocks = workout.get("blocks") or []
+    bi = int(st.session_state.get("workout_block_i") or 0)
+    si = int(st.session_state.get("workout_set_i") or 0)
+    if bi >= len(blocks):
+        st.session_state.workout_phase = "done"
+        st.session_state.workout_timer_end = None
+        return
+    block = blocks[bi]
+    sets = max(1, int(block.get("sets") or 1))
+    rest = max(0, int(block.get("rest_seconds") or 0))
+    # Finished a set
+    if si + 1 < sets:
+        st.session_state.workout_set_i = si + 1
+        if rest > 0:
+            st.session_state.workout_phase = "rest"
+            _start_timer(rest)
+        else:
+            st.session_state.workout_phase = "play"
+            _begin_block_work(block)
+        return
+    # Next block
+    st.session_state.workout_block_i = bi + 1
+    st.session_state.workout_set_i = 0
+    if st.session_state.workout_block_i >= len(blocks):
+        st.session_state.workout_phase = "done"
+        st.session_state.workout_timer_end = None
+        return
+    st.session_state.workout_phase = "play"
+    _begin_block_work(blocks[st.session_state.workout_block_i])
+
+
+def _begin_block_work(block: dict[str, Any]) -> None:
+    if (block.get("type") or "reps") == "time":
+        _start_timer(int(block.get("seconds") or 30))
+    else:
+        st.session_state.workout_timer_end = None
+
+
+def render_workout_progress(blocks: list, bi: int) -> None:
+    dots = []
+    for i, _ in enumerate(blocks):
+        cls = "used" if i < bi else ("" if i > bi else "current")
+        dots.append(f'<i class="{cls}"></i>')
+    st.markdown(
+        f'<div class="oc-rerolls" aria-label="progress">{"".join(dots)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_workout_overview(workout: dict[str, Any], language: str) -> None:
+    import workout_domain as wd
+
+    w = wd.finalize_workout(workout, language=language)
+    title = w["title"]
+    if title:
+        title = title[:1].upper() + title[1:]
+    st.markdown(
+        f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
+        f'<div class="label">{html.escape(domain_label("workout"))}</div>'
+        f'<h1 style="font-size:1.55rem">{html.escape(title)}</h1>'
+        f'<p>{html.escape(str(w["total_minutes"]))} min</p>'
+        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    rows = []
+    for b in w["blocks"]:
+        rows.append(
+            f'<li><strong>{html.escape(str(b["name"]))}</strong> '
+            f'<span style="color:#6B6B76">{html.escape(wd.block_duration_label(b, language))}</span></li>'
+        )
+    st.markdown(
+        f'<div class="oc-shop"><div class="oc-shop-title">{html.escape(t("workout_overview"))}</div>'
+        f'<ul>{"".join(rows)}</ul></div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(t("workout_awake_note"))
+    if st.button(t("workout_go"), type="primary", use_container_width=True, key="wo_go"):
+        st.session_state.workout_phase = "play"
+        st.session_state.workout_block_i = 0
+        st.session_state.workout_set_i = 0
+        _begin_block_work(w["blocks"][0])
+        st.rerun()
+
+
+def render_workout_player(workout: dict[str, Any], language: str) -> None:
+    import workout_domain as wd
+    from datetime import timedelta
+
+    w = wd.finalize_workout(workout, language=language)
+    blocks = w["blocks"]
+    bi = int(st.session_state.get("workout_block_i") or 0)
+    si = int(st.session_state.get("workout_set_i") or 0)
+    phase = st.session_state.get("workout_phase") or "play"
+
+    if bi >= len(blocks):
+        st.session_state.workout_phase = "done"
+        st.rerun()
+        return
+
+    _inject_wake_lock()
+    render_workout_progress(blocks, bi)
+    block = blocks[bi]
+    sets = max(1, int(block.get("sets") or 1))
+
+    if phase == "rest":
+        remaining = _timer_remaining()
+        st.markdown(
+            f'<div class="oc-decision">'
+            f'<div class="label">{html.escape(t("workout_rest"))}</div>'
+            f'<h1 style="font-size:3rem">{remaining}s</h1>'
+            f"<p>{html.escape(str(block.get('name')))} · set {si + 1}/{sets}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        @st.fragment(run_every=timedelta(seconds=1))
+        def _rest_tick() -> None:
+            left = _timer_remaining()
+            st.progress(1.0 - (left / max(1, int(st.session_state.get("workout_timer_total") or 1))))
+            if left <= 0:
+                st.session_state.workout_phase = "play"
+                _begin_block_work(block)
+                st.rerun()
+
+        _rest_tick()
+        if st.button(t("workout_skip"), use_container_width=True, key="wo_skip_rest"):
+            st.session_state.workout_phase = "play"
+            _begin_block_work(block)
+            st.rerun()
+        return
+
+    # Active work
+    cue = str(block.get("cue") or "")
+    if (block.get("type") or "reps") == "time":
+        remaining = _timer_remaining()
+        if st.session_state.get("workout_timer_end") is None:
+            _begin_block_work(block)
+            remaining = _timer_remaining()
+        st.markdown(
+            f'<div class="oc-decision">'
+            f'<div class="label">Set {si + 1}/{sets}</div>'
+            f'<h1 style="font-size:2.2rem">{html.escape(str(block["name"]))}</h1>'
+            f'<h1 style="font-size:3rem;margin:0.4rem 0">{remaining}s</h1>'
+            f"<p>{html.escape(cue)}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        @st.fragment(run_every=timedelta(seconds=1))
+        def _work_tick() -> None:
+            left = _timer_remaining()
+            total = max(1, int(st.session_state.get("workout_timer_total") or 1))
+            st.progress(1.0 - (left / total))
+            if left <= 0:
+                _advance_workout_after_block(w)
+                st.rerun()
+
+        _work_tick()
+        if st.button(t("workout_skip"), use_container_width=True, key="wo_skip_time"):
+            _advance_workout_after_block(w)
+            st.rerun()
+    else:
+        reps = int(block.get("reps") or 10)
+        st.markdown(
+            f'<div class="oc-decision">'
+            f'<div class="label">Set {si + 1}/{sets}</div>'
+            f'<h1 style="font-size:2.2rem">{html.escape(str(block["name"]))}</h1>'
+            f'<h1 style="font-size:2.6rem;margin:0.4rem 0">{reps}</h1>'
+            f"<p>{html.escape(cue)}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        label = t("workout_next_set") if si + 1 < sets else t("workout_next")
+        if st.button(label, type="primary", use_container_width=True, key="wo_next_reps"):
+            _advance_workout_after_block(w)
+            st.rerun()
+
+
+def render_workout_done(workout: dict[str, Any], cur: dict[str, Any], language: str) -> None:
+    import workout_domain as wd
+
+    w = wd.finalize_workout(workout, language=language)
+    mins = w["total_minutes"]
+    title = t("workout_done_title")
+    line = f"{title} {mins} minuter." if language == "sv" else f"{title} {mins} minutes."
+    st.markdown(
+        f'<div class="oc-decision"><h1 style="font-size:1.8rem">{html.escape(line)}</h1>'
+        f'<p>{html.escape(t("workout_feedback_q"))}</p></div>',
+        unsafe_allow_html=True,
+    )
+    c1, c2 = st.columns(2)
+    did = _active_decision_id(cur)
+    with c1:
+        if st.button("👍", use_container_width=True, key="wo_up"):
+            _record_workout_feel(did, positive=True, cur=cur)
+            safe_toast(t("accepted"))
+            st.session_state.page = "home"
+            st.rerun()
+    with c2:
+        if st.button("👎", use_container_width=True, key="wo_down"):
+            _record_workout_feel(did, positive=False, cur=cur)
+            st.session_state.page = "home"
+            st.rerun()
+
+
+def _record_workout_feel(
+    decision_id: int | None, *, positive: bool, cur: dict[str, Any]
+) -> None:
+    """Post-decision feedback into preference log (structure stays accepted)."""
+    try:
+        suggestion = str(cur.get("suggestion") or "").strip().lower()
+        uid = st.session_state.get("user_id")
+        if uid and suggestion:
+            db.upsert_preference(
+                str(uid),
+                "workout",
+                "suggestion",
+                suggestion,
+                1.0 if positive else -1.0,
+            )
+        # Mirror into session context for history visibility
+        updated = dict(cur)
+        ctx = dict(updated.get("context") or {})
+        ctx["post_feedback"] = "up" if positive else "down"
+        updated["context"] = ctx
+        st.session_state.current = updated
+    except Exception as exc:
+        log.warning("workout feedback failed: %s", exc)
+
+
 def page_execute() -> None:
-    """Execution view after Handla & laga: shopping (checkable) + full recipe."""
+    """Execution view: food shopping/recipe OR workout player."""
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     cur = st.session_state.get("current") or {}
@@ -1563,34 +1881,78 @@ def page_execute() -> None:
 
     # Must be accepted/locked to be here; enforce
     if not (st.session_state.get("accepted") or cur.get("accepted") or cur.get("locked")):
-        # User navigated here without accept — send to result
         st.session_state.page = "result"
         st.rerun()
         return
 
+    language = st.session_state.get("language", "sv")
+    domain = cur.get("domain") or ""
+    ctx = cur.get("context") or {}
+
+    # ----- Workout player -----
+    if domain == "workout" or cur.get("execution_type") == "workout":
+        import workout_domain as wd
+
+        workout = wd.get_workout_from_decision(cur)
+        if not workout:
+            workout = wd.finalize_workout(
+                wd._match_template(str(cur.get("suggestion") or ""), language),
+                language=language,
+            )
+            ctx = dict(ctx)
+            ctx["workout"] = workout
+            cur = dict(cur)
+            cur["context"] = ctx
+            st.session_state.current = cur
+
+        phase = st.session_state.get("workout_phase") or "overview"
+        if phase == "overview":
+            render_workout_overview(workout, language)
+        elif phase == "done":
+            render_workout_done(workout, cur, language)
+        else:
+            render_workout_player(workout, language)
+
+        if phase != "done" and st.button(
+            t("back_to_decision"),
+            type="secondary",
+            use_container_width=True,
+            key="exec_back_wo",
+        ):
+            st.session_state.page = "result"
+            st.rerun()
+        nav()
+        return
+
+    # ----- Food shopping + recipe -----
     suggestion = str(cur.get("suggestion") or "")
     st.markdown(
         f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
-        f'<div class="label">{html.escape(domain_label(cur.get("domain") or "food"))}</div>'
+        f'<div class="label">{html.escape(domain_label(domain or "food"))}</div>'
         f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
         f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
         f"</div>",
         unsafe_allow_html=True,
     )
 
-    ctx = cur.get("context") or {}
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
     recipe = ctx.get("recipe") or (shop or {}).get("recipe")
     import shopping as shopping_mod
 
+    active_mins = None
+    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+        active_mins = int(recipe["active_minutes"])
+
     # Always rebuild recipe from shopping ingredients so dish-name protein is present
     if shop:
-        recipe = shopping_mod.build_recipe(suggestion, shop.get("ingredients"))
-        # Keep session current in sync for back-nav
+        recipe = shopping_mod.build_recipe(
+            suggestion,
+            shop.get("ingredients"),
+            active_minutes=active_mins,
+        )
         ctx = dict(ctx)
         ctx["recipe"] = recipe
         if "kyckling" in suggestion.lower() or "chicken" in suggestion.lower():
-            # Guarantee kyckling on the shopping payload shown in execute
             flat = [
                 shopping_mod._strip_hint(i)
                 for section in (shop.get("to_buy") or {}).values()
@@ -1604,11 +1966,17 @@ def page_execute() -> None:
                     shop = rebuilt
                     ctx["shopping"] = rebuilt
                     recipe = rebuilt.get("recipe") or recipe
+                    if active_mins is not None and isinstance(recipe, dict):
+                        recipe = dict(recipe)
+                        recipe["active_minutes"] = active_mins
         cur = dict(cur)
         cur["context"] = ctx
         st.session_state.current = cur
     elif not recipe:
-        recipe = shopping_mod.build_recipe(suggestion)
+        recipe = shopping_mod.build_recipe(suggestion, active_minutes=active_mins)
+
+    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+        st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
 
     did = _active_decision_id(cur)
     render_checkable_shopping(shop, did)
