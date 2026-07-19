@@ -190,28 +190,34 @@ def init_db(path: Path | str | None = None) -> None:
             )
             """
         )
-        conn.execute(
-            """
-            CREATE VIEW IF NOT EXISTS near_domain_demand AS
-            SELECT category_guess,
-                   COUNT(*) AS total,
-                   COUNT(DISTINCT user_id) AS unique_users,
-                   AVG(CASE WHEN accepted = 1 THEN 1.0 ELSE 0.0 END) AS accept_rate
-            FROM routed_queries
-            WHERE route = 'NEAR_DOMAIN'
-            GROUP BY category_guess
-            ORDER BY total DESC
-            """
-        )
+        try:
+            conn.execute(
+                """
+                CREATE VIEW IF NOT EXISTS near_domain_demand AS
+                SELECT category_guess,
+                       COUNT(*) AS total,
+                       COUNT(DISTINCT user_id) AS unique_users,
+                       AVG(CASE WHEN accepted = 1 THEN 1.0 ELSE 0.0 END) AS accept_rate
+                FROM routed_queries
+                WHERE route = 'NEAR_DOMAIN'
+                GROUP BY category_guess
+                """
+            )
+        except sqlite3.Error:
+            pass
         # Privacy: wipe raw_text older than 90 days (normalized_question kept)
-        conn.execute(
-            """
-            UPDATE routed_queries
-            SET raw_text = NULL
-            WHERE raw_text IS NOT NULL
-              AND datetime(created_at) < datetime('now', '-90 days')
-            """
-        )
+        try:
+            conn.execute(
+                """
+                UPDATE routed_queries
+                SET raw_text = NULL
+                WHERE raw_text IS NOT NULL
+                  AND datetime(created_at) < datetime('now', '-90 days')
+                """
+            )
+        except sqlite3.Error:
+            pass
+
 
 
 def ensure_user(
@@ -298,25 +304,34 @@ def create_decision(
     if status not in DECISION_STATUSES:
         raise ValueError(f"invalid status: {status}")
     if _use_supabase(path):
-        import supabase_store as store
+        try:
+            import supabase_store as store
 
-        at, rt = _tokens()
-        return store.create_decision(
-            user_id=user_id,
-            access_token=at,
-            refresh_token=rt,
-            domain=domain,
-            question=question,
-            suggestion=suggestion,
-            justification=justification,
-            status=status,
-            reroll_index=reroll_index,
-            context=context,
-            execution_type=execution_type,
-            execution_label=execution_label,
-            execution_url=execution_url,
-        )
-    ctx = json.dumps(context or {}, ensure_ascii=False)
+            at, rt = _tokens()
+            row = store.create_decision(
+                user_id=user_id,
+                access_token=at,
+                refresh_token=rt,
+                domain=domain,
+                question=question,
+                suggestion=suggestion,
+                justification=justification,
+                status=status,
+                reroll_index=reroll_index,
+                context=context,
+                execution_type=execution_type,
+                execution_label=execution_label,
+                execution_url=execution_url,
+            )
+            if row.get("id") is not None:
+                return row
+        except Exception:
+            # Fall through to local SQLite so the app never hard-fails on Cloud
+            pass
+
+    # SQLite path — force local user row (FK) even if auth tokens are set
+    _ensure_sqlite_user(user_id, path=path)
+    ctx = json.dumps(context or {}, ensure_ascii=False, default=str)
     with get_conn(path) as conn:
         cur = conn.execute(
             """
@@ -345,6 +360,21 @@ def create_decision(
             "SELECT * FROM decisions WHERE id = ?", (cur.lastrowid,)
         ).fetchone()
         return _decision_row(row)
+
+
+def _ensure_sqlite_user(user_id: str, *, path: Path | str | None = None) -> None:
+    """Insert user into SQLite if missing — ignores Supabase auth routing."""
+    with get_conn(path) as conn:
+        row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if row:
+            return
+        conn.execute(
+            """
+            INSERT INTO users (id, created_at, language)
+            VALUES (?, ?, ?)
+            """,
+            (user_id, utc_now(), "sv"),
+        )
 
 
 def set_decision_status(
@@ -545,23 +575,6 @@ def log_routed_query(
 
     HIGH_STAKES privacy: store ONLY route + timestamp + user_id.
     """
-    if _use_supabase(path):
-        import supabase_store as store
-
-        at, rt = _tokens()
-        return store.log_routed_query(
-            user_id,
-            access_token=at,
-            refresh_token=rt,
-            route=route,
-            domain=domain,
-            confidence=confidence,
-            category_guess=category_guess,
-            normalized_question=normalized_question,
-            raw_text=raw_text,
-        )
-
-    # Hard privacy rule
     if route == "HIGH_STAKES":
         raw_text = None
         domain = None
@@ -569,6 +582,28 @@ def log_routed_query(
         category_guess = None
         normalized_question = None
 
+    if _use_supabase(path):
+        try:
+            import supabase_store as store
+
+            at, rt = _tokens()
+            row = store.log_routed_query(
+                user_id,
+                access_token=at,
+                refresh_token=rt,
+                route=route,
+                domain=domain,
+                confidence=confidence,
+                category_guess=category_guess,
+                normalized_question=normalized_question,
+                raw_text=raw_text,
+            )
+            if row.get("id") is not None:
+                return row
+        except Exception:
+            pass
+
+    _ensure_sqlite_user(user_id, path=path)
     with get_conn(path) as conn:
         cur = conn.execute(
             """

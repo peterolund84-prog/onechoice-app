@@ -335,7 +335,12 @@ def init_state() -> None:
         db.init_db()
         st.session_state.user_id = str(uuid.uuid4())
         st.session_state.guest_mode = True
+        st.session_state.access_token = None
+        st.session_state.refresh_token = None
+        db.clear_auth()
         db.ensure_user(st.session_state.user_id, language=st.session_state.language)
+    elif st.session_state.guest_mode:
+        db.clear_auth()
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -486,10 +491,17 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
     import router as rt
 
     require_auth_context()
+    # Guest mode must never hit Supabase RLS writes
+    if st.session_state.get("guest_mode"):
+        db.clear_auth()
+        st.session_state.access_token = None
+        st.session_state.refresh_token = None
+
     if not st.session_state.user_id:
         db.init_db()
         st.session_state.user_id = str(uuid.uuid4())
         st.session_state.guest_mode = True
+        db.clear_auth()
         db.ensure_user(st.session_state.user_id, language=st.session_state.language)
 
     if reroll:
@@ -550,16 +562,17 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                     grok_api_key=get_secret("GROK_API_KEY"),
                     skip_feasibility=(hint == "other"),
                 )
+        st.session_state.route_log_id = result.route_log_id
+        st.session_state.current = result.to_dict()
+        if result.ok and result.domain:
+            st.session_state.last_domain_hint = result.domain
     except Exception as exc:
         log.exception("decide failed: %s", exc)
         st.error("Kunde inte skapa beslut just nu. Försök igen.")
+        with st.expander("Teknisk detalj"):
+            st.code(f"{type(exc).__name__}: {exc}")
         st.session_state.page = "home"
         return
-
-    st.session_state.route_log_id = result.route_log_id
-    st.session_state.current = result.to_dict()
-    if result.ok and result.domain:
-        st.session_state.last_domain_hint = result.domain
 
     if result.needs_domain_pick:
         st.session_state.pending_free_text = q
