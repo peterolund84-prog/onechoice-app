@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-honest-v7-20260719"
+BUILD_ID = "fridge-camera-tall-v8-20260719"
 
 I18N = {
     "sv": {
@@ -192,6 +192,7 @@ I18N = {
         "fridge_title": "Kylskåp & skafferi",
         "fridge_hint": "1–3 foton — jag listar det jag ser. Du bekräftar innan jag bestämmer.",
         "fridge_camera": "Ta foto",
+        "fridge_camera_tip": "Håll telefonen upprätt — förhandsvisningen är hög så hela hyllan får plats.",
         "fridge_upload": "Ladda upp",
         "fridge_scan": "Läs av",
         "fridge_scanning": "Tittar i kylen…",
@@ -294,6 +295,7 @@ I18N = {
         "fridge_title": "Fridge & pantry",
         "fridge_hint": "1–3 photos — I’ll list what I see. You confirm before I decide.",
         "fridge_camera": "Take photo",
+        "fridge_camera_tip": "Hold the phone upright — the preview is tall so a full shelf fits.",
         "fridge_upload": "Upload",
         "fridge_scan": "Scan",
         "fridge_scanning": "Looking in the fridge…",
@@ -353,27 +355,52 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 @media (max-width: 768px) {{
     .block-container {{ padding: 1rem 0.75rem 9rem !important; }}
 }}
-/* Fridge capture: almost full phone width + tall camera so more of the fridge fits */
+/* Fridge capture: Streamlit hardcodes 16:9 (height = width*9/16). Override to tall portrait. */
 .block-container:has([data-testid="stCameraInput"]) {{
-    max-width: min(100vw, 720px) !important;
-    padding-left: 0.35rem !important;
-    padding-right: 0.35rem !important;
+    max-width: min(100vw, 560px) !important;
+    padding-left: 0.3rem !important;
+    padding-right: 0.3rem !important;
+    padding-top: 0.5rem !important;
+}}
+.block-container:has([data-testid="stCameraInput"]) .oc-logo {{
+    font-size: 1.15rem !important;
+    margin: 0.15rem 0 0.05rem !important;
+}}
+.block-container:has([data-testid="stCameraInput"]) .oc-tagline {{
+    font-size: 0.88rem !important;
+    margin: 0 0 0.35rem !important;
 }}
 div[data-testid="stCameraInput"] {{
     width: 100% !important;
 }}
+/* The box Streamlit sizes as landscape — force fridge-height instead */
+div[data-testid="stCameraInputWebcamStyledBox"],
+div[data-testid="stCameraInputWebcamComponent"],
 div[data-testid="stCameraInput"] > div {{
     width: 100% !important;
+    max-width: 100% !important;
+    height: min(78vh, 640px) !important;
+    min-height: min(78vh, 640px) !important;
+    max-height: none !important;
+    aspect-ratio: 3 / 4 !important;
+}}
+div[data-testid="stCameraInputWebcamStyledBox"] {{
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-radius: 12px 12px 0 0 !important;
 }}
 div[data-testid="stCameraInput"] video,
 div[data-testid="stCameraInput"] img,
 div[data-testid="stCameraInput"] canvas {{
     width: 100% !important;
     max-width: 100% !important;
-    min-height: min(72vh, 560px) !important;
-    height: auto !important;
+    height: 100% !important;
+    min-height: min(78vh, 640px) !important;
+    max-height: none !important;
     object-fit: cover !important;
-    border-radius: 12px !important;
+    object-position: center center !important;
+    border-radius: 12px 12px 0 0 !important;
 }}
 div[data-testid="stCameraInput"] button {{
     width: 100% !important;
@@ -1935,7 +1962,16 @@ def page_fridge() -> None:
     step = st.session_state.get("fridge_step") or "capture"
 
     if step == "capture":
-        cam = st.camera_input(t("fridge_camera"), key="fridge_cam")
+        st.caption(t("fridge_camera_tip"))
+        cam_kwargs: dict[str, Any] = {"key": "fridge_cam"}
+        try:
+            import inspect as _inspect
+
+            if "resolution" in _inspect.signature(st.camera_input).parameters:
+                cam_kwargs["resolution"] = "1080p"
+        except Exception:
+            pass
+        cam = st.camera_input(t("fridge_camera"), **cam_kwargs)
         # Persist bytes across the Scan click (Streamlit can drop widget values)
         if cam is not None:
             try:
