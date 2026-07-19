@@ -187,10 +187,8 @@ class AppAcceptUiTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
         # Full path: home → Mat
-        for b in at.button:
-            if b.label == "Mat":
-                b.click().run()
-                break
+        at.query_params["domain"] = "food"
+        at.run()
         self.assertEqual(at.session_state["page"], "result")
         self.assertFalse(at.exception)
         self.assertTrue(at.pills, "meal pills missing")
@@ -220,7 +218,7 @@ class AppAcceptUiTests(unittest.TestCase):
         self.assertFalse(bool(at.session_state["ui_error"]))
 
     def test_css_chip_rules_override_ghost_secondary(self) -> None:
-        """Regression: secondary buttons in grids must not be transparent underlines."""
+        """Regression: grid chips are ghost borders, not underlined secondary links."""
         import app as app_mod
         from unittest import mock
 
@@ -238,13 +236,14 @@ class AppAcceptUiTests(unittest.TestCase):
         css = "\n".join(captured)
         self.assertIn("stHorizontalBlock", css)
         self.assertIn("stButtonGroup", css)
-        # Chip override must force white background (not transparent ghost links)
         self.assertIn(
             'div[data-testid="stHorizontalBlock"] div.stButton > button',
             css,
         )
-        self.assertIn("background: #fff !important", css)
+        # Ghost chips: transparent fill + border (not Streamlit underline secondary)
+        self.assertIn("background: transparent !important", css)
         self.assertIn("border-radius: 999px !important", css)
+        self.assertIn("a.oc-chip", css)
 
     def test_clothes_occasion_buttons_visible(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -268,10 +267,9 @@ class AppAcceptUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        for b in at.button:
-            if b.label == "Träning":
-                b.click().run()
-                break
+        # Home domain chips are HTML links (?domain=), not Streamlit buttons
+        at.query_params["domain"] = "workout"
+        at.run()
         self.assertEqual(at.session_state["page"], "result")
         self.assertFalse(at.exception)
         hit = False
@@ -296,10 +294,9 @@ class AppAcceptUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        for b in at.button:
-            if b.label == "Kläder":
-                b.click().run()
-                break
+        # Home domain chips are HTML links (?domain=), not Streamlit buttons
+        at.query_params["domain"] = "clothes"
+        at.run()
         self.assertEqual(at.session_state["page"], "clothes_occasion")
         labels = [b.label or "" for b in at.button]
         self.assertTrue(any("Fest" in L for L in labels), labels)
@@ -321,12 +318,10 @@ class AppAcceptUiTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
         self.assertFalse(at.exception)
-        labels = [b.label or "" for b in at.button]
+        body = " ".join(str(m.value or "") for m in at.markdown)
         for needle in ("Mat", "Kläder", "Träning"):
-            self.assertTrue(
-                any(needle in lab for lab in labels),
-                f"missing domain button {needle}: {labels}",
-            )
+            self.assertIn(needle, body, f"missing domain chip {needle}")
+        self.assertIn("oc-chip", body)
 
 
 if __name__ == "__main__":
