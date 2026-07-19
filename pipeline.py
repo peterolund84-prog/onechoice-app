@@ -222,6 +222,10 @@ def decide(
     effective_reroll = min(reroll_index, MAX_REROLLS)
 
     ctx = collect_context(user, extra=context_extra)
+    if domain == "clothes" and (context_extra or {}).get("occasion"):
+        ctx["occasion"] = (context_extra or {}).get("occasion")
+        ctx["intent"] = (context_extra or {}).get("intent") or "wear"
+
     if domain == "clothes" and "intent" not in ctx:
         ql = q.lower()
         ctx["intent"] = "buy" if any(w in ql for w in ("köp", "beställ", "handla", "buy")) else "wear"
@@ -247,6 +251,23 @@ def decide(
         language=language,
         grok_api_key=grok_api_key,
     )
+
+    # Occasion is the primary clothes constraint — pin a matching outfit first
+    if domain == "clothes":
+        import clothes_domain as cd
+
+        occasion = str(ctx.get("occasion") or "")
+        if occasion in cd.OCCASIONS:
+            clothes_prof = profile.get("clothes") or {}
+            pin = cd.outfit_for_occasion(
+                occasion,
+                section=str(clothes_prof.get("section") or "båda"),
+                language=language,
+                temp_c=ctx.get("temp_c")
+                if isinstance(ctx.get("temp_c"), (int, float))
+                else None,
+            )
+            candidates = [pin] + [c for c in candidates if c.get("suggestion") != pin["suggestion"]]
 
     if skip_feasibility or domain == db.NEAR_DOMAIN:
         survivors = list(candidates) or _local_candidates(
@@ -353,6 +374,7 @@ def handle_free_text(
     previous_decision_id: int | None = None,
     forced_domain: str | None = None,
     prior_route_log_id: int | None = None,
+    context_extra: dict[str, Any] | None = None,
 ) -> DecisionResult:
     """
     Gatekeeper entry for EVERY free-text input.
@@ -379,6 +401,7 @@ def handle_free_text(
             grok_api_key=grok_api_key,
             db_path=db_path,
             skip_feasibility=(forced_domain == db.NEAR_DOMAIN),
+            context_extra=context_extra,
             route_meta={
                 "route": "NEAR_DOMAIN" if forced_domain == db.NEAR_DOMAIN else "IN_DOMAIN",
                 "route_log_id": prior_route_log_id,
@@ -471,6 +494,7 @@ def handle_free_text(
         grok_api_key=grok_api_key,
         db_path=db_path,
         skip_feasibility=(classification.route == "NEAR_DOMAIN"),
+        context_extra=context_extra,
         route_meta=meta,
     )
     if result.ok and log_id is not None:
@@ -500,7 +524,9 @@ def accept_decision(
     out = db.record_feedback(did, accepted=True, path=db_path)
     rid = route_log_id
     if rid is None and isinstance(out, dict):
-        rid = (out.get("context") or {}).get("route_log_id")
+        ctx = out.get("context")
+        if isinstance(ctx, dict):
+            rid = ctx.get("route_log_id")
     if rid is not None:
         try:
             db.update_routed_query(int(rid), accepted=True, path=db_path)
@@ -509,6 +535,25 @@ def accept_decision(
         except Exception as exc:
             log.warning("failed to mark routed accept: %s", exc)
     return out
+
+
+def try_accept_decision(
+    decision_id: int | None,
+    *,
+    db_path: str | None = None,
+    route_log_id: int | None = None,
+) -> dict[str, Any] | None:
+    """Best-effort accept for UI handlers — never raises to the Streamlit layer."""
+    if decision_id is None:
+        log.warning("try_accept_decision: missing decision_id")
+        return None
+    try:
+        return accept_decision(
+            decision_id, db_path=db_path, route_log_id=route_log_id
+        )
+    except Exception as exc:
+        log.exception("try_accept_decision failed for id=%r: %s", decision_id, exc)
+        return None
 
 
 

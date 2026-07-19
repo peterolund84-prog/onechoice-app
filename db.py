@@ -525,25 +525,42 @@ def record_feedback(
     accepted: bool,
     path: Path | str | None = None,
 ) -> dict[str, Any]:
-    """Mark decision accepted/rejected and update preference scores."""
+    """Mark decision accepted/rejected and update preference scores.
+
+    If Supabase is selected but the row is missing / RLS fails, fall back to
+    local SQLite so accept never hard-crashes the UI mid-button-handler.
+    """
     if _use_supabase(path):
         import supabase_store as store
 
         at, rt = _tokens()
-        return store.record_feedback(
-            decision_id, accepted=accepted, access_token=at, refresh_token=rt
-        )
+        try:
+            return store.record_feedback(
+                decision_id, accepted=accepted, access_token=at, refresh_token=rt
+            )
+        except Exception as exc:
+            import logging
+
+            logging.getLogger("onechoice.db").warning(
+                "supabase record_feedback failed (%s); falling back to sqlite", exc
+            )
+            # Force sqlite for the remainder of this call
+            path = path or DB_PATH
+
     status = "accepted" if accepted else "rejected"
-    decision = set_decision_status(decision_id, status, path=path)
+    # path set → _use_supabase is False
+    decision = set_decision_status(decision_id, status, path=path or DB_PATH)
     delta = 1.0 if accepted else -1.0
-    upsert_preference(
-        decision["user_id"],
-        decision["domain"],
-        "suggestion",
-        decision["suggestion"].strip().lower(),
-        delta,
-        path=path,
-    )
+    suggestion = str(decision.get("suggestion") or "").strip().lower()
+    if suggestion:
+        upsert_preference(
+            decision["user_id"],
+            decision["domain"],
+            "suggestion",
+            suggestion,
+            delta,
+            path=path or DB_PATH,
+        )
     return decision
 
 

@@ -123,6 +123,13 @@ I18N = {
         "back_to_decision": "Tillbaka",
         "error_friendly": "Något gick fel — försök igen",
         "retry": "Försök igen",
+        "occasion_title": "Vart ska du?",
+        "occasion_hint": "Ett tryck — sen tar jag outfiten.",
+        "clothes_profile_title": "Dina kläder",
+        "clothes_section": "Var handlar du / vilken avdelning?",
+        "clothes_sizes": "Storlekar",
+        "clothes_save": "Spara klädprofil",
+        "clothes_saved": "Klädprofil sparad.",
         "refuse": "Onechoice tar vardagsbesluten. Det här beslutet är ditt.",
         "home": "Hem",
         "history": "Historik",
@@ -179,6 +186,13 @@ I18N = {
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
         "retry": "Try again",
+        "occasion_title": "Where are you going?",
+        "occasion_hint": "One tap — then I’ll pick the outfit.",
+        "clothes_profile_title": "Your clothes",
+        "clothes_section": "Which section do you shop?",
+        "clothes_sizes": "Sizes",
+        "clothes_save": "Save clothes profile",
+        "clothes_saved": "Clothes profile saved.",
         "refuse": "Onechoice handles everyday decisions. This one is yours.",
         "home": "Home",
         "history": "History",
@@ -504,6 +518,9 @@ def init_state() -> None:
         "pending_free_text": None,
         "force_route_domain": None,
         "ui_error": None,  # set by error boundary; cleared on retry
+        "clothes_occasion": None,  # jobb|vardag|fest|middag|traffa|barnkalas
+        "pending_clothes_question": "",
+        "occasion_by_hour": {},  # remembered most-common occasion per hour bucket
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -765,10 +782,27 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         q = pipeline._default_question(str(hint), st.session_state.language)
         st.session_state.last_question = q
 
+    # Clothes always need occasion first ("Vart ska du?")
+    if (
+        not reroll
+        and (hint == "clothes" or st.session_state.get("force_route_domain") == "clothes")
+        and not st.session_state.get("clothes_occasion")
+    ):
+        st.session_state.pending_clothes_question = q
+        st.session_state.last_domain_hint = "clothes"
+        st.session_state.page = "clothes_occasion"
+        st.rerun()
+        return
+
     prev_id = None
     cur = st.session_state.current
     if reroll and isinstance(cur, dict):
         prev_id = cur.get("decision_id")
+
+    context_extra: dict[str, Any] = {}
+    if st.session_state.get("clothes_occasion"):
+        context_extra["occasion"] = st.session_state.clothes_occasion
+        context_extra["intent"] = "wear"
 
     try:
         with st.spinner(t("loading")):
@@ -779,6 +813,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                     language=st.session_state.language,
                     grok_api_key=get_secret("GROK_API_KEY"),
                     forced_domain=st.session_state.force_route_domain,
+                    context_extra=context_extra or None,
                 )
                 st.session_state.force_route_domain = None
             elif via_router and reroll:
@@ -792,9 +827,9 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                     previous_decision_id=prev_id,
                     forced_domain=str(hint) if hint else None,
                     prior_route_log_id=st.session_state.route_log_id,
+                    context_extra=context_extra or None,
                 )
             else:
-                # Domain chip / resolved pick — direct pipeline (not free-text)
                 result = _safe_decide(
                     str(st.session_state.user_id),
                     q,
@@ -805,18 +840,34 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                     previous_decision_id=prev_id,
                     grok_api_key=get_secret("GROK_API_KEY"),
                     skip_feasibility=(str(hint) == "other"),
+                    context_extra=context_extra or None,
                 )
+        # Free-text may land on clothes without occasion — gate before showing
+        if (
+            getattr(result, "ok", False)
+            and getattr(result, "domain", None) == "clothes"
+            and not st.session_state.get("clothes_occasion")
+            and not reroll
+        ):
+            st.session_state.pending_clothes_question = q
+            st.session_state.last_domain_hint = "clothes"
+            st.session_state.page = "clothes_occasion"
+            st.rerun()
+            return
+
         st.session_state.route_log_id = getattr(result, "route_log_id", None)
         st.session_state.current = result.to_dict()
         st.session_state.decision_id = getattr(result, "decision_id", None)
-        # accepted is ONLY set by Handla & laga — not by max-reroll lock
         st.session_state.accepted = False
+        # Clear one-shot occasion after a successful clothes decision
+        if getattr(result, "domain", None) == "clothes":
+            pass  # keep occasion for justification / rerolls this session
         if result.ok and result.domain:
             st.session_state.last_domain_hint = result.domain
     except Exception as exc:
         log.exception("decide failed: %s", exc)
         st.session_state.ui_error = True
-        st.session_state.page = "home"
+        st.rerun()
         return
 
     if getattr(result, "needs_domain_pick", False):
@@ -864,52 +915,75 @@ def _is_streamlit_control_flow(exc: BaseException) -> bool:
     return name in ("RerunException", "StopException") or "Rerun" in name
 
 
-def accept_and_open_execute(cur: dict[str, Any]) -> None:
-    """
-    Handla & laga handler:
-    1) Lock decision (accepted) once — disable rerolls permanently for this decision
-    2) Navigate to execute view (shopping + recipe)
-    Re-tapping after accept only reopens execute (no second DB write).
+def safe_toast(message: str) -> None:
+    """st.toast needs Streamlit >=1.33 — older Cloud pins must not crash accept."""
+    toast = getattr(st, "toast", None)
+    if callable(toast):
+        try:
+            toast(message)
+            return
+        except Exception as exc:
+            log.warning("st.toast failed: %s", exc)
+    # Fallback: quiet success, never raise
+    st.caption(message)
 
-    DB accept is best-effort: if it fails we still open execute with a local lock
-    so the user is never stuck on the friendly error screen after tapping.
+
+def accept_current_decision(cur: dict[str, Any] | None = None) -> bool:
     """
+    Shared accept for ALL domains (food / clothes / movie / workout / weekend).
+
+    - Never raises into the Streamlit render loop (root cause of stacked error card)
+    - Guest mode always clears Supabase auth so we hit local SQLite consistently
+    - Mirrors accepted/locked into session_state even if DB write soft-fails
+    Returns True when the decision is now accepted in session.
+    """
+    cur = cur if isinstance(cur, dict) else (st.session_state.get("current") or {})
+    if not isinstance(cur, dict):
+        cur = {}
+
     require_auth_context()
     if st.session_state.get("guest_mode"):
         db.clear_auth()
+        st.session_state.access_token = None
+        st.session_state.refresh_token = None
 
-    already = bool(st.session_state.get("accepted") or cur.get("accepted"))
+    if st.session_state.get("accepted") or cur.get("accepted"):
+        return True
+
     did = _active_decision_id(cur)
-    # Fall back to raw id from payload for session mirroring
-    raw_id = did if did is not None else cur.get("decision_id") or st.session_state.get("decision_id")
+    raw_id = did if did is not None else cur.get("decision_id") or st.session_state.get(
+        "decision_id"
+    )
+    route_log_id = cur.get("route_log_id") or st.session_state.get("route_log_id")
 
-    if not already:
-        if did is not None:
-            try:
-                pipeline.accept_decision(
-                    did,
-                    route_log_id=cur.get("route_log_id")
-                    or st.session_state.get("route_log_id"),
-                )
-            except Exception as exc:
-                # Soft-fail: shopping/recipe live in session — still open execute
-                log.exception("accept_decision failed (continuing to execute): %s", exc)
-        else:
-            log.warning(
-                "Handla & laga: decision_id missing — locking locally and opening execute"
-            )
+    pipeline.try_accept_decision(did, route_log_id=route_log_id)
 
-        st.session_state.accepted = True
-        if raw_id is not None:
-            st.session_state.decision_id = raw_id
-        updated = dict(cur)
-        updated["locked"] = True
-        updated["accepted"] = True
-        if raw_id is not None:
-            updated["decision_id"] = raw_id
-        st.session_state.current = updated
+    st.session_state.accepted = True
+    if raw_id is not None:
+        st.session_state.decision_id = raw_id
+    updated = dict(cur)
+    updated["locked"] = True
+    updated["accepted"] = True
+    if raw_id is not None:
+        updated["decision_id"] = raw_id
+    st.session_state.current = updated
+    return True
 
+
+def accept_and_open_execute(cur: dict[str, Any]) -> None:
+    """Handla & laga: accept (all-domain pipeline) then open execute view."""
+    accept_current_decision(cur)
     st.session_state.page = "execute"
+    st.rerun()
+
+
+def raise_ui_error(where: str, exc: BaseException | None = None) -> None:
+    """Replace the whole content area with the friendly error (never stack mid-page)."""
+    if exc is not None:
+        log.error("ui error at %s:\n%s", where, traceback.format_exc())
+    else:
+        log.error("ui error at %s", where)
+    st.session_state.ui_error = True
     st.rerun()
 
 
@@ -1035,8 +1109,43 @@ def page_home() -> None:
         elif len(question) > rt.MAX_INPUT_CHARS:
             st.warning(t("too_long"))
         else:
-            # Free-text — router gatekeeper, no bypass
             run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
+    nav()
+
+
+def page_clothes_occasion() -> None:
+    """One-tap 'Vart ska du?' — primary input before any clothes decision."""
+    import clothes_domain as cd
+    from datetime import datetime
+
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="oc-tagline">{html.escape(t("occasion_title"))}</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(t("occasion_hint"))
+
+    language = st.session_state.get("language", "sv")
+    now = datetime.now().astimezone()
+    hour = now.hour
+    remembered = (st.session_state.get("occasion_by_hour") or {}).get(str(hour))
+    preselect = remembered or cd.default_occasion(hour, weekday=now.weekday() < 5)
+
+    # Chip grid via query params — same pattern as domains (one tap)
+    chips = []
+    for key in cd.OCCASION_ORDER:
+        label = cd.occasion_label(key, language)
+        style = ""
+        if key == preselect:
+            style = ' style="background:#EAF1FF;color:#5A8BFF;font-weight:700;"'
+        chips.append(f'<a href="?occasion={key}"{style}>{html.escape(label)}</a>')
+    st.markdown(f'<div class="oc-domains">{"".join(chips)}</div>', unsafe_allow_html=True)
+
+    if st.button(t("home"), use_container_width=True, key="occasion_home"):
+        st.session_state.page = "home"
+        st.session_state.clothes_occasion = None
+        st.rerun()
     nav()
 
 
@@ -1135,15 +1244,8 @@ def page_result() -> None:
             if exec_url:
                 st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
-                did = _active_decision_id(cur)
-                if did is not None:
-                    pipeline.accept_decision(
-                        did,
-                        route_log_id=cur.get("route_log_id")
-                        or st.session_state.get("route_log_id"),
-                    )
-                    st.session_state.accepted = True
-                st.toast(t("accepted"))
+                accept_current_decision(cur)
+                safe_toast(t("accepted"))
         if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
             st.session_state.page = "home"
             st.rerun()
@@ -1187,34 +1289,14 @@ def page_result() -> None:
         if st.button(label, type="primary", use_container_width=True, key="handla_accept"):
             accept_and_open_execute(cur)
     else:
-        exec_url = cur.get("execution_url")
+        # Shared accept for clothes / movie / workout / weekend
         exec_label = cur.get("execution_label") or t("do_it")
-        if exec_url:
-            st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
-            # Accept on navigate intent (optional persist)
-            if _active_decision_id(cur) and st.button(
-                t("accepted"), type="secondary", use_container_width=True, key="accept_link"
-            ):
-                pipeline.accept_decision(
-                    _active_decision_id(cur),
-                    route_log_id=cur.get("route_log_id") or st.session_state.get("route_log_id"),
-                )
-                st.session_state.accepted = True
-                st.toast(t("accepted"))
-        else:
-            if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
-                did = _active_decision_id(cur)
-                if did is not None:
-                    pipeline.accept_decision(
-                        did,
-                        route_log_id=cur.get("route_log_id")
-                        or st.session_state.get("route_log_id"),
-                    )
-                    st.session_state.accepted = True
-                    st.session_state.decision_id = did
-                st.toast(t("accepted"))
+        if st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
+            accept_current_decision(cur)
+            safe_toast(t("accepted"))
+            st.rerun()  # locked card; never leave a mid-page error under the decision
 
-    # Secondary: reroll — disabled once accepted (guarded above); hidden when locked
+    # Secondary: reroll — hidden once accepted (lock card branch above)
     st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
     if st.button(t("new"), type="secondary", use_container_width=True, key="reroll_link"):
         via = bool(cur.get("route") or st.session_state.get("route_log_id"))
@@ -1330,6 +1412,10 @@ def page_history() -> None:
 
 
 def page_profile() -> None:
+    import json
+
+    import clothes_domain as cd
+
     lang_bar()
     require_auth_context()
     st.markdown(
@@ -1353,6 +1439,56 @@ def page_profile() -> None:
             db.update_user(st.session_state.user_id, is_pro=1)
             st.session_state.is_pro = True
             st.rerun()
+
+    # --- Clothes onboarding (section + sizes) — used by the clothes generator ---
+    st.markdown(
+        f'<p class="oc-logo" style="font-size:1.15rem;margin-top:1.4rem">'
+        f'{html.escape(t("clothes_profile_title"))}</p>',
+        unsafe_allow_html=True,
+    )
+    raw_profile = user.get("profile_json") or {}
+    if isinstance(raw_profile, str):
+        try:
+            raw_profile = json.loads(raw_profile)
+        except json.JSONDecodeError:
+            raw_profile = {}
+    ensured = cd.ensure_clothes_profile(raw_profile if isinstance(raw_profile, dict) else {})
+    clothes = ensured.get("clothes") or {}
+
+    section = st.selectbox(
+        t("clothes_section"),
+        options=["herr", "dam", "båda"],
+        index=["herr", "dam", "båda"].index(str(clothes.get("section") or "båda")),
+        key="prof_clothes_section",
+    )
+    st.caption(t("clothes_sizes"))
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        top = st.text_input("Topp", value=str((clothes.get("sizes") or {}).get("top") or "M"), key="prof_size_top")
+    with c2:
+        bottom = st.text_input(
+            "Byxa",
+            value=str((clothes.get("sizes") or {}).get("bottom") or "32"),
+            key="prof_size_bottom",
+        )
+    with c3:
+        shoes = st.text_input(
+            "Skor",
+            value=str((clothes.get("sizes") or {}).get("shoes") or "42"),
+            key="prof_size_shoes",
+        )
+    if st.button(t("clothes_save"), use_container_width=True, key="save_clothes_profile"):
+        new_profile = dict(ensured)
+        new_profile["clothes"] = {
+            **clothes,
+            "section": section,
+            "sizes": {"top": top.strip() or "M", "bottom": bottom.strip() or "32", "shoes": shoes.strip() or "42"},
+            "onboarded": True,
+            "retailers": clothes.get("retailers") or ["Zalando", "H&M", "Lindex"],
+        }
+        db.update_user(st.session_state.user_id, profile_json=new_profile)
+        safe_toast(t("clothes_saved"))
+        st.rerun()
 
     if st.button(t("logout"), use_container_width=True):
         import supabase_client as sb
@@ -1411,7 +1547,46 @@ def handle_query_params() -> None:
             del st.query_params["domain"]
         except Exception:
             pass
+        if domain == "clothes":
+            st.session_state.last_domain_hint = "clothes"
+            st.session_state.pending_clothes_question = pipeline._default_question(
+                "clothes", st.session_state.get("language", "sv")
+            )
+            st.session_state.clothes_occasion = None
+            st.session_state.page = "clothes_occasion"
+            st.rerun()
+            return
         run_decision(question="", domain_hint=domain, reroll=False, via_router=False)
+
+    # Clothes occasion chips
+    import clothes_domain as cd
+
+    occasion = _qp_one(qp.get("occasion"))
+    if occasion in cd.OCCASIONS:
+        try:
+            del st.query_params["occasion"]
+        except Exception:
+            pass
+        from datetime import datetime
+
+        hour = str(datetime.now().astimezone().hour)
+        hist = dict(st.session_state.get("occasion_by_hour") or {})
+        hist[hour] = occasion
+        st.session_state.occasion_by_hour = hist
+        st.session_state.clothes_occasion = occasion
+        pending = (
+            st.session_state.get("pending_clothes_question")
+            or st.session_state.get("last_question")
+            or pipeline._default_question("clothes", st.session_state.get("language", "sv"))
+        )
+        st.session_state.last_domain_hint = "clothes"
+        run_decision(
+            question=pending,
+            domain_hint="clothes",
+            reroll=False,
+            via_router=False,
+        )
+        return
 
     # AMBIGUOUS resolution chips
     pick = _qp_one(qp.get("pick"))
@@ -1424,6 +1599,12 @@ def handle_query_params() -> None:
         st.session_state.force_route_domain = pick
         st.session_state.last_domain_hint = pick
         st.session_state.pending_free_text = None
+        if pick == "clothes":
+            st.session_state.pending_clothes_question = pending
+            st.session_state.clothes_occasion = None
+            st.session_state.page = "clothes_occasion"
+            st.rerun()
+            return
         run_decision(
             question=pending,
             domain_hint=pick,
@@ -1437,6 +1618,7 @@ def main() -> None:
     inject_css()
     require_auth_context()
 
+    # Friendly error REPLACES the content area — never stacks under a decision card
     if st.session_state.get("ui_error"):
         render_error_boundary()
         return
@@ -1448,7 +1630,7 @@ def main() -> None:
             raise
         log.error("query-param handler failed:\n%s", traceback.format_exc())
         st.session_state.ui_error = True
-        render_error_boundary()
+        st.rerun()
         return
 
     pages: dict[str, Callable[[], None]] = {
@@ -1459,6 +1641,7 @@ def main() -> None:
         "profile": page_profile,
         "ambiguous": page_ambiguous,
         "not_a_decision": page_not_a_decision,
+        "clothes_occasion": page_clothes_occasion,
         "home": page_home,
     }
     page_name = st.session_state.get("page") or "home"
@@ -1470,13 +1653,12 @@ def main() -> None:
     try:
         render()
     except BaseException as exc:
-        # Never swallow st.rerun() / st.stop() — that falsely shows "Något gick fel"
         if _is_streamlit_control_flow(exc):
             raise
-        # Hard requirement: never show raw traceback to the user
+        # Rerun into clean error-only view (do not paint error under partial page)
         log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
         st.session_state.ui_error = True
-        render_error_boundary()
+        st.rerun()
 
 
 if __name__ == "__main__":

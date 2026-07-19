@@ -112,6 +112,16 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
     clothes.setdefault("sizes", ctx.get("sizes") or {"top": "M", "bottom": "32", "shoes": "42"})
     clothes.setdefault("styles", ctx.get("styles") or ["casual"])
     clothes.setdefault("wardrobe", wardrobe if isinstance(wardrobe, list) else [])
+    try:
+        import clothes_domain as cd
+
+        clothes = cd.ensure_clothes_profile({"clothes": clothes}).get("clothes") or clothes
+    except Exception:
+        pass
+    if ctx.get("clothing_section"):
+        clothes["section"] = ctx["clothing_section"]
+    if ctx.get("sizes") and isinstance(ctx.get("sizes"), dict):
+        clothes["sizes"] = {**(clothes.get("sizes") or {}), **ctx["sizes"]}
 
     movie.setdefault(
         "services",
