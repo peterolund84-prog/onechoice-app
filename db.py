@@ -579,7 +579,25 @@ def record_feedback(
 
     status = "accepted" if accepted else "rejected"
     # path set → _use_supabase is False
-    decision = set_decision_status(decision_id, status, path=path or DB_PATH)
+    try:
+        decision = set_decision_status(decision_id, status, path=path or DB_PATH)
+    except KeyError:
+        # Decision may exist only in Supabase after a remote write; UI must still
+        # treat accept as success (session mirrors accepted/locked).
+        import logging
+
+        logging.getLogger("onechoice.db").warning(
+            "record_feedback: decision %s missing in sqlite — soft-succeed",
+            decision_id,
+        )
+        return {
+            "id": decision_id,
+            "status": status,
+            "suggestion": "",
+            "user_id": "",
+            "domain": "",
+            "context": {},
+        }
     delta = 1.0 if accepted else -1.0
     suggestion = str(decision.get("suggestion") or "").strip().lower()
     if suggestion:

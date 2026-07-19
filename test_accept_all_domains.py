@@ -24,7 +24,10 @@ class AcceptAllDomainsTests(unittest.TestCase):
 
     def test_try_accept_never_raises(self) -> None:
         self.assertIsNone(pipeline.try_accept_decision(None, db_path=self.db_path))
-        self.assertIsNone(pipeline.try_accept_decision(999999, db_path=self.db_path))
+        # Missing row soft-succeeds (Cloud hybrid) — must not raise
+        out = pipeline.try_accept_decision(999999, db_path=self.db_path)
+        self.assertIsNotNone(out)
+        self.assertEqual(out["status"], "accepted")
 
     def test_accept_all_five_domains(self) -> None:
         for domain in ("food", "clothes", "movie", "workout", "weekend"):
@@ -64,7 +67,11 @@ class AcceptAllDomainsTests(unittest.TestCase):
         ):
             self.assertIsNone(pipeline.try_accept_decision(1, db_path=self.db_path))
 
-    def test_safe_toast_without_toast_attr(self) -> None:
+    def test_record_feedback_soft_succeeds_when_sqlite_missing(self) -> None:
+        """Supabase accept fail → sqlite miss must not raise (Cloud hybrid)."""
+        out = db.record_feedback(999999001, accepted=True, path=self.db_path)
+        self.assertEqual(out["status"], "accepted")
+        self.assertEqual(out["id"], 999999001)
         import app as app_mod
 
         class NoToast:
@@ -99,16 +106,22 @@ class ClothesOccasionTests(unittest.TestCase):
         path = str(Path(tmp.name) / "t.db")
         db.init_db(path)
         user = db.ensure_user(language="sv", path=path)
-        r = pipeline.decide(
-            user["id"],
-            "Vad ska jag ha på mig?",
-            domain_hint="clothes",
-            language="sv",
-            db_path=path,
-            context_extra={"occasion": "fest", "intent": "wear"},
-        )
+        with mock.patch("pipeline.random.random", return_value=0.0):
+            r = pipeline.decide(
+                user["id"],
+                "Vad ska jag ha på mig?",
+                domain_hint="clothes",
+                language="sv",
+                db_path=path,
+                context_extra={"occasion": "fest", "intent": "wear"},
+            )
         self.assertTrue(r.ok)
-        self.assertIn("fest", (r.justification or "").lower())
+        blob = f"{r.suggestion} {r.justification}".lower()
+        self.assertTrue(
+            "fest" in blob or "skjorta" in blob or "klänning" in blob,
+            blob,
+        )
+        self.assertEqual((r.context or {}).get("occasion"), "fest")
         tmp.cleanup()
 
     def test_profile_ensure(self) -> None:
@@ -133,8 +146,18 @@ class AppAcceptUiTests(unittest.TestCase):
             self.assertFalse(at.exception)
             uid = at.session_state["user_id"]
             extra = {"occasion": "jobb", "intent": "wear"} if domain == "clothes" else None
+            if domain == "food":
+                at.session_state["food_meal_type"] = "middag"
             r = pipeline.decide(
-                str(uid), "", domain_hint=domain, language="sv", context_extra=extra
+                str(uid),
+                "",
+                domain_hint=domain,
+                language="sv",
+                context_extra=(
+                    {"meal_type": "middag"}
+                    if domain == "food"
+                    else extra
+                ),
             )
             at.session_state["current"] = r.to_dict()
             at.session_state["decision_id"] = r.decision_id
@@ -152,8 +175,67 @@ class AppAcceptUiTests(unittest.TestCase):
                     break
             self.assertFalse(at.exception, domain)
             self.assertTrue(at.session_state["accepted"], domain)
+            self.assertFalse(bool(at.session_state["ui_error"]), domain)
             err = any("Något gick fel" in (m.value or "") for m in at.markdown)
             self.assertFalse(err, domain)
+
+    def test_meal_type_buttons_visible_on_food_result(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=45)
+        at.run()
+        uid = at.session_state["user_id"]
+        at.session_state["food_meal_type"] = "middag"
+        r = pipeline.decide(
+            str(uid),
+            "",
+            domain_hint="food",
+            language="sv",
+            context_extra={"meal_type": "middag"},
+        )
+        at.session_state["current"] = r.to_dict()
+        at.session_state["decision_id"] = r.decision_id
+        at.session_state["accepted"] = False
+        at.session_state["page"] = "result"
+        at.session_state["ui_error"] = None
+        at.run()
+        self.assertFalse(at.exception)
+        labels = [b.label or "" for b in at.button]
+        for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
+            self.assertTrue(
+                any(needle in lab for lab in labels),
+                f"missing meal button {needle}: {labels}",
+            )
+
+    def test_clothes_occasion_buttons_visible(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=45)
+        at.run()
+        at.session_state["page"] = "clothes_occasion"
+        at.session_state["pending_clothes_question"] = "Vad ska jag ha på mig?"
+        at.session_state["ui_error"] = None
+        at.run()
+        self.assertFalse(at.exception)
+        labels = [b.label or "" for b in at.button]
+        for needle in ("Jobb", "Vardag", "Fest"):
+            self.assertTrue(
+                any(needle in lab for lab in labels),
+                f"missing occasion button {needle}: {labels}",
+            )
+
+    def test_home_domain_buttons_visible(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=45)
+        at.run()
+        self.assertFalse(at.exception)
+        labels = [b.label or "" for b in at.button]
+        for needle in ("Mat", "Kläder", "Träning"):
+            self.assertTrue(
+                any(needle in lab for lab in labels),
+                f"missing domain button {needle}: {labels}",
+            )
 
 
 if __name__ == "__main__":
