@@ -322,7 +322,9 @@ div.stButton > button[data-testid="baseButton-primary"] {{
     box-shadow: 0 12px 28px rgba(90,139,255,0.32) !important;
     font-family: "Manrope", sans-serif !important;
 }}
-div.stButton > button[data-testid="baseButton-secondary"] {{
+/* Link-style secondary ONLY outside chip grids (Hem / Nytt förslag) */
+div.stButton > button[data-testid="baseButton-secondary"],
+div.stButton > button[kind="secondary"] {{
     background: transparent !important; color: {MUTED} !important;
     border: none !important; box-shadow: none !important;
     border-radius: 0 !important; font-weight: 500 !important;
@@ -331,13 +333,62 @@ div.stButton > button[data-testid="baseButton-secondary"] {{
     text-underline-offset: 3px !important;
     font-family: "Manrope", sans-serif !important;
 }}
-div.stButton > button[kind="secondary"] {{
-    background: transparent !important; color: {MUTED} !important;
-    border: none !important; box-shadow: none !important;
+/* Domain / occasion / meal chips live in horizontal blocks — must look like pills,
+   not ghost underlines (root cause of "inga val syns" on Cloud). */
+div[data-testid="stHorizontalBlock"] div.stButton > button,
+div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
+div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
+div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
+div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+    background: #fff !important;
+    color: #444 !important;
+    border: 1px solid rgba(62,91,132,0.10) !important;
+    border-radius: 999px !important;
+    box-shadow: {SHADOW} !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    min-height: 2.7rem !important;
+    height: auto !important;
+    width: 100% !important;
+    text-decoration: none !important;
+    padding: 0.55rem 0.6rem !important;
+    font-family: "Manrope", sans-serif !important;
+}}
+div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
+div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+    background: {PRIMARY_SOFT} !important;
+    color: {PRIMARY} !important;
+    font-weight: 700 !important;
+    border-color: rgba(90,139,255,0.35) !important;
+    box-shadow: none !important;
+}}
+/* st.pills / button_group — same chip look */
+div[data-testid="stButtonGroup"] button,
+[data-testid="stButtonGroup"] button {{
+    background: #fff !important;
+    color: #444 !important;
+    border: 1px solid rgba(62,91,132,0.10) !important;
+    border-radius: 999px !important;
+    box-shadow: {SHADOW} !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+    min-height: 2.5rem !important;
+    text-decoration: none !important;
+    font-family: "Manrope", sans-serif !important;
+}}
+div[data-testid="stButtonGroup"] button[aria-checked="true"],
+[data-testid="stButtonGroup"] button[aria-pressed="true"] {{
+    background: {PRIMARY_SOFT} !important;
+    color: {PRIMARY} !important;
+    font-weight: 700 !important;
+    border-color: rgba(90,139,255,0.35) !important;
 }}
 @media (max-width: 768px) {{
     div.stButton > button[data-testid="baseButton-primary"] {{
         height: 52px !important; font-size: 1rem !important;
+    }}
+    div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {{
+        height: auto !important; font-size: 0.88rem !important;
     }}
 }}
 .oc-decision {{
@@ -484,11 +535,29 @@ div[data-testid="stCheckbox"] label {{
 .oc-nav a.active {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; font-weight: 700; }}
 .oc-nav .oc-ico {{ width: 1.15rem; height: 1.15rem; display: block; }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
+/* Meal pills + profile fields need visible labels */
+div[data-testid="stButtonGroup"] [data-testid="stWidgetLabel"],
+div[data-testid="stButtonGroup"] ~ div [data-testid="stWidgetLabel"],
+.stButtonGroup [data-testid="stWidgetLabel"],
+div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
+div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] {{
+    display: flex !important;
+}}
+/* Streamlit wraps pills label above the group */
+.stElementContainer:has([data-testid="stButtonGroup"]) [data-testid="stWidgetLabel"],
+[data-testid="stVerticalBlock"] [data-testid="stWidgetLabel"]:has(+ * [data-testid="stButtonGroup"]) {{
+    display: flex !important;
+}}
 div[data-testid="stHorizontalBlock"] {{
     display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
 }}
 div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
     min-width: 0 !important; flex: 1 1 0 !important;
+}}
+/* Ensure chip rows are not collapsed to 0 height on Cloud */
+div[data-testid="stHorizontalBlock"] div.stButton {{
+    width: 100% !important;
+    min-height: 2.7rem !important;
 }}
 </style>
         """,
@@ -1002,7 +1071,6 @@ def on_accept_primary(cur: dict[str, Any]) -> None:
         if _is_streamlit_control_flow(exc):
             raise
         log.exception("on_accept_primary failed: %s", exc)
-        # Still lock locally so the user is not stuck
         st.session_state.accepted = True
         updated = dict(cur) if isinstance(cur, dict) else {}
         updated["locked"] = True
@@ -1012,6 +1080,8 @@ def on_accept_primary(cur: dict[str, Any]) -> None:
         safe_toast(t("accepted"))
     except Exception:
         pass
+    # Mark so a misclassified RerunException cannot become the error boundary
+    st.session_state.pop("ui_error", None)
     st.rerun()
 
 
@@ -1029,6 +1099,7 @@ def accept_and_open_execute(cur: dict[str, Any]) -> None:
         updated["accepted"] = True
         st.session_state.current = updated
     st.session_state.page = "execute"
+    st.session_state.pop("ui_error", None)
     st.rerun()
 
 
@@ -1142,7 +1213,7 @@ def page_home() -> None:
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="oc-tagline">{html.escape(t("tagline"))}</p>', unsafe_allow_html=True)
 
-    # Real Streamlit buttons — HTML ?domain= links are unreliable on Streamlit Cloud
+    # Real Streamlit buttons — styled as chips via horizontal-block CSS
     domains = ("food", "clothes", "movie", "workout", "weekend")
     cols = st.columns(2)
     for i, d in enumerate(domains):
@@ -1151,6 +1222,7 @@ def page_home() -> None:
                 domain_label(d),
                 key=f"domain_chip_{d}",
                 use_container_width=True,
+                type="secondary",
             ):
                 if d == "clothes":
                     st.session_state.last_domain_hint = "clothes"
@@ -1207,14 +1279,18 @@ def page_clothes_occasion() -> None:
     remembered = (st.session_state.get("occasion_by_hour") or {}).get(str(hour))
     preselect = remembered or cd.default_occasion(hour, weekday=now.weekday() < 5)
 
-    # Streamlit buttons (not HTML links) — visible + reliable on Cloud
+    # Visible chip buttons (CSS targets horizontal blocks — not ghost secondary links)
     cols = st.columns(2)
     for i, key in enumerate(cd.OCCASION_ORDER):
         label = cd.occasion_label(key, language)
-        if key == preselect:
-            label = f"● {label}"
+        is_sel = key == preselect
         with cols[i % 2]:
-            if st.button(label, key=f"occasion_btn_{key}", use_container_width=True):
+            if st.button(
+                f"● {label}" if is_sel else label,
+                key=f"occasion_btn_{key}",
+                use_container_width=True,
+                type="primary" if is_sel else "secondary",
+            ):
                 hist = dict(st.session_state.get("occasion_by_hour") or {})
                 hist[str(hour)] = key
                 st.session_state.occasion_by_hour = hist
@@ -1262,7 +1338,7 @@ def page_ambiguous() -> None:
 
 
 def render_meal_type_chips(cur: dict[str, Any]) -> None:
-    """Four meal chips above the food decision — Streamlit buttons, not HTML links."""
+    """Meal type chooser above the food decision — st.pills (visible on Cloud)."""
     import food_domain as fd
 
     language = st.session_state.get("language", "sv")
@@ -1275,34 +1351,37 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
         current = fd.default_meal_type()
     st.session_state.food_meal_type = current
 
+    # Session-state only (no default=) — avoids Streamlit warning and overwrite races
+    if st.session_state.get("meal_pills") not in fd.MEAL_TYPES:
+        st.session_state.meal_pills = current
+
     st.caption("Måltid" if language == "sv" else "Meal")
-    cols = st.columns(4)
-    for i, key in enumerate(fd.MEAL_ORDER):
-        label = fd.meal_label(key, language)
-        is_sel = key == current
-        with cols[i]:
-            clicked = st.button(
-                f"● {label}" if is_sel else label,
-                key=f"meal_btn_{key}",
-                use_container_width=True,
-                type="primary" if is_sel else "secondary",
+    choice = st.pills(
+        "Måltid" if language == "sv" else "Meal",
+        options=list(fd.MEAL_ORDER),
+        format_func=lambda k: fd.meal_label(k, language),
+        selection_mode="single",
+        key="meal_pills",
+        label_visibility="collapsed",
+    )
+    if choice is None:
+        choice = current
+    if choice != current:
+        st.session_state.food_meal_type = choice
+        st.session_state.accepted = False
+        pending = (
+            st.session_state.get("last_question")
+            or pipeline._default_question(
+                "food", st.session_state.get("language", "sv")
             )
-            if clicked and key != current:
-                st.session_state.food_meal_type = key
-                st.session_state.accepted = False
-                pending = (
-                    st.session_state.get("last_question")
-                    or pipeline._default_question(
-                        "food", st.session_state.get("language", "sv")
-                    )
-                )
-                st.session_state.last_domain_hint = "food"
-                run_decision(
-                    question=pending,
-                    domain_hint="food",
-                    reroll=False,
-                    via_router=False,
-                )
+        )
+        st.session_state.last_domain_hint = "food"
+        run_decision(
+            question=pending,
+            domain_hint="food",
+            reroll=False,
+            via_router=False,
+        )
 
 
 def page_not_a_decision() -> None:
@@ -1848,6 +1927,13 @@ def main() -> None:
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
+        # Accept already locked the decision — never replace success with error page
+        if st.session_state.get("accepted") and page_name in ("result", "execute"):
+            log.exception(
+                "post-accept render noise on %s (ignored): %s", page_name, exc
+            )
+            st.session_state.pop("ui_error", None)
+            return
         # Rerun into clean error-only view (do not paint error under partial page)
         log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
         st.session_state.ui_error = True
