@@ -6,6 +6,7 @@ Minimalistisk premium koreansk estetik.
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import re
@@ -46,34 +47,34 @@ FREE_LIMIT = 5
 
 IMAGES: dict[str, list[str]] = {
     "food": [
-        "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=500&h=500&fit=crop",
+        "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=800&h=800&fit=crop&q=80",
     ],
     "clothes": [
-        "https://images.unsplash.com/photo-1542272604-787c3835535d?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=500&h=500&fit=crop",
+        "https://images.unsplash.com/photo-1542272604-787c3835535d?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?w=800&h=800&fit=crop&q=80",
     ],
     "travel": [
-        "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1449158743715-0a90ebb4d4f8?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=500&h=500&fit=crop",
+        "https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1449158743715-0a90ebb4d4f8?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1555881400-74d7acaacd8b?w=800&h=800&fit=crop&q=80",
     ],
     "career": [
-        "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&h=500&fit=crop",
+        "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1521737711867-e3b97375f902?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=800&h=800&fit=crop&q=80",
     ],
     "evening": [
-        "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=500&h=500&fit=crop",
+        "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800&h=800&fit=crop&q=80",
     ],
     "general": [
-        "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=500&h=500&fit=crop",
-        "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=500&h=500&fit=crop",
+        "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1506784983877-45594efa4cbe?w=800&h=800&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1484480974693-6ca0a78fb36b?w=800&h=800&fit=crop&q=80",
     ],
 }
 
@@ -195,7 +196,8 @@ def inject_css() -> None:
 
 html, body, .stApp, [data-testid="stAppViewContainer"] {{
     background:
-        radial-gradient(120% 80% at 50% -10%, {PRIMARY_SOFT} 0%, transparent 55%),
+        radial-gradient(110% 70% at 80% -5%, rgba(90,139,255,0.14) 0%, transparent 50%),
+        radial-gradient(90% 60% at 10% 0%, rgba(245,240,230,0.55) 0%, transparent 45%),
         linear-gradient(180deg, {BG} 0%, {BG_SOFT} 100%) !important;
     font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
                  "Helvetica Neue", Helvetica, sans-serif !important;
@@ -209,246 +211,274 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 }}
 .block-container {{
     max-width: 400px !important;
-    padding: 1.35rem 1.35rem 9rem !important;
+    padding: 1.2rem 1.3rem 9.5rem !important;
 }}
 @media (max-width: 480px) {{
-    .block-container {{ padding: 1.1rem 1.15rem 8.5rem !important; }}
+    .block-container {{ padding: 1rem 1.05rem 9rem !important; }}
 }}
 
-/* ----- Top bar: brand + round lang buttons ----- */
+/* ----- Brand ----- */
 .oc-topbar {{
     display: flex; align-items: center; justify-content: center;
-    position: relative; min-height: 3rem; margin: 0.15rem 0 0.5rem;
+    position: relative; min-height: 2.85rem; margin: 0.1rem 0 0.35rem;
 }}
 .oc-logo {{
-    text-align: center; font-weight: 700; font-size: 1.6rem;
-    letter-spacing: -0.05em; color: {INK}; line-height: 1;
+    text-align: center; font-weight: 700; font-size: 1.62rem;
+    letter-spacing: -0.055em; color: {INK}; line-height: 1;
 }}
 .oc-logo em {{ font-style: normal; color: {PRIMARY}; }}
 .oc-logo-sm {{
-    text-align: center; font-weight: 600; font-size: 1.35rem;
+    text-align: center; font-weight: 600; font-size: 1.32rem;
     letter-spacing: -0.04em; color: {INK};
 }}
+
+/* ----- Round SV/EN top-right ----- */
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"]) {{
     position: absolute !important;
-    top: 1.15rem !important;
-    right: max(1.15rem, calc(50% - 200px + 1.15rem)) !important;
+    top: 1.05rem !important;
+    right: max(0.95rem, calc(50% - 200px + 0.95rem)) !important;
     width: auto !important;
-    gap: 0.45rem !important;
-    z-index: 50 !important;
+    gap: 0.4rem !important;
+    z-index: 60 !important;
     justify-content: flex-end !important;
+    margin: 0 !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"])
 > div[data-testid="stColumn"] {{
-    width: auto !important; flex: 0 0 auto !important;
-    min-width: 0 !important;
+    width: auto !important; flex: 0 0 auto !important; min-width: 0 !important;
+    padding: 0 !important;
 }}
 div[class*="st-key-lang_sv"],
 div[class*="st-key-lang_en"] {{
-    width: 42px !important;
+    width: 40px !important;
 }}
 div[class*="st-key-lang_sv"] button,
 div[class*="st-key-lang_en"] button {{
-    width: 42px !important; height: 42px !important;
-    min-height: 42px !important; max-width: 42px !important;
+    width: 40px !important; height: 40px !important;
+    min-height: 40px !important; max-width: 40px !important;
     padding: 0 !important; border-radius: 50% !important;
-    font-size: 0.68rem !important; font-weight: 700 !important;
-    letter-spacing: 0.02em !important;
-    box-shadow: {SHADOW_SOFT} !important;
-    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+    font-size: 0.66rem !important; font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    box-shadow: 0 4px 14px rgba(62, 91, 132, 0.08) !important;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease !important;
 }}
 div[class*="st-key-lang_sv"] button:hover,
 div[class*="st-key-lang_en"] button:hover {{
-    transform: translateY(-1px) !important;
+    transform: translateY(-1px) scale(1.03) !important;
 }}
 div[class*="st-key-lang_sv"] button[data-testid="baseButton-primary"],
 div[class*="st-key-lang_en"] button[data-testid="baseButton-primary"] {{
-    background: {PRIMARY} !important; color: #fff !important;
-    border: none !important;
-    box-shadow: 0 8px 20px rgba(90, 139, 255, 0.35) !important;
+    background: {PRIMARY} !important; color: #fff !important; border: none !important;
+    box-shadow: 0 8px 18px rgba(90, 139, 255, 0.38) !important;
 }}
 div[class*="st-key-lang_sv"] button[data-testid="baseButton-secondary"],
 div[class*="st-key-lang_en"] button[data-testid="baseButton-secondary"] {{
-    background: rgba(255,255,255,0.92) !important; color: {MUTED} !important;
-    border: 1px solid rgba(62, 91, 132, 0.08) !important;
+    background: rgba(255,255,255,0.95) !important; color: {MUTED} !important;
+    border: 1px solid rgba(62, 91, 132, 0.07) !important;
 }}
 
-/* ----- Hero tagline (no card) ----- */
+/* ----- Hero (text only, no box) ----- */
 .oc-hero {{
-    background: transparent; border-radius: 0;
-    padding: 2.4rem 0.35rem 1.15rem; margin: 0;
-    text-align: center;
+    background: transparent; padding: 2.15rem 0.4rem 1.05rem;
+    margin: 0; text-align: center;
 }}
 .oc-hero h1 {{
-    font-size: 1.42rem; font-weight: 600; letter-spacing: -0.035em;
-    line-height: 1.4; margin: 0; color: {INK};
+    font-size: clamp(1.2rem, 4.6vw, 1.45rem); font-weight: 600;
+    letter-spacing: -0.035em; line-height: 1.4; margin: 0; color: {INK};
 }}
 .oc-topic {{
     display: inline-block; background: {PRIMARY_SOFT}; color: {PRIMARY};
-    font-size: 0.72rem; font-weight: 600; padding: 0.32rem 0.85rem;
-    border-radius: 999px; margin: 0.35rem 0 1.25rem;
+    font-size: 0.7rem; font-weight: 600; padding: 0.34rem 0.9rem;
+    border-radius: 999px; margin: 0.25rem 0 1.15rem; letter-spacing: 0.01em;
 }}
 
-/* ----- Clean input: one soft field, no nested white boxes ----- */
+/* ----- Clean single input field ----- */
 div[data-testid="stTextArea"],
 div[data-testid="stTextArea"] > div,
 div[data-testid="stTextArea"] > div > div,
 .stTextArea, .stTextArea > div, .stTextArea [data-baseweb="textarea"] {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; padding: 0 !important;
 }}
-div[data-testid="stTextArea"] {{
-    margin: 0 0 1.5rem !important;
-}}
+div[data-testid="stTextArea"] {{ margin: 0 0 1.35rem !important; }}
 .stTextArea label {{ display: none !important; }}
 .stTextArea textarea {{
-    font-family: inherit !important;
-    font-size: 1.08rem !important;
-    line-height: 1.55 !important;
-    background: #fff !important;
-    border: 1px solid rgba(62, 91, 132, 0.06) !important;
-    border-radius: 28px !important;
-    min-height: 200px !important;
-    color: {INK} !important;
-    padding: 1.35rem 1.4rem !important;
-    box-shadow: {SHADOW} !important;
-    caret-color: {PRIMARY} !important;
-    resize: none !important;
+    font-family: inherit !important; font-size: 1.06rem !important;
+    line-height: 1.55 !important; background: #fff !important;
+    border: 1px solid rgba(62, 91, 132, 0.05) !important;
+    border-radius: 28px !important; min-height: 200px !important;
+    color: {INK} !important; padding: 1.4rem 1.45rem !important;
+    box-shadow: {SHADOW} !important; caret-color: {PRIMARY} !important;
+    resize: none !important; transition: box-shadow 0.2s ease, border-color 0.2s ease !important;
 }}
 .stTextArea textarea:focus {{
-    border-color: rgba(90, 139, 255, 0.35) !important;
-    box-shadow: 0 12px 40px rgba(90, 139, 255, 0.12) !important;
+    border-color: rgba(90, 139, 255, 0.32) !important;
+    box-shadow: 0 14px 42px rgba(90, 139, 255, 0.14) !important;
     outline: none !important;
 }}
-.stTextArea textarea::placeholder {{
-    color: #B0B0BA !important;
-}}
 
-/* ----- Large rounded centered buttons ----- */
-div.stButton {{
-    display: flex !important;
-    justify-content: center !important;
-}}
+/* ----- Primary / secondary Streamlit buttons ----- */
+div.stButton {{ display: flex !important; justify-content: center !important; }}
 div.stButton > button {{
     transition: transform 0.18s ease, box-shadow 0.18s ease !important;
 }}
-div.stButton > button:hover {{
-    transform: translateY(-1px) !important;
-}}
+div.stButton > button:hover {{ transform: translateY(-1px) !important; }}
 div.stButton > button[data-testid="baseButton-primary"] {{
     background: {PRIMARY} !important; color: #fff !important; border: none !important;
     border-radius: 999px !important; font-weight: 600 !important;
-    font-size: 1.08rem !important; letter-spacing: -0.01em !important;
-    height: 3.65rem !important; width: 100% !important;
-    max-width: 360px !important;
+    font-size: 1.06rem !important; letter-spacing: -0.01em !important;
+    height: 3.6rem !important; width: 100% !important; max-width: 360px !important;
     box-shadow: 0 12px 28px rgba(90, 139, 255, 0.32) !important;
 }}
 div.stButton > button[data-testid="baseButton-secondary"] {{
     background: #fff !important; color: #555 !important;
     border: 1px solid rgba(62, 91, 132, 0.08) !important;
     border-radius: 999px !important; font-weight: 500 !important;
-    font-size: 0.88rem !important;
-    min-height: 2.85rem !important; width: 100% !important;
+    font-size: 0.88rem !important; min-height: 2.85rem !important; width: 100% !important;
     box-shadow: {SHADOW_SOFT} !important;
-}}
-div[data-testid="stLinkButton"] {{
-    display: flex !important; justify-content: center !important;
 }}
 div[data-testid="stLinkButton"] a {{
     border-radius: 999px !important; font-weight: 600 !important;
-    font-size: 0.82rem !important;
-    min-height: 2.85rem !important; width: 100% !important;
+    font-size: 0.82rem !important; min-height: 2.85rem !important; width: 100% !important;
     display: flex !important; justify-content: center !important;
     align-items: center !important; text-decoration: none !important;
-    box-shadow: {SHADOW_SOFT} !important;
 }}
 
-.oc-spacer {{ height: 0.85rem; }}
+.oc-spacer {{ height: 0.75rem; }}
 .oc-label {{
-    text-align: center; font-size: 0.9rem; color: {MUTED};
-    margin: 1rem 0 0; letter-spacing: 0.01em;
+    text-align: center; font-size: 0.86rem; color: {MUTED};
+    margin: 0.85rem 0 0; letter-spacing: 0.02em;
 }}
 .oc-q {{
-    text-align: center; font-size: 1.65rem; font-weight: 700;
-    letter-spacing: -0.04em; line-height: 1.25;
-    margin: 0.4rem 0 0.9rem; color: {INK};
+    text-align: center; font-size: clamp(1.35rem, 5vw, 1.65rem); font-weight: 700;
+    letter-spacing: -0.04em; line-height: 1.25; margin: 0.35rem 0 0.75rem; color: {INK};
 }}
+
+/* ----- Elegant result cards ----- */
 .oc-card {{
-    background: #fff; border-radius: 26px; padding: 1.35rem 1.3rem 0.4rem;
-    margin-bottom: 0.55rem; position: relative;
-    box-shadow: {SHADOW}; border: 1px solid rgba(62, 91, 132, 0.04);
+    background: #fff; border-radius: 28px; padding: 1.15rem 1.15rem 1.2rem;
+    margin: 0 0 1.05rem; position: relative; overflow: hidden;
+    box-shadow: {SHADOW}; border: 1px solid rgba(62, 91, 132, 0.045);
 }}
-.oc-card.tint-blue {{ background: {PASTEL}; }}
-.oc-card.tint-beige {{ background: {BEIGE}; }}
-.oc-row {{ display: flex; align-items: center; gap: 1.05rem; }}
-.oc-col {{ display: flex; flex-direction: column; gap: 0.85rem; }}
+.oc-card.tint-blue {{ background: linear-gradient(165deg, {PASTEL} 0%, #fff 72%); }}
+.oc-card.tint-beige {{ background: linear-gradient(165deg, {BEIGE} 0%, #fff 72%); }}
+.oc-card.tint-soft {{ background: linear-gradient(165deg, #F7F8FC 0%, #fff 70%); }}
+.oc-card.is-rec {{
+    border-color: rgba(76, 175, 112, 0.22);
+    box-shadow: 0 14px 40px rgba(76, 175, 112, 0.1), {SHADOW};
+}}
+.oc-badge {{
+    position: absolute; top: 1rem; right: 1rem; background: {GREEN}; color: #fff;
+    font-size: 0.66rem; font-weight: 600; padding: 0.34rem 0.78rem;
+    border-radius: 999px; z-index: 2; letter-spacing: 0.01em;
+    box-shadow: 0 4px 12px rgba(76, 175, 112, 0.3);
+}}
+.oc-card-inner {{ display: flex; align-items: center; gap: 1.05rem; }}
+.oc-card-inner.reverse {{ flex-direction: row-reverse; }}
+.oc-card-inner.stack {{
+    flex-direction: column; align-items: flex-start; gap: 0.95rem;
+    padding-top: 0.35rem;
+}}
 .oc-img {{
-    width: 80px; height: 80px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.07); background: #fff;
+    width: 92px; height: 92px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.08); background: #fff;
+    border: 3px solid rgba(255,255,255,0.9);
 }}
 .oc-img-rect {{
-    width: 110px; height: 90px; border-radius: 20px; object-fit: cover; flex-shrink: 0;
+    width: 118px; height: 96px; border-radius: 22px; object-fit: cover; flex-shrink: 0;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.08); background: #fff;
 }}
+.oc-img-hero {{
+    width: 100%; height: 148px; border-radius: 20px; object-fit: cover;
+    box-shadow: 0 8px 22px rgba(0,0,0,0.07); background: #eee;
+}}
+.oc-card-copy {{ flex: 1; min-width: 0; }}
 .oc-card h3 {{
-    font-size: 1.18rem; font-weight: 700; margin: 0 0 0.3rem; letter-spacing: -0.03em;
+    font-size: 1.18rem; font-weight: 700; margin: 0 0 0.35rem;
+    letter-spacing: -0.03em; color: {INK}; line-height: 1.25;
 }}
-.oc-card p {{ font-size: 0.82rem; color: #6e6e76; margin: 0; line-height: 1.45; }}
-.oc-badge {{
-    position: absolute; top: 1rem; left: 1rem; background: {GREEN}; color: #fff;
-    font-size: 0.68rem; font-weight: 600; padding: 0.32rem 0.8rem;
-    border-radius: 999px; z-index: 2;
+.oc-card p {{
+    font-size: 0.84rem; color: #6a6a74; margin: 0; line-height: 1.5;
 }}
+.oc-card-actions {{
+    display: flex; gap: 0.55rem; margin-top: 1.05rem;
+}}
+.oc-card-actions a {{
+    flex: 1; display: inline-flex; align-items: center; justify-content: center;
+    min-height: 2.7rem; border-radius: 999px; font-size: 0.8rem; font-weight: 600;
+    text-decoration: none; letter-spacing: -0.01em;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}}
+.oc-card-actions a:hover {{ transform: translateY(-1px); }}
+.oc-btn-ghost {{
+    background: rgba(255,255,255,0.85); color: #4a4a55;
+    border: 1px solid rgba(62, 91, 132, 0.1);
+    box-shadow: 0 2px 8px rgba(62, 91, 132, 0.04);
+}}
+.oc-btn-solid {{
+    background: {PRIMARY}; color: #fff; border: none;
+    box-shadow: 0 8px 18px rgba(90, 139, 255, 0.28);
+}}
+@media (max-width: 380px) {{
+    .oc-img {{ width: 78px; height: 78px; }}
+    .oc-img-rect {{ width: 96px; height: 82px; border-radius: 18px; }}
+    .oc-img-hero {{ height: 128px; }}
+    .oc-card {{ padding: 1rem; border-radius: 24px; }}
+    .oc-card h3 {{ font-size: 1.08rem; }}
+    .oc-card-actions {{ flex-direction: column; gap: 0.45rem; }}
+}}
+
 div:has(> #share-mark) + div button[data-testid="baseButton-primary"] {{
     background: {NAVY} !important;
     box-shadow: 0 10px 24px rgba(62, 91, 132, 0.25) !important;
-    border-radius: 999px !important;
+    border-radius: 999px !important; margin-top: 0.35rem !important;
 }}
+.oc-actions-gap {{ height: 0.55rem; }}
+
 .oc-hist {{
-    background: #fff; border-radius: 22px; padding: 1.25rem 1.35rem;
-    margin-bottom: 0.95rem; box-shadow: {SHADOW};
+    background: #fff; border-radius: 22px; padding: 1.2rem 1.3rem;
+    margin-bottom: 0.9rem; box-shadow: {SHADOW};
     border: 1px solid rgba(62, 91, 132, 0.04);
 }}
-.oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.25rem; }}
-.oc-hist span {{ font-size: 0.75rem; color: #999; }}
+.oc-hist strong {{ display: block; font-size: 1.02rem; margin-bottom: 0.25rem; }}
+.oc-hist span {{ font-size: 0.74rem; color: #999; }}
 .oc-pro {{
-    background: #fff; border-radius: 30px; padding: 2.35rem 1.75rem;
-    text-align: center; box-shadow: {SHADOW}; margin-top: 2rem;
+    background: #fff; border-radius: 30px; padding: 2.3rem 1.7rem;
+    text-align: center; box-shadow: {SHADOW}; margin-top: 1.85rem;
     border: 1px solid rgba(62, 91, 132, 0.04);
 }}
-.oc-pro h2 {{ font-size: 1.7rem; margin: 0 0 0.6rem; letter-spacing: -0.03em; }}
-.oc-pro p {{ color: #6e6e76; font-size: 0.95rem; margin: 0; line-height: 1.5; }}
+.oc-pro h2 {{ font-size: 1.65rem; margin: 0 0 0.55rem; letter-spacing: -0.03em; }}
+.oc-pro p {{ color: #6e6e76; font-size: 0.94rem; margin: 0; line-height: 1.5; }}
 .oc-price {{
     font-size: 1.7rem; font-weight: 700; color: {PRIMARY};
-    margin: 1.45rem 0 0.25rem; letter-spacing: -0.02em;
+    margin: 1.4rem 0 0.2rem; letter-spacing: -0.02em;
 }}
 .oc-pill {{
     display: inline-block; background: {PRIMARY_SOFT}; color: {PRIMARY};
-    font-weight: 600; font-size: 0.88rem; padding: 0.6rem 1.35rem;
-    border-radius: 999px; margin-top: 0.95rem;
+    font-weight: 600; font-size: 0.88rem; padding: 0.58rem 1.3rem;
+    border-radius: 999px; margin-top: 0.9rem;
 }}
 
 /* ----- Bottom nav ----- */
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) {{
     position: fixed !important; left: 50% !important; transform: translateX(-50%) !important;
-    bottom: 1rem !important; width: min(360px, calc(100% - 2rem)) !important;
-    background: rgba(255,255,255,0.92) !important;
-    backdrop-filter: blur(14px) !important;
+    bottom: max(0.85rem, env(safe-area-inset-bottom)) !important;
+    width: min(360px, calc(100% - 1.6rem)) !important;
+    background: rgba(255,255,255,0.94) !important;
+    backdrop-filter: blur(16px) saturate(1.2) !important;
     border-radius: 999px !important;
-    padding: 0.4rem 0.45rem 0.5rem !important;
-    box-shadow: 0 10px 32px rgba(62, 91, 132, 0.12) !important;
+    padding: 0.38rem 0.4rem 0.45rem !important;
+    box-shadow: 0 12px 36px rgba(62, 91, 132, 0.14) !important;
     border: 1px solid rgba(62, 91, 132, 0.06) !important;
     z-index: 1000 !important; gap: 0 !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
 div.stButton > button {{
     background: transparent !important; border: none !important; box-shadow: none !important;
-    color: {MUTED} !important; font-size: 0.68rem !important; font-weight: 500 !important;
+    color: {MUTED} !important; font-size: 0.66rem !important; font-weight: 500 !important;
     white-space: pre-line !important; line-height: 1.3 !important;
-    height: 3.55rem !important; padding: 0.25rem !important;
-    border-radius: 999px !important; max-width: none !important;
-    transform: none !important;
+    height: 3.5rem !important; padding: 0.2rem !important;
+    border-radius: 999px !important; max-width: none !important; transform: none !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
 div.stButton > button[data-testid="baseButton-primary"] {{
@@ -457,8 +487,7 @@ div.stButton > button[data-testid="baseButton-primary"] {{
 }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
 div[data-testid="stVerticalBlockBorderWrapper"] {{
-    border: none !important; background: transparent !important;
-    box-shadow: none !important;
+    border: none !important; background: transparent !important; box-shadow: none !important;
 }}
 </style>
         """,
@@ -466,8 +495,6 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
     )
 
 
-# ---------------------------------------------------------------------------
-# \u00c4mnesdetektering + l\u00e4nkar
 # ---------------------------------------------------------------------------
 def detect_category(question: str) -> str:
     q = question.lower()
@@ -752,30 +779,51 @@ def nav() -> None:
 
 
 def result_card(choice: dict[str, Any], index: int) -> None:
-    title = choice.get("title", "")
-    desc = choice.get("description", "")
+    title = html.escape(str(choice.get("title", "")))
+    desc = html.escape(str(choice.get("description", "")))
     cat = choice.get("category", "general")
     imgs = IMAGES.get(cat, IMAGES["general"])
-    img = choice.get("image_url", imgs[index % 3])
-    tint = "tint-blue" if index == 0 else "tint-beige"
-    badge = f'<span class="oc-badge">{t("recommended")}</span>' if choice.get("recommended") else ""
+    img = html.escape(str(choice.get("image_url", imgs[index % 3])))
+    recommended = bool(choice.get("recommended"))
+    tint = ("tint-soft" if recommended else "tint-blue" if index == 0 else "tint-beige")
+    rec_cls = " is-rec" if recommended else ""
+    badge = f'<span class="oc-badge">{html.escape(t("recommended"))}</span>' if recommended else ""
+    info_label = html.escape(t("info_food") if cat == "food" else t("info_other"))
+    order_label = html.escape(t("order"))
+    info_href = html.escape(choice.get("info_url") or info_url(str(choice.get("title", "")), cat), quote=True)
+    order_href = html.escape(choice.get("order_url") or order_url(str(choice.get("title", "")), index, cat), quote=True)
+    actions = (
+        f'<div class="oc-card-actions">'
+        f'<a class="oc-btn-ghost" href="{info_href}" target="_blank" rel="noopener noreferrer">{info_label}</a>'
+        f'<a class="oc-btn-solid" href="{order_href}" target="_blank" rel="noopener noreferrer">{order_label}</a>'
+        f"</div>"
+    )
 
-    if index == 0:
-        html = f'<div class="oc-card {tint}"><div class="oc-row"><img class="oc-img" src="{img}" alt="" /><div><h3>{title}</h3><p>{desc}</p></div></div></div>'
-    elif index == 1:
-        html = f'<div class="oc-card {tint}"><div class="oc-row"><div style="flex:1"><h3>{title}</h3><p>{desc}</p></div><img class="oc-img-rect" src="{img}" alt="" /></div></div>'
+    if recommended:
+        body = (
+            f'<div class="oc-card-inner stack">'
+            f'<img class="oc-img-hero" src="{img}" alt="" loading="lazy" />'
+            f'<div class="oc-card-copy"><h3>{title}</h3><p>{desc}</p></div>'
+            f"</div>"
+        )
+    elif index % 2 == 1:
+        body = (
+            f'<div class="oc-card-inner reverse">'
+            f'<img class="oc-img-rect" src="{img}" alt="" loading="lazy" />'
+            f'<div class="oc-card-copy"><h3>{title}</h3><p>{desc}</p></div>'
+            f"</div>"
+        )
     else:
-        html = f'<div class="oc-card {tint}">{badge}<div class="oc-col" style="padding-top:0.4rem"><img class="oc-img" src="{img}" alt="" /><div><h3>{title}</h3><p>{desc}</p></div></div></div>'
+        body = (
+            f'<div class="oc-card-inner">'
+            f'<img class="oc-img" src="{img}" alt="" loading="lazy" />'
+            f'<div class="oc-card-copy"><h3>{title}</h3><p>{desc}</p></div>'
+            f"</div>"
+        )
 
-    st.markdown(html, unsafe_allow_html=True)
-
-    label = t("info_food") if cat == "food" else t("info_other")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.link_button(label, choice.get("info_url") or info_url(title, cat), use_container_width=True, type="secondary")
-    with c2:
-        st.link_button(t("order"), choice.get("order_url") or order_url(title, index, cat), use_container_width=True, type="primary")
-    st.markdown("<div style='height:0.65rem'></div>", unsafe_allow_html=True)
+    st.html(
+        f'<div class="oc-card {tint}{rec_cls}">{badge}{body}{actions}</div>'
+    )
 
 
 def page_home() -> None:
@@ -823,7 +871,7 @@ def page_results() -> None:
 
     st.markdown(
         f'<p class="oc-label">{t("decision")}</p>'
-        f'<p class="oc-q">{question}</p>'
+        f'<p class="oc-q">{html.escape(question)}</p>'
         f'<div style="text-align:center"><span class="oc-topic">{t("topic")}: {topic_label(cat)}</span></div>',
         unsafe_allow_html=True,
     )
@@ -840,7 +888,7 @@ def page_results() -> None:
     rec_title = next((c.get("title", "") for c in choices if c.get("recommended")), choices[0].get("title", "") if choices else "")
     share = f"OneChoice: {question} \u2192 {rec_title}"
 
-    st.markdown('<div id="share-mark"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-actions-gap"></div><div id="share-mark"></div>', unsafe_allow_html=True)
     if st.button(f"\u22ef  {t('share')}", type="primary", use_container_width=True, key="share_btn"):
         components.html(f"<script>navigator.clipboard.writeText({json.dumps(share)});</script>", height=0)
         st.toast(share)
