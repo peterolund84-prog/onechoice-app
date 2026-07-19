@@ -135,5 +135,66 @@ class AppErrorBoundaryImportTests(unittest.TestCase):
         self.assertFalse(app_mod._is_streamlit_control_flow(ValueError("x")))
 
 
+class HandlaLagaUiTests(unittest.TestCase):
+    def test_handla_opens_execute_even_if_share_explodes(self) -> None:
+        """Regression: share must never turn Handla & laga into the error boundary."""
+        import app as app_mod
+        from streamlit.testing.v1 import AppTest
+
+        def boom(*_a, **_k):  # noqa: ANN001
+            raise RuntimeError("share intentionally broken")
+
+        orig = app_mod.render_share_for_decision
+        app_mod.render_share_for_decision = boom  # type: ignore[assignment]
+        try:
+            at = AppTest.from_file("app.py", default_timeout=60)
+            at.run()
+            for b in at.button:
+                if b.label == "Mat":
+                    b.click().run()
+                    break
+            hit = False
+            for b in at.button:
+                if b.label and "Handla" in b.label:
+                    b.click().run()
+                    hit = True
+                    break
+            self.assertTrue(hit)
+            self.assertFalse(at.exception)
+            self.assertFalse(bool(at.session_state["ui_error"]))
+            self.assertEqual(at.session_state["page"], "execute")
+            self.assertTrue(at.session_state["accepted"])
+            body = " ".join(str(m.value or "") for m in at.markdown)
+            self.assertNotIn("Något gick fel", body)
+            labels = [b.label or "" for b in at.button]
+            self.assertTrue(any("Tillbaka" in lab or "Back" in lab for lab in labels), labels)
+        finally:
+            app_mod.render_share_for_decision = orig  # type: ignore[assignment]
+
+    def test_handla_survives_string_context(self) -> None:
+        """Cloud/Supabase can leave context as a JSON string — must not crash execute."""
+        import json
+
+        import app as app_mod
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        for b in at.button:
+            if b.label == "Mat":
+                b.click().run()
+                break
+        cur = dict(at.session_state["current"] or {})
+        cur["context"] = json.dumps(cur.get("context") or {}, ensure_ascii=False)
+        at.session_state["current"] = cur
+        for b in at.button:
+            if b.label and "Handla" in b.label:
+                b.click().run()
+                break
+        self.assertFalse(bool(at.session_state["ui_error"]))
+        self.assertEqual(at.session_state["page"], "execute")
+        self.assertFalse(at.exception)
+
+
 if __name__ == "__main__":
     unittest.main()

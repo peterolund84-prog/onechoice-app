@@ -720,6 +720,25 @@ def build_share_bundle(cur: dict[str, Any]) -> dict[str, str]:
     return {"text": text, "url": url, "token": token}
 
 
+def _session_pop(key: str, default: Any = None) -> Any:
+    """session_state.pop — safe across Streamlit versions."""
+    try:
+        if hasattr(st.session_state, "pop"):
+            return st.session_state.pop(key, default)
+    except Exception:
+        pass
+    val = st.session_state.get(key, default) if hasattr(st.session_state, "get") else default
+    try:
+        if key in st.session_state:
+            del st.session_state[key]
+    except Exception:
+        try:
+            st.session_state[key] = default
+        except Exception:
+            pass
+    return val
+
+
 def render_native_share(
     *,
     text: str,
@@ -729,14 +748,14 @@ def render_native_share(
     icon: bool = False,
 ) -> None:
     """Web Share API sheet (Messenger/SMS/WhatsApp). Clipboard fallback + toast."""
+    import base64
     import json as _json
 
-    import streamlit.components.v1 as components
-
-    payload = _json.dumps(
-        {"title": "OneChoice", "text": text, "url": url},
-        ensure_ascii=False,
-    )
+    payload_obj = {"title": "OneChoice", "text": text, "url": url}
+    # Base64 avoids </script> / brace breakage inside the iframe HTML
+    payload_b64 = base64.b64encode(
+        _json.dumps(payload_obj, ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
     copied = t("share_copied")
     btn_css = (
         "width:40px;height:40px;border-radius:50%;border:1px solid rgba(62,91,132,0.12);"
@@ -753,30 +772,30 @@ def render_native_share(
     )
     wrap = "display:flex;justify-content:flex-end;" if icon else "width:100%;"
     height = 48 if icon else 72
+    safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
     safe_label = html.escape(label)
-    components.html(
-        f"""
+    html_doc = f"""<!DOCTYPE html><html><body style="margin:0;background:transparent;">
         <div style="font-family:Manrope,Helvetica Neue,sans-serif;{wrap}">
-          <button id="oc-share-{html.escape(key)}" style="{btn_css}">{safe_label}</button>
-          <div id="oc-share-status-{html.escape(key)}"
+          <button id="oc-share-{safe_key}" type="button" style="{btn_css}">{safe_label}</button>
+          <div id="oc-share-status-{safe_key}"
                style="text-align:center;color:#5a8bff;font-size:0.85rem;font-weight:700;
                       margin-top:0.35rem;min-height:1.1em;"></div>
         </div>
         <script>
         (function() {{
-          const payload = {payload};
-          const btn = document.getElementById("oc-share-{key}");
-          const status = document.getElementById("oc-share-status-{key}");
-          const copiedMsg = {_json.dumps(copied, ensure_ascii=False)};
+          var payload = JSON.parse(atob("{payload_b64}"));
+          var btn = document.getElementById("oc-share-{safe_key}");
+          var status = document.getElementById("oc-share-status-{safe_key}");
+          var copiedMsg = {_json.dumps(copied, ensure_ascii=False)};
           if (!btn) return;
-          btn.addEventListener("click", async () => {{
-            let shareUrl = payload.url || "";
-            if (shareUrl.startsWith("?")) {{
+          btn.addEventListener("click", async function() {{
+            var shareUrl = payload.url || "";
+            if (shareUrl.indexOf("?") === 0) {{
               shareUrl = window.location.origin + "/" + shareUrl;
-            }} else if (shareUrl.startsWith("/")) {{
+            }} else if (shareUrl.indexOf("/") === 0) {{
               shareUrl = window.location.origin + shareUrl;
             }}
-            const full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
+            var full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
             if (navigator.share) {{
               try {{
                 await navigator.share({{
@@ -793,7 +812,7 @@ def render_native_share(
               await navigator.clipboard.writeText(full);
               status.textContent = copiedMsg;
             }} catch (e) {{
-              const ta = document.createElement("textarea");
+              var ta = document.createElement("textarea");
               ta.value = full;
               document.body.appendChild(ta);
               ta.select();
@@ -803,15 +822,37 @@ def render_native_share(
             }}
           }});
         }})();
-        </script>
-        """,
-        height=height,
-    )
+        </script></body></html>
+        """
+    # Prefer st.iframe (components.html soft-deprecated); never raise into page render
+    try:
+        iframe = getattr(st, "iframe", None)
+        if callable(iframe):
+            iframe(html_doc, height=height)
+            return
+    except Exception:
+        pass
+    try:
+        import streamlit.components.v1 as components
+
+        components.html(html_doc, height=height)
+        return
+    except Exception:
+        pass
+    # Last resort — Streamlit-only copy path (no native sheet)
+    box_key = f"share_fallback_{safe_key}"
+    if st.button(label, key=box_key, use_container_width=not icon):
+        st.session_state[f"_share_fallback_text_{safe_key}"] = f"{text}\n{url}".strip()
+    fb = st.session_state.get(f"_share_fallback_text_{safe_key}")
+    if fb:
+        st.caption(t("share_copied"))
+        st.code(fb, language=None)
 
 
 def render_share_for_decision(
     cur: dict[str, Any], *, key: str, icon: bool = False
 ) -> None:
+    """Share must never take down Handla & laga / execute — swallow all errors."""
     try:
         bundle = build_share_bundle(cur if isinstance(cur, dict) else {})
         label = "↗" if icon else t("share")
@@ -822,7 +863,9 @@ def render_share_for_decision(
             key=key,
             icon=icon,
         )
-    except Exception as exc:
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
         log.exception("share render failed: %s", exc)
 
 
@@ -1368,7 +1411,7 @@ def open_execute_now(cur: dict[str, Any] | None = None) -> None:
 
 def _flush_db_accept() -> None:
     """Best-effort persist accept — sync via pipeline (UI already visible)."""
-    if not st.session_state.pop("pending_db_accept", None):
+    if not _session_pop("pending_db_accept", None):
         return
     cur = st.session_state.get("current")
     cur = cur if isinstance(cur, dict) else {}
@@ -1388,7 +1431,7 @@ def _flush_db_accept() -> None:
 
 def _flush_db_accept_bg() -> None:
     """Non-blocking DB accept — must not delay execute first paint on Cloud."""
-    if not st.session_state.pop("pending_db_accept", None):
+    if not _session_pop("pending_db_accept", None):
         return
     cur = st.session_state.get("current")
     cur = cur if isinstance(cur, dict) else {}
@@ -1404,9 +1447,14 @@ def _flush_db_accept_bg() -> None:
         except Exception as exc:
             log.exception("bg accept failed: %s", exc)
 
-    import threading
+    try:
+        import threading
 
-    threading.Thread(target=work, daemon=True).start()
+        threading.Thread(target=work, daemon=True).start()
+    except Exception as exc:
+        log.exception("bg accept thread failed to start: %s", exc)
+        # Sync fallback — still after navigate
+        work()
 
 
 def on_accept_primary(cur: dict[str, Any]) -> None:
@@ -1449,7 +1497,7 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
-    if not to_buy:
+    if not isinstance(to_buy, dict) or not to_buy:
         return
     import shopping as shopping_mod
 
@@ -1465,6 +1513,10 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
     for section, items in to_buy.items():
         if not items:
             continue
+        if isinstance(items, str):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            continue
         st.markdown(
             f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
             unsafe_allow_html=True,
@@ -1477,6 +1529,8 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
             st.checkbox(str(item), key=wkey)
 
     assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+    if not isinstance(assumed, (list, tuple)):
+        assumed = ["salt", "peppar", "olja"]
     assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
     st.caption(assumed_line)
 
@@ -2198,7 +2252,12 @@ def _record_workout_feel(
 def page_execute() -> None:
     """Execution view: food shopping/recipe OR workout player."""
     # Persist accept in background so first paint never waits on Supabase
-    _flush_db_accept_bg()
+    try:
+        _flush_db_accept_bg()
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("flush db accept bg failed: %s", exc)
 
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
@@ -2217,6 +2276,15 @@ def page_execute() -> None:
     language = st.session_state.get("language", "sv")
     domain = cur.get("domain") or ""
     ctx = cur.get("context") or {}
+    if isinstance(ctx, str):
+        try:
+            import json as _json
+
+            ctx = _json.loads(ctx)
+        except Exception:
+            ctx = {}
+    if not isinstance(ctx, dict):
+        ctx = {}
 
     # ----- Workout player -----
     if domain == "workout" or cur.get("execution_type") == "workout":
@@ -2271,78 +2339,107 @@ def page_execute() -> None:
             return
 
     # ----- Food shopping + recipe -----
-    suggestion = str(cur.get("suggestion") or "")
-    st.markdown(
-        f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
-        f'<div class="label">{html.escape(domain_label(domain or "food"))}</div>'
-        f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
-        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-    shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
-    recipe = ctx.get("recipe") or (shop or {}).get("recipe")
-    import shopping as shopping_mod
-
-    active_mins = None
-    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
-        active_mins = int(recipe["active_minutes"])
-
-    # Always rebuild recipe from shopping ingredients so dish-name protein is present
-    if shop:
-        recipe = shopping_mod.build_recipe(
-            suggestion,
-            shop.get("ingredients"),
-            active_minutes=active_mins,
+    try:
+        if not isinstance(ctx, dict):
+            ctx = {}
+        suggestion = str(cur.get("suggestion") or "")
+        st.markdown(
+            f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
+            f'<div class="label">{html.escape(domain_label(domain or "food"))}</div>'
+            f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
+            f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+            f"</div>",
+            unsafe_allow_html=True,
         )
-        ctx = dict(ctx)
-        ctx["recipe"] = recipe
-        if "kyckling" in suggestion.lower() or "chicken" in suggestion.lower():
-            flat = [
-                shopping_mod._strip_hint(i)
-                for section in (shop.get("to_buy") or {}).values()
-                for i in section
-            ]
-            if shopping_mod._missing_main_protein(suggestion, flat):
-                rebuilt = shopping_mod.build_shopping(
-                    suggestion, meta={"ingredients": shop.get("ingredients") or []}
-                )
-                if rebuilt:
-                    shop = rebuilt
-                    ctx["shopping"] = rebuilt
-                    recipe = rebuilt.get("recipe") or recipe
-                    if active_mins is not None and isinstance(recipe, dict):
-                        recipe = dict(recipe)
-                        recipe["active_minutes"] = active_mins
-        cur = dict(cur)
-        cur["context"] = ctx
-        st.session_state.current = cur
-    elif not recipe:
-        recipe = shopping_mod.build_recipe(suggestion, active_minutes=active_mins)
 
-    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
-        st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
+        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+        recipe = ctx.get("recipe") or (shop or {}).get("recipe")
+        import shopping as shopping_mod
 
-    did = _active_decision_id(cur)
-    render_checkable_shopping(shop, did)
-    render_recipe_block(
-        recipe if isinstance(recipe, dict) else None,
-        list((shop or {}).get("ingredients") or []) if isinstance(shop, dict) else None,
-    )
+        active_mins = None
+        if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+            try:
+                active_mins = int(recipe["active_minutes"])
+            except (TypeError, ValueError):
+                active_mins = None
 
-    # Share after cooking plan is visible — recipient gets recipe via link
-    render_share_for_decision(cur, key="share_food_execute", icon=False)
+        # Always rebuild recipe from shopping ingredients so dish-name protein is present
+        if shop:
+            recipe = shopping_mod.build_recipe(
+                suggestion,
+                shop.get("ingredients"),
+                active_minutes=active_mins,
+            )
+            ctx = dict(ctx)
+            ctx["recipe"] = recipe
+            if "kyckling" in suggestion.lower() or "chicken" in suggestion.lower():
+                flat: list[str] = []
+                raw_buy = shop.get("to_buy") or {}
+                if isinstance(raw_buy, dict):
+                    for _section, items in raw_buy.items():
+                        if isinstance(items, str):
+                            items = [items]
+                        if not isinstance(items, (list, tuple)):
+                            continue
+                        for i in items:
+                            flat.append(shopping_mod._strip_hint(i))
+                if shopping_mod._missing_main_protein(suggestion, flat):
+                    rebuilt = shopping_mod.build_shopping(
+                        suggestion, meta={"ingredients": shop.get("ingredients") or []}
+                    )
+                    if rebuilt:
+                        shop = rebuilt
+                        ctx["shopping"] = rebuilt
+                        recipe = rebuilt.get("recipe") or recipe
+                        if active_mins is not None and isinstance(recipe, dict):
+                            recipe = dict(recipe)
+                            recipe["active_minutes"] = active_mins
+            cur = dict(cur)
+            cur["context"] = ctx
+            st.session_state.current = cur
+        elif not recipe:
+            recipe = shopping_mod.build_recipe(suggestion, active_minutes=active_mins)
 
-    if st.button(
-        t("back_to_decision"),
-        type="secondary",
-        use_container_width=True,
-        key="exec_back",
-    ):
-        st.session_state.page = "result"
-        st.rerun()
-    nav()
+        if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+            st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
+
+        did = _active_decision_id(cur)
+        render_checkable_shopping(shop, did)
+        ings_fallback = None
+        if isinstance(shop, dict):
+            raw_ings = shop.get("ingredients") or []
+            ings_fallback = list(raw_ings) if isinstance(raw_ings, (list, tuple)) else None
+        render_recipe_block(
+            recipe if isinstance(recipe, dict) else None,
+            ings_fallback,
+        )
+
+        # Share after cooking plan — isolated; never takes down Handla & laga
+        render_share_for_decision(cur, key="share_food_execute", icon=False)
+
+        if st.button(
+            t("back_to_decision"),
+            type="secondary",
+            use_container_width=True,
+            key="exec_back",
+        ):
+            st.session_state.page = "result"
+            st.rerun()
+        nav()
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("food execute failed: %s", exc)
+        st.markdown(
+            f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button(t("retry"), type="primary", use_container_width=True, key="food_exec_retry"):
+            st.rerun()
+        if st.button(t("home"), use_container_width=True, key="food_exec_home"):
+            st.session_state.page = "home"
+            st.rerun()
+        nav()
 
 
 def page_history() -> None:
