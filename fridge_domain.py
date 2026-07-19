@@ -21,10 +21,6 @@ import shopping
 
 log = logging.getLogger("onechoice.fridge")
 
-SOURCE = "fridge_photo"
-MAX_PHOTOS = 3
-VISION_MODELS = ("grok-2-vision-1212", "grok-2-latest", "grok-4.5")
-
 # Synonyms so "ägg" matches "äggula" / "äggvita" lightly via stem checks
 _ALIASES: dict[str, tuple[str, ...]] = {
     "ägg": ("ägg", "egg", "äggula", "äggvita"),
@@ -68,8 +64,53 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     "citron": ("citron", "lemon"),
     "lime": ("lime",),
     "persilja": ("persilja", "parsley"),
-    "basilika": ("basilika", "basil"),  # fresh — staple is dried; still ok if photo shows it
+    "basilika": ("basilika", "basil"),
 }
+
+
+SOURCE = "fridge_photo"
+MAX_PHOTOS = 3
+# Vision-capable models only — NEVER text-only (e.g. grok-2-latest ignores images)
+VISION_MODELS = ("grok-2-vision-1212", "grok-2-vision-latest", "grok-4.5")
+MAX_IMAGE_EDGE = 1568  # long-edge cap before upload (phone photos are huge)
+XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions"
+XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
+
+# Filled by invent_from_images for debugging / tests (last attempt)
+LAST_VISION_DEBUG: dict[str, Any] = {}
+
+
+class FridgeVisionError(RuntimeError):
+    """Vision invent failed — must surface to the user, never become []."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        raw: str | None = None,
+        status: int | None = None,
+        model: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.raw = raw
+        self.status = status
+        self.model = model
+
+
+def usable_vision_key(key: str) -> bool:
+    k = (key or "").strip()
+    if len(k) < 8:
+        return False
+    low = k.lower()
+    if low.startswith(("din_", "your_", "sk_test")):
+        return False
+    if low.endswith(("_här", "_har")) or "your_" in low or "nyckel" in low:
+        return False
+    if "placeholder" in low or k.startswith("YOUR_"):
+        return False
+    return True
 
 
 def is_fridge_mode(context: dict[str, Any] | None) -> bool:
@@ -141,7 +182,6 @@ def _covers(need: str, available: set[str]) -> bool:
         return True
     if need_n in available:
         return True
-    # alias groups
     for canonical, aliases in _ALIASES.items():
         cue_hit = any(a in need_n or need_n in a for a in aliases) or need_n == canonical
         if not cue_hit:
@@ -149,7 +189,6 @@ def _covers(need: str, available: set[str]) -> bool:
         for a in available:
             if a == canonical or any(al in a or a in al for al in aliases):
                 return True
-    # soft stem: available item contains need or vice versa (min 4 chars)
     if len(need_n) >= 4:
         for a in available:
             if need_n in a or (len(a) >= 4 and a in need_n):
@@ -166,6 +205,40 @@ def can_cook(required: list[str], available: list[str]) -> bool:
     return all(_covers(n, avail) for n in needed)
 
 
+def downscale_image(blob: bytes, mime: str = "image/jpeg") -> tuple[bytes, str]:
+    """Resize to max MAX_IMAGE_EDGE on the long side; convert to jpeg (xAI: jpg/png)."""
+    try:
+        from io import BytesIO
+
+        from PIL import Image
+
+        im = Image.open(BytesIO(blob))
+        im.load()
+        if im.mode not in ("RGB", "L"):
+            im = im.convert("RGB")
+        elif im.mode == "L":
+            im = im.convert("RGB")
+        w, h = im.size
+        long_edge = max(w, h)
+        if long_edge > MAX_IMAGE_EDGE:
+            scale = MAX_IMAGE_EDGE / float(long_edge)
+            im = im.resize(
+                (max(1, int(w * scale)), max(1, int(h * scale))),
+                Image.Resampling.LANCZOS,
+            )
+        out = BytesIO()
+        im.save(out, format="JPEG", quality=85, optimize=True)
+        return out.getvalue(), "image/jpeg"
+    except Exception as exc:
+        log.warning("fridge downscale failed (%s) — using original bytes", exc)
+        if "webp" in (mime or "").lower():
+            raise FridgeVisionError(
+                "image_encode",
+                f"Kunde inte konvertera webp-bild: {exc}",
+            ) from exc
+        return bytes(blob), (mime or "image/jpeg")
+
+
 def invent_from_images(
     images: list[bytes],
     *,
@@ -175,24 +248,134 @@ def invent_from_images(
 ) -> list[dict[str, Any]]:
     """
     Vision call → [{name, confidence}]. Separate from decision generation.
-    On failure / missing key → empty list (caller shows edit UI / retry).
+
+    Raises FridgeVisionError on missing key, HTTP failure, or unparseable response.
+    Never returns [] to hide a failed call.
     """
+    global LAST_VISION_DEBUG
+    LAST_VISION_DEBUG = {
+        "models_tried": [],
+        "raw_response": None,
+        "http_status": None,
+        "model": None,
+        "image_bytes": [],
+        "payload_chars": None,
+        "parsed_n": None,
+        "endpoint": None,
+    }
+
     blobs = [b for b in (images or []) if isinstance(b, (bytes, bytearray)) and len(b) > 20]
     blobs = blobs[:MAX_PHOTOS]
     if not blobs:
-        return []
+        raise FridgeVisionError("no_image", "Ingen bild att skicka till vision-modellen.")
+
     key = (api_key or "").strip()
-    if not key or len(key) < 8 or key.lower().startswith(("din_", "your_", "sk_test")):
-        log.info("fridge invent skipped — no usable API key")
-        return []
+    if not usable_vision_key(key):
+        log.error(
+            "fridge invent ABORT — unusable GROK_API_KEY (len=%s, prefix=%r)",
+            len(key),
+            key[:6] if key else "",
+        )
+        raise FridgeVisionError(
+            "missing_api_key",
+            "GROK_API_KEY saknas eller är en placeholder — vision-anropet kördes aldrig.",
+        )
 
     mimes = list(mime_types or [])
     while len(mimes) < len(blobs):
         mimes.append("image/jpeg")
 
-    content: list[dict[str, Any]] = []
+    prepared: list[tuple[bytes, str]] = []
     for blob, mime in zip(blobs, mimes):
-        b64 = base64.b64encode(bytes(blob)).decode("ascii")
+        raw_len = len(blob)
+        scaled, out_mime = downscale_image(bytes(blob), str(mime or "image/jpeg"))
+        prepared.append((scaled, out_mime))
+        LAST_VISION_DEBUG["image_bytes"].append(
+            {"raw": raw_len, "sent": len(scaled), "mime": out_mime}
+        )
+        log.info(
+            "fridge image prepared: raw=%sB sent=%sB mime=%s",
+            raw_len,
+            len(scaled),
+            out_mime,
+        )
+
+    lang = "Swedish" if language == "sv" else "English"
+    prompt = (
+        "List ONLY clearly visible food ingredients in these fridge/pantry photos. "
+        f"Use everyday {lang} grocery names (e.g. ägg, mjölk, paprika — not brands). "
+        "Do NOT invent items you cannot see. Do NOT include empty packaging or utensils. "
+        'Return JSON only: {"ingredients":[{"name":"...","confidence":0.0-1.0}]}'
+    )
+
+    errors: list[str] = []
+    for model in VISION_MODELS:
+        LAST_VISION_DEBUG["models_tried"].append(model)
+        try:
+            raw, status, endpoint = _call_vision_model(
+                model=model,
+                api_key=key,
+                images=prepared,
+                prompt=prompt,
+            )
+            LAST_VISION_DEBUG["raw_response"] = raw
+            LAST_VISION_DEBUG["http_status"] = status
+            LAST_VISION_DEBUG["model"] = model
+            LAST_VISION_DEBUG["endpoint"] = endpoint
+            log.info(
+                "fridge vision RAW model=%s status=%s endpoint=%s chars=%s\n%s",
+                model,
+                status,
+                endpoint,
+                len(raw or ""),
+                (raw or "")[:4000],
+            )
+            parsed = parse_inventory_json(raw)
+            LAST_VISION_DEBUG["parsed_n"] = len(parsed)
+            log.info(
+                "fridge vision PARSE model=%s received_chars=%s produced_n=%s names=%s",
+                model,
+                len(raw or ""),
+                len(parsed),
+                [p["name"] for p in parsed],
+            )
+            return parsed
+        except FridgeVisionError as exc:
+            log.error(
+                "fridge vision FAILED model=%s code=%s status=%s: %s | raw=%s",
+                model,
+                exc.code,
+                exc.status,
+                exc,
+                (exc.raw or "")[:1500],
+            )
+            errors.append(f"{model}:{exc.code}:{exc}")
+            continue
+        except Exception as exc:
+            log.exception("fridge vision UNEXPECTED model=%s: %s", model, exc)
+            errors.append(f"{model}:unexpected:{exc}")
+            continue
+
+    raise FridgeVisionError(
+        "all_models_failed",
+        "Vision-anropet misslyckades för alla modeller: " + " | ".join(errors[:3]),
+        raw=str(LAST_VISION_DEBUG.get("raw_response") or "")[:2000],
+        status=LAST_VISION_DEBUG.get("http_status"),  # type: ignore[arg-type]
+        model=str(LAST_VISION_DEBUG.get("model") or ""),
+    )
+
+
+def _call_vision_model(
+    *,
+    model: str,
+    api_key: str,
+    images: list[tuple[bytes, str]],
+    prompt: str,
+) -> tuple[str, int, str]:
+    """Try chat/completions first, then /responses. Returns (content, status, endpoint)."""
+    content: list[dict[str, Any]] = []
+    for blob, mime in images:
+        b64 = base64.b64encode(blob).decode("ascii")
         content.append(
             {
                 "type": "image_url",
@@ -202,80 +385,206 @@ def invent_from_images(
                 },
             }
         )
-    lang = "Swedish" if language == "sv" else "English"
-    content.append(
-        {
-            "type": "text",
-            "text": (
-                "List ONLY clearly visible food ingredients in these fridge/pantry photos. "
-                f"Use everyday {lang} grocery names (e.g. ägg, mjölk, paprika — not brands). "
-                "Do NOT invent items you cannot see. Do NOT include empty packaging or utensils. "
-                'Return JSON only: {"ingredients":[{"name":"...","confidence":0.0-1.0}]}'
-            ),
-        }
+    content.append({"type": "text", "text": prompt})
+    body = {
+        "model": model,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You extract grocery inventories from photos. "
+                    "Conservative: only clear items. JSON only."
+                ),
+            },
+            {"role": "user", "content": content},
+        ],
+        "temperature": 0.1,
+    }
+    payload_chars = len(json.dumps(body))
+    LAST_VISION_DEBUG["payload_chars"] = payload_chars
+    log.info(
+        "fridge vision REQUEST model=%s endpoint=chat/completions images=%s payload_chars=%s",
+        model,
+        len(images),
+        payload_chars,
+    )
+    resp = requests.post(
+        XAI_CHAT_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json=body,
+        timeout=90,
+    )
+    log.info(
+        "fridge vision HTTP chat/completions model=%s status=%s body_prefix=%s",
+        model,
+        resp.status_code,
+        (resp.text or "")[:500],
+    )
+    if resp.status_code < 400:
+        payload = resp.json()
+        choices = payload.get("choices") or []
+        if not choices:
+            raise FridgeVisionError(
+                "empty_choices",
+                "Tomt choices-fält från chat/completions",
+                raw=resp.text,
+                status=resp.status_code,
+                model=model,
+            )
+        raw = str((choices[0].get("message") or {}).get("content") or "").strip()
+        if not raw:
+            raise FridgeVisionError(
+                "empty_content",
+                "Tomt message.content från vision-modellen",
+                raw=resp.text,
+                status=resp.status_code,
+                model=model,
+            )
+        return raw, resp.status_code, "chat/completions"
+
+    chat_err = f"{resp.status_code}:{(resp.text or '')[:400]}"
+    log.error(
+        "fridge chat/completions rejected model=%s %s — trying /responses",
+        model,
+        chat_err,
     )
 
-    last_err: Exception | None = None
-    for model in VISION_MODELS:
-        try:
-            resp = requests.post(
-                "https://api.x.ai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                "You extract grocery inventories from photos. "
-                                "Conservative: only clear items. JSON only."
-                            ),
-                        },
-                        {"role": "user", "content": content},
-                    ],
-                    "temperature": 0.1,
-                },
-                timeout=60,
-            )
-            resp.raise_for_status()
-            payload = resp.json()
-            choices = payload.get("choices") or []
-            if not choices:
-                raise ValueError("empty vision choices")
-            raw = str((choices[0].get("message") or {}).get("content") or "").strip()
-            return parse_inventory_json(raw)
-        except Exception as exc:
-            last_err = exc
-            log.warning("fridge vision model %s failed: %s", model, exc)
-    if last_err:
-        log.exception("fridge invent failed: %s", last_err)
-    return []
+    input_content: list[dict[str, Any]] = []
+    for blob, mime in images:
+        b64 = base64.b64encode(blob).decode("ascii")
+        input_content.append(
+            {
+                "type": "input_image",
+                "image_url": f"data:{mime};base64,{b64}",
+                "detail": "high",
+            }
+        )
+    input_content.append({"type": "input_text", "text": prompt})
+    body2 = {
+        "model": model,
+        "input": [{"role": "user", "content": input_content}],
+    }
+    log.info(
+        "fridge vision REQUEST model=%s endpoint=responses images=%s",
+        model,
+        len(images),
+    )
+    resp2 = requests.post(
+        XAI_RESPONSES_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json=body2,
+        timeout=90,
+    )
+    log.info(
+        "fridge vision HTTP responses model=%s status=%s body_prefix=%s",
+        model,
+        resp2.status_code,
+        (resp2.text or "")[:500],
+    )
+    if resp2.status_code >= 400:
+        raise FridgeVisionError(
+            "http_error",
+            f"Vision HTTP misslyckades chat={chat_err} responses={resp2.status_code}:{(resp2.text or '')[:300]}",
+            raw=resp2.text,
+            status=resp2.status_code,
+            model=model,
+        )
+    payload2 = resp2.json()
+    raw2 = _extract_responses_text(payload2)
+    if not raw2:
+        raise FridgeVisionError(
+            "empty_content",
+            "Tomt svar från /responses",
+            raw=resp2.text,
+            status=resp2.status_code,
+            model=model,
+        )
+    return raw2, resp2.status_code, "responses"
+
+
+def _extract_responses_text(payload: dict[str, Any]) -> str:
+    """Pull assistant text from xAI Responses API payload shapes."""
+    if not isinstance(payload, dict):
+        return ""
+    out = payload.get("output") or payload.get("outputs") or []
+    chunks: list[str] = []
+    if isinstance(out, list):
+        for item in out:
+            if not isinstance(item, dict):
+                continue
+            for part in item.get("content") or []:
+                if isinstance(part, dict):
+                    t = part.get("text") or part.get("output_text") or ""
+                    if t:
+                        chunks.append(str(t))
+            if item.get("text"):
+                chunks.append(str(item["text"]))
+    if payload.get("output_text"):
+        chunks.append(str(payload["output_text"]))
+    if not chunks and isinstance(payload.get("response"), dict):
+        return _extract_responses_text(payload["response"])
+    return "\n".join(chunks).strip()
 
 
 def parse_inventory_json(raw: str) -> list[dict[str, Any]]:
+    """
+    Parse model output into inventory rows.
+    Raises FridgeVisionError if the model did not return usable JSON
+    (silent prose→[] is forbidden).
+    """
     text = (raw or "").strip()
+    if not text:
+        raise FridgeVisionError("parse_empty", "Vision-svar tomt — inget att parsa.")
+    original = text
     fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
     if fence:
         text = fence.group(1).strip()
     brace = re.search(r"\{[\s\S]*\}", text)
     if brace:
         text = brace.group(0)
-    data = json.loads(text)
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        log.error(
+            "fridge PARSE failed — received=%r produced=ERROR (%s)",
+            original[:800],
+            exc,
+        )
+        raise FridgeVisionError(
+            "parse_json",
+            f"Vision-svar var inte JSON: {exc}",
+            raw=original[:2000],
+        ) from exc
+
     items = data.get("ingredients") if isinstance(data, dict) else data
+    if not isinstance(items, list):
+        log.error(
+            "fridge PARSE failed — no ingredients list. received=%r produced={}",
+            original[:800],
+        )
+        raise FridgeVisionError(
+            "parse_shape",
+            "Vision-JSON saknar ingredients-lista.",
+            raw=original[:2000],
+        )
+
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
-    if not isinstance(items, list):
-        return []
     for row in items:
         if isinstance(row, str):
             name, conf = row, 0.7
         elif isinstance(row, dict):
             name = row.get("name") or row.get("ingredient") or ""
             try:
-                conf = float(row.get("confidence") if row.get("confidence") is not None else 0.7)
+                conf = float(
+                    row.get("confidence") if row.get("confidence") is not None else 0.7
+                )
             except (TypeError, ValueError):
                 conf = 0.7
         else:
@@ -285,7 +594,16 @@ def parse_inventory_json(raw: str) -> list[dict[str, Any]]:
             continue
         seen.add(name_n)
         out.append({"name": name_n, "confidence": max(0.0, min(1.0, conf))})
+
+    log.info(
+        "fridge PARSE ok — received_chars=%s produced_n=%s names=%s",
+        len(original),
+        len(out),
+        [x["name"] for x in out],
+    )
     return out
+
+
 
 
 def recipe_library(language: str = "sv") -> list[dict[str, Any]]:

@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-v1-20260719"
+BUILD_ID = "fridge-vision-v2-20260719"
 
 I18N = {
     "sv": {
@@ -202,6 +202,7 @@ I18N = {
         "fridge_add_placeholder": "t.ex. ägg",
         "fridge_empty_scan": "Jag såg inget tydligt — lägg till själv eller ta om foto.",
         "fridge_need_photo": "Lägg till minst ett foto.",
+        "fridge_vision_error": "Kunde inte läsa fotot",
         "fridge_cook": "Laga nu",
         "fridge_shop_alt": "Föreslå med inköpslista",
         "fridge_remove": "Ta bort",
@@ -298,6 +299,7 @@ I18N = {
         "fridge_add_placeholder": "e.g. eggs",
         "fridge_empty_scan": "Nothing clear — add items yourself or retake.",
         "fridge_need_photo": "Add at least one photo.",
+        "fridge_vision_error": "Couldn’t read the photo",
         "fridge_cook": "Cook now",
         "fridge_shop_alt": "Suggest with shopping list",
         "fridge_remove": "Remove",
@@ -1757,12 +1759,23 @@ def page_fridge() -> None:
                 st.warning(t("fridge_need_photo"))
             else:
                 with st.spinner(t("fridge_scanning")):
-                    invent = fr.invent_from_images(
-                        blobs,
-                        api_key=get_secret("GROK_API_KEY"),
-                        language=st.session_state.get("language", "sv"),
-                        mime_types=mimes,
-                    )
+                    try:
+                        invent = fr.invent_from_images(
+                            blobs,
+                            api_key=get_secret("GROK_API_KEY"),
+                            language=st.session_state.get("language", "sv"),
+                            mime_types=mimes,
+                        )
+                    except fr.FridgeVisionError as exc:
+                        # Never pretend the model returned an empty inventory
+                        log.error("fridge invent UI error: %s", exc)
+                        st.session_state._last_ui_error = f"{exc.code}: {exc}"
+                        st.error(f"{t('fridge_vision_error')}: {exc}")
+                        if exc.raw:
+                            st.caption(html.escape(str(exc.raw)[:240]))
+                        st.caption(f"build {BUILD_ID}")
+                        nav()
+                        return
                 st.session_state.fridge_inventory = invent
                 st.session_state.fridge_step = "confirm"
                 st.rerun()
