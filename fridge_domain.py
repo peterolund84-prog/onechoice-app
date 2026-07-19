@@ -45,6 +45,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
     ),
     "sylt": ("sylt", "jam", "marmelad"),
     "saft": ("saft", "juice", "apelsinjuice", "äppeljuice"),
+    "rester": ("rester", "rest", "matlåda", "leftover", "leftovers", "resterätt"),
     "pasta": ("pasta", "spaghetti", "penne", "tagliatelle"),
     "ris": ("ris", "rice", "jasminris", "basmatiris"),
     "potatis": ("potatis", "potato", "potatisar"),
@@ -324,6 +325,107 @@ def fridge_required_ingredients(
         seen.add(item)
         out.append(item)
     return out
+
+
+# Canned meal-type phrases that must NEVER win in fridge_photo mode unless inventory supports them
+BANNED_FRIDGE_SUGGESTIONS = frozenset(
+    {
+        "värm en rest",
+        "reheat leftovers",
+        "smörgås med ost",
+        "cheese sandwich",
+        "fil eller yoghurt",
+        "filmjölk or yoghurt",
+        "krämig tomatsås-pasta",
+        "creamy tomato pasta",
+    }
+)
+
+
+def _mentions_leftovers(text: str) -> bool:
+    blob = normalize_name(text)
+    if not blob:
+        return False
+    return bool(
+        re.search(r"\brest(er|en|erna)?\b", blob)
+        or "leftover" in blob
+        or "matlåda" in blob
+        or "värm en rest" in blob
+    )
+
+
+def inventory_has_leftovers(available: list[str]) -> bool:
+    avail = set(names_only(available))
+    return _covers("rester", avail) or any(
+        "rest" in a or "matlåda" in a or "leftover" in a for a in avail
+    )
+
+
+def is_grounded_fridge_decision(
+    suggestion: str,
+    justification: str,
+    meta_ingredients: list[str] | None,
+    available: list[str],
+    *,
+    allow_empty_honesty: bool = False,
+) -> bool:
+    """
+    Hard grounding: dish may only reference inventory (+ staples).
+    Must name ≥1 detected non-staple in title or justification.
+    Leftover phrases require leftovers actually seen.
+    """
+    avail = names_only(available)
+    sug = normalize_name(suggestion)
+    just = normalize_name(justification or "")
+    blob = f"{sug} {just}".strip()
+
+    if sug in BANNED_FRIDGE_SUGGESTIONS:
+        # Cheese sandwich / reheat leftovers etc. — only if inventory truly covers them
+        if "rest" in sug or "leftover" in sug:
+            return inventory_has_leftovers(avail)
+        required = fridge_required_ingredients(suggestion, meta_ingredients)
+        return bool(required) and can_cook(required, avail)
+
+    if _mentions_leftovers(blob) and not inventory_has_leftovers(avail):
+        return False
+
+    if not avail:
+        return bool(allow_empty_honesty)
+
+    required = fridge_required_ingredients(suggestion, meta_ingredients)
+    if required and not can_cook(required, avail):
+        return False
+
+    non_staples = [a for a in avail if not _is_staple(a)]
+    if not non_staples:
+        return True
+
+    # Must explicitly name at least one seen ingredient
+    for item in non_staples:
+        if item and (item in sug or item in just):
+            return True
+    # Compound titles: Äggröra / äggmackor
+    cued = ingredients_cued_by_text(suggestion) + ingredients_cued_by_text(justification or "")
+    for cue in cued:
+        if _is_staple(cue):
+            continue
+        if _covers(cue, set(avail)):
+            return True
+    return False
+
+
+def prefer_quick_fridge_dishes(
+    candidates: list[dict[str, Any]],
+    *,
+    meal_type: str | None,
+) -> list[dict[str, Any]]:
+    """Kvällsmål/frukost: sort by active_minutes (effort), never inject foreign templates."""
+    if meal_type not in ("kvallsmal", "frukost"):
+        return candidates
+    return sorted(
+        candidates,
+        key=lambda c: int((c.get("meta") or {}).get("active_minutes") or 99),
+    )
 
 
 def downscale_image(blob: bytes, mime: str = "image/jpeg") -> tuple[bytes, str]:

@@ -255,10 +255,6 @@ def _check_food(
         show_shop = meal_type == "middag"
         at_home = meal_type in ("frukost", "kvallsmal")
 
-    active = (candidate.get("meta") or {}).get("active_minutes")
-    if active is not None and int(active) > max_min:
-        reasons.append("too_long")
-
     # Fridge photo mode — hard constraint: only confirmed ingredients + staples
     fridge_mode = False
     try:
@@ -269,6 +265,13 @@ def _check_food(
         ) == fr.SOURCE
     except Exception:
         fridge_mode = str(context.get("source") or "") == "fridge_photo"
+
+    active = (candidate.get("meta") or {}).get("active_minutes")
+    # Fridge: meal type may only prefer quicker dishes (sorted upstream) —
+    # never hard-reject inventory dishes as "too_long" (that leaked kvällsmål
+    # canned phrases like "Värm en rest" when äggröra was 6 min > 5 min cap).
+    if active is not None and int(active) > max_min and not fridge_mode:
+        reasons.append("too_long")
 
     if fridge_mode:
         if eating_out:
@@ -285,11 +288,24 @@ def _check_food(
         meta_ings = list((candidate.get("meta") or {}).get("ingredients") or [])
         is_fallback = bool((candidate.get("meta") or {}).get("fridge_fallback"))
         no_cook_empty = bool((candidate.get("meta") or {}).get("no_cook_empty"))
+        justification = str(candidate.get("justification") or "")
+        # Empty inventory → only honest no_cook_empty fallback may pass
+        if not available and not no_cook_empty:
+            return FeasibilityResult(ok=False, reasons=["fridge_empty_inventory"])
+        # Leftover / canned meal templates without matching inventory
+        if bool((candidate.get("meta") or {}).get("leftover")) and not fr.inventory_has_leftovers(
+            available
+        ):
+            return FeasibilityResult(ok=False, reasons=["fridge_ungrounded_leftover"])
         # Title + meta must both be cookable — blocks "Macka med ost" without ost
         required = fr.fridge_required_ingredients(suggestion, meta_ings)
         if not no_cook_empty:
             if not required or not fr.can_cook(required, available):
                 return FeasibilityResult(ok=False, reasons=["fridge_missing_ingredient"])
+            if not fr.is_grounded_fridge_decision(
+                suggestion, justification, meta_ings, available
+            ):
+                return FeasibilityResult(ok=False, reasons=["fridge_ungrounded"])
         language = str(profile.get("language") or context.get("language") or "sv")
         execution = fr.apply_fridge_execution(
             suggestion,

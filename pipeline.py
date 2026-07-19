@@ -329,39 +329,71 @@ def decide(
             else:
                 candidates = pinned + typed
 
-    # Fridge: pin cook-from-inventory dishes; never fall back to supermarket packs
+    # Fridge: pin cook-from-inventory dishes; NEVER meal-type canned packs
     if domain == "food" and fridge_mode:
         import fridge_domain as fr
 
+        if not available_ingredients:
+            # Empty inventory is not a decision — honest refuse (UI should block earlier)
+            msg = (
+                "Jag kunde inte läsa av kylen — testa ett ljusare foto rakt framifrån, "
+                "eller manuell lista först."
+                if language == "sv"
+                else "I couldn’t read the fridge — try a brighter front-on photo, "
+                "or add items manually first."
+            )
+            return DecisionResult(
+                ok=False,
+                domain="food",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={"source": fr.SOURCE, "available_ingredients": [], "meal_type": meal_type},
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
+
         pinned = fr.fridge_candidates(available_ingredients, language=language)
-        # Keep only LLM candidates cookable from inventory (title + meta.ingredients)
+        # Keep only LLM candidates cookable + grounded from inventory
         typed: list[dict[str, Any]] = []
         for c in candidates:
             meta = c.get("meta") if isinstance(c.get("meta"), dict) else {}
             ings = list(meta.get("ingredients") or [])
             title = str(c.get("suggestion") or "")
+            just = str(c.get("justification") or "")
             required = fr.fridge_required_ingredients(title, ings)
-            if required and fr.can_cook(required, available_ingredients):
-                row = dict(c)
-                m = dict(meta)
-                m["ingredients"] = required
-                m["source"] = fr.SOURCE
-                m["available_ingredients"] = available_ingredients
-                m["assume_at_home_only"] = True
-                row["meta"] = m
-                if not row.get("justification"):
-                    row["justification"] = fr.justify_from_inventory(
-                        title, required, language
-                    )
-                typed.append(row)
-        candidates = pinned + typed
+            if not (required and fr.can_cook(required, available_ingredients)):
+                continue
+            if not just:
+                just = fr.justify_from_inventory(title, required, language)
+            if not fr.is_grounded_fridge_decision(
+                title, just, required, available_ingredients
+            ):
+                continue
+            row = dict(c)
+            m = dict(meta)
+            m["ingredients"] = required
+            m["source"] = fr.SOURCE
+            m["available_ingredients"] = available_ingredients
+            m["assume_at_home_only"] = True
+            row["meta"] = m
+            row["justification"] = just
+            typed.append(row)
+        candidates = fr.prefer_quick_fridge_dishes(
+            pinned + typed, meal_type=meal_type
+        )
         if not candidates:
             candidates = [fr.fridge_fallback(available_ingredients, language=language)]
 
     if skip_feasibility or domain == db.NEAR_DOMAIN:
-        survivors = list(candidates) or _local_candidates(
-            domain, language, recent, ctx, profile
-        )
+        # Fridge must never pull supermarket / meal-type packs via this branch
+        if fridge_mode:
+            survivors = list(candidates)
+        else:
+            survivors = list(candidates) or _local_candidates(
+                domain, language, recent, ctx, profile
+            )
     else:
         survivors = feasibility.filter_feasible(
             candidates, domain=domain, profile=profile, context=ctx
@@ -375,15 +407,58 @@ def decide(
                 profile=profile,
                 context=ctx,
             )
-        if not survivors:
+        # CRITICAL: fridge mode must never fall through to supermarket / kvällsmål packs
+        if not survivors and not fridge_mode:
             survivors = feasibility.filter_feasible(
                 _local_candidates(domain, language, recent, ctx, profile),
                 domain=domain,
                 profile=profile,
                 context=ctx,
             )
-        if not survivors:
+        if not survivors and not fridge_mode:
             survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
+        if not survivors and fridge_mode:
+            import fridge_domain as fr
+
+            fb = fr.fridge_fallback(available_ingredients, language=language)
+            survivors = feasibility.filter_feasible(
+                [fb], domain=domain, profile=profile, context=ctx
+            )
+            if not survivors:
+                msg = (
+                    "Jag hittade inget jag kan laga av det som syns i kylen. "
+                    "Lägg till fler råvaror eller ta om fotot."
+                    if language == "sv"
+                    else "I couldn’t find a dish from what’s in the fridge. "
+                    "Add more items or retake the photo."
+                )
+                return DecisionResult(
+                    ok=False,
+                    domain="food",
+                    suggestion="",
+                    justification="",
+                    refused=True,
+                    refusal_message=msg,
+                    context={
+                        "source": fr.SOURCE,
+                        "available_ingredients": available_ingredients,
+                        "meal_type": meal_type,
+                    },
+                    route=(route_meta or {}).get("route"),
+                    route_log_id=(route_meta or {}).get("route_log_id"),
+                )
+
+    if not survivors:
+        return DecisionResult(
+            ok=False,
+            domain=domain,
+            suggestion="",
+            justification="",
+            refused=True,
+            refusal_message=REFUSAL_COPY.get(language, REFUSAL_COPY["en"]),
+            route=(route_meta or {}).get("route"),
+            route_log_id=(route_meta or {}).get("route_log_id"),
+        )
 
     ranked = _rank_candidates(
         survivors,
@@ -392,6 +467,40 @@ def decide(
         explore=explore,
     )
     top = ranked[0] if ranked else survivors[0]
+
+    # Final fridge grounding gate — never display ungrounded / canned meal phrases
+    if fridge_mode:
+        import fridge_domain as fr
+
+        sug = str(top.get("suggestion") or "")
+        just = str(top.get("justification") or "")
+        meta_ings = list((top.get("meta") or {}).get("ingredients") or [])
+        no_cook_empty = bool((top.get("meta") or {}).get("no_cook_empty"))
+        if not no_cook_empty and not fr.is_grounded_fridge_decision(
+            sug, just, meta_ings, available_ingredients
+        ):
+            msg = (
+                "Jag hittade inget jag kan laga av det som syns i kylen. "
+                "Lägg till fler råvaror eller ta om fotot."
+                if language == "sv"
+                else "I couldn’t find a dish from what’s in the fridge. "
+                "Add more items or retake the photo."
+            )
+            return DecisionResult(
+                ok=False,
+                domain="food",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={
+                    "source": fr.SOURCE,
+                    "available_ingredients": available_ingredients,
+                    "meal_type": meal_type,
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
     if explore or top.get("wildcard"):
         top = dict(top)
         top["wildcard"] = True
