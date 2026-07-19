@@ -250,15 +250,32 @@ div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"]) {{
     top: 1.05rem !important;
     right: max(0.95rem, calc(50% - 340px + 0.95rem)) !important;
     width: auto !important;
+    max-width: 100px !important;
     gap: 0.4rem !important;
     z-index: 60 !important;
     justify-content: flex-end !important;
     margin: 0 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"])
 > div[data-testid="stColumn"] {{
     width: auto !important; flex: 0 0 auto !important; min-width: 0 !important;
-    padding: 0 !important;
+    max-width: 44px !important; padding: 0 !important;
+}}
+@media (max-width: 768px) {{
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"]) {{
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        right: 0.75rem !important;
+        top: 0.85rem !important;
+    }}
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"])
+    > div[data-testid="stColumn"] {{
+        width: auto !important; flex: 0 0 auto !important; max-width: 44px !important;
+    }}
 }}
 div[class*="st-key-lang_sv"],
 div[class*="st-key-lang_en"] {{
@@ -439,7 +456,8 @@ div[data-testid="stLinkButton"] a {{
     .oc-img-hero {{ height: 128px; }}
     .oc-card {{ padding: 1rem; border-radius: 24px; }}
     .oc-card h3 {{ font-size: 1.08rem; }}
-    .oc-card-actions {{ flex-direction: column; gap: 0.45rem; }}
+    .oc-card-actions {{ flex-direction: row; flex-wrap: nowrap; gap: 0.4rem; }}
+    .oc-card-actions a {{ font-size: 0.74rem; min-height: 2.5rem; }}
 }}
 
 div:has(> #share-mark) + div button[data-testid="baseButton-primary"] {{
@@ -473,32 +491,124 @@ div:has(> #share-mark) + div button[data-testid="baseButton-primary"] {{
     border-radius: 999px; margin-top: 0.9rem;
 }}
 
-/* ----- Bottom nav ----- */
-div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) {{
-    position: fixed !important; left: 50% !important; transform: translateX(-50%) !important;
+/* ----- Bottom nav: always horizontal (incl. mobile) ----- */
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]),
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])[class] {{
+    position: fixed !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     bottom: max(0.85rem, env(safe-area-inset-bottom)) !important;
-    width: min(360px, calc(100% - 1.6rem)) !important;
+    width: min(360px, calc(100vw - 1.6rem)) !important;
+    max-width: calc(100vw - 1.6rem) !important;
     background: rgba(255,255,255,0.94) !important;
     backdrop-filter: blur(16px) saturate(1.2) !important;
     border-radius: 999px !important;
-    padding: 0.38rem 0.4rem 0.45rem !important;
+    padding: 0.3rem 0.35rem !important;
     box-shadow: 0 12px 36px rgba(62, 91, 132, 0.14) !important;
     border: 1px solid rgba(62, 91, 132, 0.06) !important;
-    z-index: 1000 !important; gap: 0 !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+    justify-content: space-between !important;
+    gap: 0.15rem !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
-div.stButton > button {{
-    background: transparent !important; border: none !important; box-shadow: none !important;
-    color: {MUTED} !important; font-size: 0.66rem !important; font-weight: 500 !important;
-    white-space: pre-line !important; line-height: 1.3 !important;
-    height: 3.5rem !important; padding: 0.2rem !important;
-    border-radius: 999px !important; max-width: none !important; transform: none !important;
+> div[data-testid="stColumn"],
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+> div {{
+    width: 33.333% !important;
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}}
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+div.stButton {{
+    width: 100% !important;
+    display: block !important;
+}}
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+div.stButton > button,
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+div.stButton > button[data-testid="baseButton-primary"],
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+div.stButton > button[data-testid="baseButton-secondary"] {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: {MUTED} !important;
+    font-size: 0.62rem !important;
+    font-weight: 500 !important;
+    white-space: pre-line !important;
+    line-height: 1.25 !important;
+    height: 3.35rem !important;
+    min-height: 3.35rem !important;
+    max-height: 3.35rem !important;
+    padding: 0.15rem 0.1rem !important;
+    border-radius: 999px !important;
+    max-width: none !important;
+    width: 100% !important;
+    transform: none !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
 div.stButton > button[data-testid="baseButton-primary"] {{
-    background: {PRIMARY_SOFT} !important; color: {PRIMARY} !important;
-    font-weight: 700 !important; box-shadow: none !important;
+    background: {PRIMARY_SOFT} !important;
+    color: {PRIMARY} !important;
+    font-weight: 700 !important;
+    box-shadow: none !important;
 }}
+@media (max-width: 768px) {{
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) {{
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        width: min(360px, calc(100vw - 1.2rem)) !important;
+    }}
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+    > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+    > div {{
+        width: 33.333% !important;
+        flex: 1 1 0 !important;
+        min-width: 0 !important;
+    }}
+    div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
+    div.stButton > button {{
+        height: 3.2rem !important;
+        min-height: 3.2rem !important;
+        font-size: 0.6rem !important;
+    }}
+}}
+
+/* Custom HTML bottom nav (bulletproof mobile row) */
+.oc-nav {{
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: max(0.85rem, env(safe-area-inset-bottom));
+    width: min(360px, calc(100vw - 1.2rem));
+    z-index: 1000;
+    display: flex; flex-direction: row; flex-wrap: nowrap;
+    align-items: stretch; justify-content: space-between; gap: 0.2rem;
+    background: rgba(255,255,255,0.94);
+    backdrop-filter: blur(16px) saturate(1.2);
+    border-radius: 999px; padding: 0.3rem 0.35rem;
+    box-shadow: 0 12px 36px rgba(62, 91, 132, 0.14);
+    border: 1px solid rgba(62, 91, 132, 0.06);
+}}
+.oc-nav a {{
+    flex: 1 1 0; min-width: 0; text-align: center; text-decoration: none;
+    color: {MUTED}; font-size: 0.62rem; font-weight: 500;
+    line-height: 1.25; padding: 0.45rem 0.2rem; border-radius: 999px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.1rem; white-space: nowrap;
+}}
+.oc-nav a .oc-nav-icon {{ font-size: 1.05rem; line-height: 1; }}
+.oc-nav a.active {{
+    background: {PRIMARY_SOFT}; color: {PRIMARY}; font-weight: 700;
+}}
+
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
 div[data-testid="stVerticalBlockBorderWrapper"] {{
     border: none !important; background: transparent !important; box-shadow: none !important;
@@ -519,9 +629,25 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
             height: 48px;
             font-size: 15px;
         }
-        /* Bottom nav */
+        /* Bottom nav: keep Hem / Historik / Profil in one row */
+        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]),
+        .oc-nav {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) > div[data-testid="stColumn"],
+        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) > div {
+            width: 33.333% !important;
+            flex: 1 1 0 !important;
+            min-width: 0 !important;
+        }
         div[data-testid="stHorizontalBlock"] {
-            flex-wrap: nowrap;
+            flex-wrap: nowrap !important;
+        }
+        .oc-card-actions {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
         }
     }
     .stApp {
@@ -811,17 +937,22 @@ def header(mode: str = "home") -> None:
 
 
 def nav() -> None:
+    """Bottom navigation that stays in one horizontal row on mobile."""
     page = st.session_state.page
     home_on = page in ("home", "results")
-    icons = {"home": ("\U0001f3e0", t("home")), "history": ("\U0001f552", t("history")), "profile": ("\U0001f464", t("profile"))}
-    cols = st.columns(3)
-    for col, key in zip(cols, ("home", "history", "profile")):
-        with col:
-            active = (key == "home" and home_on) or page == key
-            icon, name = icons[key]
-            if st.button(f"{icon}\n{name}", key=f"nav_{key}", type="primary" if active else "secondary", use_container_width=True):
-                st.session_state.page = key
-                st.rerun()
+    items = (
+        ("home", "\U0001f3e0", t("home"), home_on),
+        ("history", "\U0001f552", t("history"), page == "history"),
+        ("profile", "\U0001f464", t("profile"), page == "profile"),
+    )
+    parts = []
+    for key, icon, name, active in items:
+        cls = "active" if active else ""
+        parts.append(
+            f'<a class="{cls}" href="?nav={key}">'
+            f'<span class="oc-nav-icon">{icon}</span>{html.escape(name)}</a>'
+        )
+    st.html(f'<nav class="oc-nav" aria-label="Navigation">{"".join(parts)}</nav>')
 
 
 def result_card(choice: dict[str, Any], index: int) -> None:
@@ -1007,6 +1138,13 @@ def page_profile() -> None:
 def main() -> None:
     init_state()
     inject_css()
+    nav_q = st.query_params.get("nav")
+    if nav_q in ("home", "history", "profile"):
+        st.session_state.page = nav_q
+        try:
+            del st.query_params["nav"]
+        except Exception:
+            pass
     if st.query_params.get("pro") == "success":
         st.session_state.is_pro = True
         st.session_state.page = "profile"
