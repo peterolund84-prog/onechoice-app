@@ -43,7 +43,9 @@ Utan nycklar körs **demo-läge**.
 
 ## Design
 
-- Bakgrund `#f8f9fa`
+- Bakgrund `#F4F6F8` med mjuk blå gradient
 - Primär `#5A8BFF`
-- Beige `#F5F0E6`
-- Mobil-först, runda hörn, soft shadow
+- Pretendard-typografi, runda SV/EN-knappar uppe till höger
+- Stort rent input-fält utan nestlade vita boxar
+- Stora rundade knappar, generös spacing
+- Mobil-först, soft shadow, glass-nav
