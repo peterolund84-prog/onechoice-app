@@ -609,6 +609,43 @@ div.stButton > button[data-testid="baseButton-primary"] {{
     background: {PRIMARY_SOFT}; color: {PRIMARY}; font-weight: 700;
 }}
 
+/* NEVER stack horizontal rows on mobile (Streamlit default stacks columns) */
+div[data-testid="stHorizontalBlock"] {{
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch !important;
+}}
+div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+div[data-testid="stHorizontalBlock"] > div {{
+    min-width: 0 !important;
+    flex: 1 1 0 !important;
+    width: auto !important;
+    max-width: 100% !important;
+}}
+.oc-nav, .oc-lang, .oc-card-actions {{
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+}}
+@media (max-width: 768px) {{
+    div[data-testid="stHorizontalBlock"] {{
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }}
+    div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"],
+    div[data-testid="stHorizontalBlock"] > div {{
+        min-width: 0 !important;
+        flex: 1 1 0 !important;
+        width: auto !important;
+    }}
+    .oc-nav, .oc-lang, .oc-card-actions {{
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+    }}
+}}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
 div[data-testid="stVerticalBlockBorderWrapper"] {{
     border: none !important; background: transparent !important; box-shadow: none !important;
@@ -905,39 +942,48 @@ def save_history(question: str, choices: list[dict[str, Any]]) -> None:
 # UI
 # ---------------------------------------------------------------------------
 def lang_switcher() -> None:
-    a, b = st.columns([1, 1], gap="small")
-    with a:
-        if st.button(
-            "SV",
-            key="lang_sv",
-            type="primary" if st.session_state.language == "sv" else "secondary",
-            use_container_width=True,
-        ):
-            st.session_state.language = "sv"
-            st.rerun()
-    with b:
-        if st.button(
-            "EN",
-            key="lang_en",
-            type="primary" if st.session_state.language == "en" else "secondary",
-            use_container_width=True,
-        ):
-            st.session_state.language = "en"
-            st.rerun()
+    """SV/EN as inline-flex HTML – never stacks on mobile (no st.columns)."""
+    lang = st.session_state.language
+    sv_bg, sv_fg, sv_bd = (
+        (PRIMARY, "#fff", "none") if lang == "sv" else ("#fff", MUTED, "1px solid rgba(62,91,132,0.1)")
+    )
+    en_bg, en_fg, en_bd = (
+        (PRIMARY, "#fff", "none") if lang == "en" else ("#fff", MUTED, "1px solid rgba(62,91,132,0.1)")
+    )
+    st.markdown(
+        f"""
+<div class="oc-lang" style="
+  position:fixed;top:max(0.75rem,env(safe-area-inset-top));right:0.75rem;z-index:1100;
+  display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;
+  align-items:center;gap:0.4rem;margin:0;padding:0;">
+  <a href="?lang=sv" style="
+    display:inline-flex;align-items:center;justify-content:center;
+    width:40px;height:40px;min-width:40px;border-radius:50%;
+    background:{sv_bg};color:{sv_fg};border:{sv_bd};
+    text-decoration:none;font-size:0.66rem;font-weight:700;letter-spacing:0.04em;
+    box-shadow:0 4px 14px rgba(62,91,132,0.1);">SV</a>
+  <a href="?lang=en" style="
+    display:inline-flex;align-items:center;justify-content:center;
+    width:40px;height:40px;min-width:40px;border-radius:50%;
+    background:{en_bg};color:{en_fg};border:{en_bd};
+    text-decoration:none;font-size:0.66rem;font-weight:700;letter-spacing:0.04em;
+    box-shadow:0 4px 14px rgba(62,91,132,0.1);">EN</a>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def header(mode: str = "home") -> None:
     lang_switcher()
-    st.markdown('<div class="oc-topbar">', unsafe_allow_html=True)
     if mode == "results":
         st.markdown('<div class="oc-logo-sm">One</div>', unsafe_allow_html=True)
     else:
         st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def nav() -> None:
-    """Bottom navigation that stays in one horizontal row on mobile."""
+    """Bottom nav as inline-flex HTML row – cannot stack on mobile."""
     page = st.session_state.page
     home_on = page in ("home", "results")
     items = (
@@ -945,14 +991,36 @@ def nav() -> None:
         ("history", "\U0001f552", t("history"), page == "history"),
         ("profile", "\U0001f464", t("profile"), page == "profile"),
     )
-    parts = []
+    links = []
     for key, icon, name, active in items:
-        cls = "active" if active else ""
-        parts.append(
-            f'<a class="{cls}" href="?nav={key}">'
-            f'<span class="oc-nav-icon">{icon}</span>{html.escape(name)}</a>'
+        bg = PRIMARY_SOFT if active else "transparent"
+        fg = PRIMARY if active else MUTED
+        fw = "700" if active else "500"
+        links.append(
+            f'<a href="?nav={key}" style="'
+            f"flex:1 1 0;min-width:0;max-width:33.33%;box-sizing:border-box;"
+            f"display:flex;flex-direction:column;align-items:center;justify-content:center;"
+            f"gap:0.1rem;text-decoration:none;white-space:nowrap;"
+            f"padding:0.45rem 0.15rem;border-radius:999px;"
+            f"background:{bg};color:{fg};font-size:0.62rem;font-weight:{fw};line-height:1.25;"
+            f'">'
+            f'<span style="font-size:1.05rem;line-height:1">{icon}</span>'
+            f"{html.escape(name)}</a>"
         )
-    st.html(f'<nav class="oc-nav" aria-label="Navigation">{"".join(parts)}</nav>')
+    st.markdown(
+        '<div class="oc-nav" style="'
+        "position:fixed;left:50%;transform:translateX(-50%);"
+        "bottom:max(0.85rem,env(safe-area-inset-bottom));"
+        "width:min(360px,calc(100vw - 1.2rem));z-index:1100;"
+        "display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;"
+        "align-items:stretch;justify-content:space-between;gap:0.15rem;"
+        "background:rgba(255,255,255,0.96);backdrop-filter:blur(16px);"
+        "border-radius:999px;padding:0.3rem 0.35rem;margin:0;"
+        "box-shadow:0 12px 36px rgba(62,91,132,0.14);"
+        "border:1px solid rgba(62,91,132,0.06);"
+        f'" aria-label="Navigation">{"".join(links)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def result_card(choice: dict[str, Any], index: int) -> None:
@@ -970,9 +1038,21 @@ def result_card(choice: dict[str, Any], index: int) -> None:
     info_href = html.escape(choice.get("info_url") or info_url(str(choice.get("title", "")), cat), quote=True)
     order_href = html.escape(choice.get("order_url") or order_url(str(choice.get("title", "")), index, cat), quote=True)
     actions = (
-        f'<div class="oc-card-actions">'
-        f'<a class="oc-btn-ghost" href="{info_href}" target="_blank" rel="noopener noreferrer">{info_label}</a>'
-        f'<a class="oc-btn-solid" href="{order_href}" target="_blank" rel="noopener noreferrer">{order_label}</a>'
+        f'<div class="oc-card-actions" style="'
+        f"display:flex !important;flex-direction:row !important;flex-wrap:nowrap !important;"
+        f'align-items:stretch;gap:0.55rem;margin-top:1.05rem;width:100%;">'
+        f'<a class="oc-btn-ghost" href="{info_href}" target="_blank" rel="noopener noreferrer" style="'
+        f"flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;"
+        f"min-height:2.7rem;border-radius:999px;font-size:0.8rem;font-weight:600;"
+        f"text-decoration:none;letter-spacing:-0.01em;"
+        f"background:rgba(255,255,255,0.85);color:#4a4a55;"
+        f'border:1px solid rgba(62,91,132,0.1);">{info_label}</a>'
+        f'<a class="oc-btn-solid" href="{order_href}" target="_blank" rel="noopener noreferrer" style="'
+        f"flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;"
+        f"min-height:2.7rem;border-radius:999px;font-size:0.8rem;font-weight:600;"
+        f"text-decoration:none;letter-spacing:-0.01em;"
+        f"background:{PRIMARY};color:#fff;border:none;"
+        f'box-shadow:0 8px 18px rgba(90,139,255,0.28);">{order_label}</a>'
         f"</div>"
     )
 
@@ -998,8 +1078,9 @@ def result_card(choice: dict[str, Any], index: int) -> None:
             f"</div>"
         )
 
-    st.html(
-        f'<div class="oc-card {tint}{rec_cls}">{badge}{body}{actions}</div>'
+    st.markdown(
+        f'<div class="oc-card {tint}{rec_cls}">{badge}{body}{actions}</div>',
+        unsafe_allow_html=True,
     )
 
 
@@ -1138,6 +1219,13 @@ def page_profile() -> None:
 def main() -> None:
     init_state()
     inject_css()
+    lang_q = st.query_params.get("lang")
+    if lang_q in ("sv", "en"):
+        st.session_state.language = lang_q
+        try:
+            del st.query_params["lang"]
+        except Exception:
+            pass
     nav_q = st.query_params.get("nav")
     if nav_q in ("home", "history", "profile"):
         st.session_state.page = nav_q
