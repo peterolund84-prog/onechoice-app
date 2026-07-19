@@ -222,6 +222,23 @@ def decide(
     effective_reroll = min(reroll_index, MAX_REROLLS)
 
     ctx = collect_context(user, extra=context_extra)
+    if domain == "clothes" and (context_extra or {}).get("occasion"):
+        ctx["occasion"] = (context_extra or {}).get("occasion")
+        ctx["intent"] = (context_extra or {}).get("intent") or "wear"
+
+    meal_type: str | None = None
+    if domain == "food":
+        import food_domain as fd
+
+        meal_type = str(
+            (context_extra or {}).get("meal_type")
+            or ctx.get("meal_type")
+            or fd.default_meal_type()
+        )
+        if meal_type not in fd.MEAL_TYPES:
+            meal_type = fd.default_meal_type()
+        ctx["meal_type"] = meal_type
+
     if domain == "clothes" and "intent" not in ctx:
         ql = q.lower()
         ctx["intent"] = "buy" if any(w in ql for w in ("köp", "beställ", "handla", "buy")) else "wear"
@@ -233,7 +250,19 @@ def decide(
     profile = feasibility.parse_profile(user, ctx)
     history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
     prefs = db.get_preferences(user_id, domain, path=db_path)
-    recent = db.recent_suggestions(user_id, domain, days=REPEAT_DAYS, path=db_path)
+    # Repetition guard: per meal_type for food (porridge every morning is fine)
+    repeat_days = REPEAT_DAYS
+    if domain == "food" and meal_type:
+        import food_domain as fd
+
+        repeat_days = fd.repeat_days(meal_type)
+    recent = db.recent_suggestions(
+        user_id,
+        domain,
+        days=repeat_days,
+        meal_type=meal_type if domain == "food" else None,
+        path=db_path,
+    )
 
     explore = (not locked) and (random.random() > SAFE_RATIO)
     candidates = _generate_candidates(
@@ -247,6 +276,40 @@ def decide(
         language=language,
         grok_api_key=grok_api_key,
     )
+
+    # Occasion is the primary clothes constraint — pin a matching outfit first
+    if domain == "clothes":
+        import clothes_domain as cd
+
+        occasion = str(ctx.get("occasion") or "")
+        if occasion in cd.OCCASIONS:
+            clothes_prof = profile.get("clothes") or {}
+            pin = cd.outfit_for_occasion(
+                occasion,
+                section=str(clothes_prof.get("section") or "båda"),
+                language=language,
+                temp_c=ctx.get("temp_c")
+                if isinstance(ctx.get("temp_c"), (int, float))
+                else None,
+            )
+            candidates = [pin] + [c for c in candidates if c.get("suggestion") != pin["suggestion"]]
+
+    # Meal type drives food generation (not just a filter)
+    if domain == "food" and meal_type:
+        import food_domain as fd
+
+        pinned = fd.meal_candidates(meal_type, language)
+        if pinned:
+            typed = [
+                c
+                for c in candidates
+                if (c.get("meta") or {}).get("meal_type") == meal_type
+            ]
+            # Non-dinner: prefer meal-typed + pinned; dinner keeps full local pack
+            if meal_type == "middag":
+                candidates = pinned + candidates
+            else:
+                candidates = pinned + typed
 
     if skip_feasibility or domain == db.NEAR_DOMAIN:
         survivors = list(candidates) or _local_candidates(
@@ -283,6 +346,20 @@ def decide(
     if not execution:
         execution = _execution_for(domain, suggestion, language, user)
     execution = _ensure_food_shopping(domain, suggestion, execution, top, user, language)
+    if domain == "food" and meal_type:
+        import food_domain as fd
+
+        execution = fd.apply_meal_execution(
+            meal_type,
+            suggestion,
+            execution,
+            language=language,
+            location=str(ctx.get("location") or user.get("location") or "Sverige"),
+        )
+        # Strip shopping from context for non-dinner meals
+        if not fd.show_shopping(meal_type):
+            execution["shopping"] = None
+            execution["shopping_list"] = None
     status = "locked" if locked else "shown"
 
     decision = db.create_decision(
@@ -295,6 +372,7 @@ def decide(
         reroll_index=effective_reroll,
         context={
             **ctx,
+            "meal_type": meal_type,
             "explore": explore,
             "wildcard": bool(top.get("wildcard")),
             "candidates_n": len(candidates),
@@ -353,6 +431,7 @@ def handle_free_text(
     previous_decision_id: int | None = None,
     forced_domain: str | None = None,
     prior_route_log_id: int | None = None,
+    context_extra: dict[str, Any] | None = None,
 ) -> DecisionResult:
     """
     Gatekeeper entry for EVERY free-text input.
@@ -379,6 +458,7 @@ def handle_free_text(
             grok_api_key=grok_api_key,
             db_path=db_path,
             skip_feasibility=(forced_domain == db.NEAR_DOMAIN),
+            context_extra=context_extra,
             route_meta={
                 "route": "NEAR_DOMAIN" if forced_domain == db.NEAR_DOMAIN else "IN_DOMAIN",
                 "route_log_id": prior_route_log_id,
@@ -471,6 +551,7 @@ def handle_free_text(
         grok_api_key=grok_api_key,
         db_path=db_path,
         skip_feasibility=(classification.route == "NEAR_DOMAIN"),
+        context_extra=context_extra,
         route_meta=meta,
     )
     if result.ok and log_id is not None:
@@ -500,7 +581,9 @@ def accept_decision(
     out = db.record_feedback(did, accepted=True, path=db_path)
     rid = route_log_id
     if rid is None and isinstance(out, dict):
-        rid = (out.get("context") or {}).get("route_log_id")
+        ctx = out.get("context")
+        if isinstance(ctx, dict):
+            rid = ctx.get("route_log_id")
     if rid is not None:
         try:
             db.update_routed_query(int(rid), accepted=True, path=db_path)
@@ -509,6 +592,25 @@ def accept_decision(
         except Exception as exc:
             log.warning("failed to mark routed accept: %s", exc)
     return out
+
+
+def try_accept_decision(
+    decision_id: int | None,
+    *,
+    db_path: str | None = None,
+    route_log_id: int | None = None,
+) -> dict[str, Any] | None:
+    """Best-effort accept for UI handlers — never raises to the Streamlit layer."""
+    if decision_id is None:
+        log.warning("try_accept_decision: missing decision_id")
+        return None
+    try:
+        return accept_decision(
+            decision_id, db_path=db_path, route_log_id=route_log_id
+        )
+    except Exception as exc:
+        log.exception("try_accept_decision failed for id=%r: %s", decision_id, exc)
+        return None
 
 
 
@@ -756,6 +858,7 @@ def _local_candidates(
                 "suggestion": "Krämig tomatsås-pasta",
                 "justification": "Varmt, enkelt och klart på 20 minuter.",
                 "meta": {
+                    "meal_type": "middag",
                     "active_minutes": 20,
                     "ingredients": [
                         "pasta",
@@ -775,6 +878,7 @@ def _local_candidates(
                 "justification": "Varm krydda hemma — linser, kokosmjölk och grönt på listan.",
                 "wildcard": True,
                 "meta": {
+                    "meal_type": "middag",
                     "active_minutes": 30,
                     "ingredients": [
                         "röda linser",
@@ -795,6 +899,7 @@ def _local_candidates(
                 "suggestion": "Proteinomelett med grönt",
                 "justification": "Snabb, mättande — ägg och grönt på inköpslistan.",
                 "meta": {
+                    "meal_type": "middag",
                     "active_minutes": 15,
                     "ingredients": [
                         "ägg",
@@ -812,6 +917,7 @@ def _local_candidates(
                 "suggestion": "Kycklingwok med ris",
                 "justification": "Vardagsfavorit — kyckling och grönt köps, salt och olja hemma.",
                 "meta": {
+                    "meal_type": "middag",
                     "active_minutes": 25,
                     "ingredients": [
                         "kycklingfilé",
@@ -832,6 +938,7 @@ def _local_candidates(
                 "suggestion": "Klassisk burgare hemma",
                 "justification": "Komfort utan krångel — färs och bröd på listan.",
                 "meta": {
+                    "meal_type": "middag",
                     "active_minutes": 25,
                     "ingredients": [
                         "nötfärs",
@@ -1240,6 +1347,25 @@ def _ensure_food_shopping(
         return execution
     if execution.get("type") == "map":
         return execution
+    meal_type = str(
+        (top.get("meta") or {}).get("meal_type")
+        or execution.get("meal_type")
+        or ""
+    )
+    try:
+        import food_domain as fd
+
+        if meal_type and not fd.show_shopping(meal_type):
+            out = dict(execution)
+            out["shopping"] = None
+            out["shopping_list"] = None
+            out["meal_type"] = meal_type
+            out["label"] = out.get("label") or (
+                "Ät nu" if language == "sv" else "Eat now"
+            )
+            return out
+    except Exception:
+        pass
     shop = execution.get("shopping")
     if not shop and isinstance((top.get("meta") or {}).get("shopping"), dict):
         shop = top["meta"]["shopping"]
