@@ -201,6 +201,137 @@ class FridgePipelineTests(unittest.TestCase):
         )
 
 
+class FridgeGroundingTests(unittest.TestCase):
+    """Hard grounding: decisions may only reference inventory evidence."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = str(Path(self.tmp.name) / "t.db")
+        db.init_db(self.db_path)
+        self.user = db.ensure_user(language="sv", path=self.db_path)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_empty_inventory_refuses_never_decides(self) -> None:
+        r = pipeline.decide(
+            self.user["id"],
+            "Vad laga från kylen?",
+            domain_hint="food",
+            language="sv",
+            db_path=self.db_path,
+            context_extra={
+                "source": fr.SOURCE,
+                "available_ingredients": [],
+                "meal_type": "kvallsmal",
+            },
+        )
+        self.assertFalse(r.ok)
+        self.assertTrue(r.refused)
+        self.assertFalse(r.suggestion)
+        blob = (r.refusal_message or "").lower()
+        self.assertTrue("kylen" in blob or "fridge" in blob or "läsa" in blob, r.refusal_message)
+
+    def test_kvallsmal_fridge_never_serves_varm_en_rest(self) -> None:
+        """Meal-type canned 'Värm en rest' must be unreachable from fridge_photo.
+
+        Regression: kvällsmål max_minutes=5 used to hard-reject äggröra (6 min),
+        then fall through to meal_candidates → 'Värm en rest'.
+        """
+        import food_domain as fd
+
+        canned = [c["suggestion"].lower() for c in fd.meal_candidates("kvallsmal", "sv")]
+        self.assertIn("värm en rest", canned)
+
+        r = pipeline.decide(
+            self.user["id"],
+            "Vad laga från kylen?",
+            domain_hint="food",
+            language="sv",
+            db_path=self.db_path,
+            context_extra={
+                "source": fr.SOURCE,
+                "available_ingredients": ["ägg", "smör", "mjölk"],
+                "meal_type": "kvallsmal",
+            },
+        )
+        self.assertTrue(r.ok, r.refusal_message)
+        title = (r.suggestion or "").lower()
+        just = (r.justification or "").lower()
+        self.assertNotEqual(title, "värm en rest")
+        self.assertNotIn("värm en rest", title)
+        self.assertNotIn("värm en rest", just)
+        # Must ground in inventory
+        self.assertTrue(
+            "ägg" in title or "ägg" in just or "mjölk" in title or "mjölk" in just,
+            f"{r.suggestion!r} / {r.justification!r}",
+        )
+
+    def test_leftover_phrase_rejected_without_leftovers(self) -> None:
+        import feasibility
+
+        profile = feasibility.parse_profile(self.user, {"source": fr.SOURCE})
+        avail = ["ägg", "smör", "mjölk"]
+        ctx = {
+            "source": fr.SOURCE,
+            "available_ingredients": avail,
+            "meal_type": "kvallsmal",
+            "language": "sv",
+        }
+        bad = {
+            "suggestion": "Värm en rest",
+            "justification": "Ingen ny matlagning — mikra det som finns.",
+            "meta": {
+                "meal_type": "kvallsmal",
+                "leftover": True,
+                "ingredients": [],
+                "source": fr.SOURCE,
+                "available_ingredients": avail,
+                "active_minutes": 3,
+                "no_cook": True,
+            },
+        }
+        result = feasibility.feasibility_check(
+            bad, domain="food", profile=profile, context=ctx
+        )
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any(
+                x in result.reasons
+                for x in (
+                    "fridge_ungrounded_leftover",
+                    "fridge_missing_ingredient",
+                    "fridge_ungrounded",
+                )
+            ),
+            result.reasons,
+        )
+        self.assertFalse(fr.is_grounded_fridge_decision(
+            "Värm en rest",
+            "Mikra det som finns",
+            [],
+            avail,
+        ))
+
+    def test_grounded_eggs_butter_names_inventory(self) -> None:
+        self.assertTrue(
+            fr.is_grounded_fridge_decision(
+                "Äggröra",
+                "Du har ägg och smör — det blir äggröra.",
+                ["ägg", "smör"],
+                ["ägg", "smör", "mjölk"],
+            )
+        )
+        self.assertFalse(
+            fr.is_grounded_fridge_decision(
+                "Kycklingwok",
+                "Gott med ris",
+                ["kyckling", "ris"],
+                ["ägg", "smör"],
+            )
+        )
+
+
 class FridgeUiTests(unittest.TestCase):
     def test_fridge_photo_accumulator_caps_at_three(self) -> None:
         import app as app_mod

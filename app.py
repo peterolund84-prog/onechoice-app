@@ -109,7 +109,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "gdpr-v10-20260719"
+BUILD_ID = "fridge-grounding-v11-20260719"
 
 I18N = {
     "sv": {
@@ -219,7 +219,11 @@ I18N = {
         "fridge_confirm": "Ja — bestäm rätt",
         "fridge_add": "Lägg till",
         "fridge_add_placeholder": "t.ex. ägg",
-        "fridge_empty_scan": "Jag såg inget tydligt — lägg till själv eller ta om foto.",
+        "fridge_empty_scan": (
+            "Jag kunde inte läsa av kylen — testa ett ljusare foto taget rakt framifrån. "
+            "Eller lägg till råvaror manuellt nedan."
+        ),
+        "fridge_need_items": "Lägg till minst en råvara innan jag bestämmer — annars gissar jag bara.",
         "fridge_need_photo": "Lägg till minst ett foto.",
         "fridge_vision_error": "Kunde inte läsa fotot",
         "fridge_api_ok": "Grok API: kopplad",
@@ -338,7 +342,11 @@ I18N = {
         "fridge_confirm": "Yes — pick a dish",
         "fridge_add": "Add",
         "fridge_add_placeholder": "e.g. eggs",
-        "fridge_empty_scan": "Nothing clear — add items yourself or retake.",
+        "fridge_empty_scan": (
+            "I couldn’t read the fridge — try a brighter photo straight on. "
+            "Or add ingredients manually below."
+        ),
+        "fridge_need_items": "Add at least one ingredient before I decide — otherwise I’m just guessing.",
         "fridge_need_photo": "Add at least one photo.",
         "fridge_vision_error": "Couldn’t read the photo",
         "fridge_api_ok": "Grok API: connected",
@@ -2263,29 +2271,37 @@ def page_fridge() -> None:
                 st.rerun()
                 return
 
+    # HARD: never decide on empty inventory (blocked "Värm en rest" leak via meal templates)
+    confirm_ready = bool(names)
     if st.button(
         t("fridge_confirm"),
         type="primary",
         use_container_width=True,
         key="fridge_confirm_btn",
+        disabled=not confirm_ready,
     ):
         confirmed = fr.names_only(st.session_state.get("fridge_inventory") or [])
-        st.session_state.fridge_inventory = [
-            {"name": n, "confidence": 1.0} for n in confirmed
-        ]
-        st.session_state.fridge_mode = True
-        st.session_state.last_domain_hint = "food"
-        import food_domain as fd
+        if not confirmed:
+            st.warning(t("fridge_need_items"))
+        else:
+            st.session_state.fridge_inventory = [
+                {"name": n, "confidence": 1.0} for n in confirmed
+            ]
+            st.session_state.fridge_mode = True
+            st.session_state.last_domain_hint = "food"
+            import food_domain as fd
 
-        if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
-            st.session_state.food_meal_type = fd.default_meal_type()
-        q = (
-            "Vad ska jag laga av det som finns i kylen?"
-            if st.session_state.get("language", "sv") == "sv"
-            else "What should I cook from what’s in the fridge?"
-        )
-        run_decision(question=q, domain_hint="food", reroll=False, via_router=False)
-        return
+            if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
+                st.session_state.food_meal_type = fd.default_meal_type()
+            q = (
+                "Vad ska jag laga av det som finns i kylen?"
+                if st.session_state.get("language", "sv") == "sv"
+                else "What should I cook from what’s in the fridge?"
+            )
+            run_decision(question=q, domain_hint="food", reroll=False, via_router=False)
+            return
+    if not confirm_ready:
+        st.caption(t("fridge_need_items"))
 
     if st.button(t("fridge_scan"), use_container_width=True, key="fridge_rescan"):
         st.session_state.fridge_step = "capture"
