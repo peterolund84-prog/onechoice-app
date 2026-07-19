@@ -163,6 +163,31 @@ def init_db(path: Path | str | None = None) -> None:
                 ON routed_queries(route, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_routed_queries_category
                 ON routed_queries(category_guess, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS public_shares (
+                token TEXT PRIMARY KEY,
+                decision_id INTEGER,
+                domain TEXT NOT NULL,
+                suggestion TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                language TEXT NOT NULL DEFAULT 'sv',
+                open_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_public_shares_decision
+                ON public_shares(decision_id);
+
+            CREATE TABLE IF NOT EXISTS share_opens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL,
+                decision_id INTEGER,
+                ref TEXT,
+                opened_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_share_opens_token
+                ON share_opens(token, opened_at DESC);
             """
         )
         # Migrate older DBs missing profile_json
@@ -217,7 +242,140 @@ def init_db(path: Path | str | None = None) -> None:
             )
         except sqlite3.Error:
             pass
+        # Public share tables (migrate older DBs)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS public_shares (
+                token TEXT PRIMARY KEY,
+                decision_id INTEGER,
+                domain TEXT NOT NULL,
+                suggestion TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                language TEXT NOT NULL DEFAULT 'sv',
+                open_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS share_opens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token TEXT NOT NULL,
+                decision_id INTEGER,
+                ref TEXT,
+                opened_at TEXT NOT NULL
+            )
+            """
+        )
 
+
+def ensure_public_share(
+    decision: dict[str, Any],
+    *,
+    language: str = "sv",
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """
+    Create (or reuse) a public, denormalized share snapshot for a decision.
+    Works in guest SQLite without auth — required for share landing pages.
+    """
+    import share_domain as sd
+
+    init_db(path)
+    did = decision.get("decision_id") or decision.get("id")
+    try:
+        did_int = int(did) if did is not None else None
+    except (TypeError, ValueError):
+        did_int = None
+
+    # Reuse existing share for this decision_id when possible
+    if did_int is not None:
+        with get_conn(path) as conn:
+            row = conn.execute(
+                "SELECT * FROM public_shares WHERE decision_id = ? ORDER BY created_at DESC LIMIT 1",
+                (did_int,),
+            ).fetchone()
+            if row:
+                return _public_share_row(row)
+
+    token = uuid.uuid4().hex
+    payload = sd.public_payload_from_decision(decision, language=language)
+    payload["decision_id"] = did_int if did_int is not None else did
+    blob = json.dumps(payload, ensure_ascii=False, default=str)
+    domain = str(decision.get("domain") or payload.get("domain") or "other")
+    suggestion = str(decision.get("suggestion") or payload.get("suggestion") or "")
+    with get_conn(path) as conn:
+        conn.execute(
+            """
+            INSERT INTO public_shares (
+                token, decision_id, domain, suggestion, payload_json, language, open_count, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+            """,
+            (token, did_int, domain, suggestion, blob, language, utc_now()),
+        )
+        row = conn.execute(
+            "SELECT * FROM public_shares WHERE token = ?", (token,)
+        ).fetchone()
+        return _public_share_row(row)
+
+
+def get_public_share(
+    token: str, *, path: Path | str | None = None
+) -> dict[str, Any] | None:
+    if not token:
+        return None
+    init_db(path)
+    with get_conn(path) as conn:
+        row = conn.execute(
+            "SELECT * FROM public_shares WHERE token = ?", (str(token),)
+        ).fetchone()
+        return _public_share_row(row) if row else None
+
+
+def log_share_open(
+    token: str,
+    *,
+    decision_id: int | None = None,
+    ref: str | None = "share",
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Attribution: share → visit. Increment open_count + append share_opens row."""
+    init_db(path)
+    with get_conn(path) as conn:
+        conn.execute(
+            """
+            INSERT INTO share_opens (token, decision_id, ref, opened_at)
+            VALUES (?, ?, ?, ?)
+            """,
+            (str(token), decision_id, ref or "share", utc_now()),
+        )
+        conn.execute(
+            "UPDATE public_shares SET open_count = open_count + 1 WHERE token = ?",
+            (str(token),),
+        )
+        row = conn.execute(
+            "SELECT * FROM share_opens WHERE id = last_insert_rowid()"
+        ).fetchone()
+        return dict(row) if row else {"token": token, "decision_id": decision_id, "ref": ref}
+
+
+def count_share_opens(token: str, *, path: Path | str | None = None) -> int:
+    init_db(path)
+    with get_conn(path) as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM share_opens WHERE token = ?", (str(token),)
+        ).fetchone()
+        return int(row["n"] if row else 0)
+
+
+def _public_share_row(row: sqlite3.Row) -> dict[str, Any]:
+    d = dict(row)
+    try:
+        d["payload"] = json.loads(d.get("payload_json") or "{}")
+    except json.JSONDecodeError:
+        d["payload"] = {}
+    return d
 
 
 def ensure_user(
