@@ -845,6 +845,7 @@ def _active_decision_id(cur: dict[str, Any] | None = None) -> int | None:
     try:
         return int(raw)
     except (TypeError, ValueError):
+        # Non-int ids (should not happen with bigint) — keep raw usable via session only
         return None
 
 
@@ -857,12 +858,21 @@ def _is_food_cook(cur: dict[str, Any]) -> bool:
     return True
 
 
+def _is_streamlit_control_flow(exc: BaseException) -> bool:
+    """st.rerun() / st.stop() must never be swallowed by the error boundary."""
+    name = type(exc).__name__
+    return name in ("RerunException", "StopException") or "Rerun" in name
+
+
 def accept_and_open_execute(cur: dict[str, Any]) -> None:
     """
     Handla & laga handler:
     1) Lock decision (accepted) once — disable rerolls permanently for this decision
     2) Navigate to execute view (shopping + recipe)
-    Re-tapping after accept only reopens execute (no second accept write).
+    Re-tapping after accept only reopens execute (no second DB write).
+
+    DB accept is best-effort: if it fails we still open execute with a local lock
+    so the user is never stuck on the friendly error screen after tapping.
     """
     require_auth_context()
     if st.session_state.get("guest_mode"):
@@ -870,23 +880,33 @@ def accept_and_open_execute(cur: dict[str, Any]) -> None:
 
     already = bool(st.session_state.get("accepted") or cur.get("accepted"))
     did = _active_decision_id(cur)
+    # Fall back to raw id from payload for session mirroring
+    raw_id = did if did is not None else cur.get("decision_id") or st.session_state.get("decision_id")
 
     if not already:
-        if did is None:
-            raise ValueError(
-                "Handla & laga: decision_id saknas i session_state innan accept"
+        if did is not None:
+            try:
+                pipeline.accept_decision(
+                    did,
+                    route_log_id=cur.get("route_log_id")
+                    or st.session_state.get("route_log_id"),
+                )
+            except Exception as exc:
+                # Soft-fail: shopping/recipe live in session — still open execute
+                log.exception("accept_decision failed (continuing to execute): %s", exc)
+        else:
+            log.warning(
+                "Handla & laga: decision_id missing — locking locally and opening execute"
             )
-        pipeline.accept_decision(
-            did,
-            route_log_id=cur.get("route_log_id") or st.session_state.get("route_log_id"),
-        )
-        # Permanent accept-lock in session (survives back-nav; disables rerolls)
+
         st.session_state.accepted = True
-        st.session_state.decision_id = did
+        if raw_id is not None:
+            st.session_state.decision_id = raw_id
         updated = dict(cur)
         updated["locked"] = True
         updated["accepted"] = True
-        updated["decision_id"] = did
+        if raw_id is not None:
+            updated["decision_id"] = raw_id
         st.session_state.current = updated
 
     st.session_state.page = "execute"
@@ -909,8 +929,8 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
         f'{html.escape(t("shop_title"))} · {html.escape(str(store))}</div>',
         unsafe_allow_html=True,
     )
-    checks = st.session_state.setdefault("shopping_checks", {})
     did = decision_id if decision_id is not None else "x"
+    idx = 0
     for section, items in to_buy.items():
         if not items:
             continue
@@ -919,10 +939,11 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
             unsafe_allow_html=True,
         )
         for item in items:
-            key = f"shop:{did}:{section}:{item}"
-            checked = bool(checks.get(key, False))
-            new_val = st.checkbox(str(item), value=checked, key=key)
-            checks[key] = bool(new_val)
+            # Unique widget key — do not also write the same key into a dict
+            # (Streamlit owns session_state[widget_key]).
+            wkey = f"shop_chk_{did}_{idx}"
+            idx += 1
+            st.checkbox(str(item), key=wkey)
 
     assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
     assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
@@ -1238,15 +1259,39 @@ def page_execute() -> None:
     )
 
     ctx = cur.get("context") or {}
-    shop = ctx.get("shopping")
+    shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
     recipe = ctx.get("recipe") or (shop or {}).get("recipe")
-    if not recipe and shop:
-        import shopping as shopping_mod
+    import shopping as shopping_mod
 
+    # Always rebuild recipe from shopping ingredients so dish-name protein is present
+    if shop:
         recipe = shopping_mod.build_recipe(suggestion, shop.get("ingredients"))
+        # Keep session current in sync for back-nav
+        ctx = dict(ctx)
+        ctx["recipe"] = recipe
+        if "kyckling" in suggestion.lower() or "chicken" in suggestion.lower():
+            # Guarantee kyckling on the shopping payload shown in execute
+            flat = [
+                shopping_mod._strip_hint(i)
+                for section in (shop.get("to_buy") or {}).values()
+                for i in section
+            ]
+            if shopping_mod._missing_main_protein(suggestion, flat):
+                rebuilt = shopping_mod.build_shopping(
+                    suggestion, meta={"ingredients": shop.get("ingredients") or []}
+                )
+                if rebuilt:
+                    shop = rebuilt
+                    ctx["shopping"] = rebuilt
+                    recipe = rebuilt.get("recipe") or recipe
+        cur = dict(cur)
+        cur["context"] = ctx
+        st.session_state.current = cur
+    elif not recipe:
+        recipe = shopping_mod.build_recipe(suggestion)
 
     did = _active_decision_id(cur)
-    render_checkable_shopping(shop if isinstance(shop, dict) else None, did)
+    render_checkable_shopping(shop, did)
     render_recipe_block(
         recipe if isinstance(recipe, dict) else None,
         list((shop or {}).get("ingredients") or []) if isinstance(shop, dict) else None,
@@ -1398,7 +1443,9 @@ def main() -> None:
 
     try:
         handle_query_params()
-    except Exception:
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
         log.error("query-param handler failed:\n%s", traceback.format_exc())
         st.session_state.ui_error = True
         render_error_boundary()
@@ -1422,7 +1469,10 @@ def main() -> None:
 
     try:
         render()
-    except Exception:
+    except BaseException as exc:
+        # Never swallow st.rerun() / st.stop() — that falsely shows "Något gick fel"
+        if _is_streamlit_control_flow(exc):
+            raise
         # Hard requirement: never show raw traceback to the user
         log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
         st.session_state.ui_error = True

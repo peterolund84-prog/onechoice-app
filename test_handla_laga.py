@@ -82,6 +82,20 @@ class HandlaLagaTests(unittest.TestCase):
         self.assertIn("kycklingfilé", " ".join(recipe["ingredients"]).lower())
         self.assertGreaterEqual(len(recipe["steps"]), 3)
 
+    def test_recipe_gets_protein_when_meta_omitted_it(self) -> None:
+        """Regression: protein added to to_buy must also land in recipe ingredients."""
+        shop = shopping.build_shopping(
+            "Kryddig kycklinggryta",
+            meta={"ingredients": ["gul lök", "ris", "curry", "olja", "salt"]},
+        )
+        self.assertIsNotNone(shop)
+        assert shop is not None
+        ings = " ".join(shop["ingredients"]).lower()
+        self.assertIn("kyckling", ings)
+        recipe = shop["recipe"]
+        self.assertIn("kyckling", " ".join(recipe["ingredients"]).lower())
+        self.assertTrue(any("kyckling" in s.lower() for s in recipe["steps"]))
+
     def test_accept_and_open_execute_state_machine(self) -> None:
         """Simulate session transitions without Streamlit UI."""
         r = pipeline.decide(
@@ -111,6 +125,14 @@ class AppErrorBoundaryImportTests(unittest.TestCase):
         self.assertTrue(callable(app_mod.render_error_boundary))
         self.assertIn("Handla & laga", app_mod.I18N["sv"]["handla_laga"])
         self.assertIn("Något gick fel", app_mod.I18N["sv"]["error_friendly"])
+
+    def test_streamlit_rerun_not_treated_as_app_error(self) -> None:
+        import app as app_mod
+        from streamlit.runtime.scriptrunner_utils.exceptions import RerunException
+        from streamlit.runtime.scriptrunner import RerunData
+
+        self.assertTrue(app_mod._is_streamlit_control_flow(RerunException(RerunData())))
+        self.assertFalse(app_mod._is_streamlit_control_flow(ValueError("x")))
 
 
 if __name__ == "__main__":

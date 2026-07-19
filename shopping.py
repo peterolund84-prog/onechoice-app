@@ -189,13 +189,15 @@ def build_shopping(
         else:
             to_buy_flat.append(item)
 
-    # Critical: main protein from dish name must be on to_buy
+    # Critical: main protein from dish name must be on to_buy AND in ingredients
     missing = _missing_main_protein(suggestion, to_buy_flat)
     if missing:
-        # Auto-add if we can resolve, else fail
         to_buy_flat.insert(0, missing)
         if missing in assumed:
             assumed = [a for a in assumed if a != missing]
+        miss_n = _norm_item(missing)
+        if miss_n not in {_norm_item(x) for x in ingredients}:
+            ingredients = [missing] + list(ingredients)
 
     # Re-validate: every ingredient in exactly one list
     all_listed = {_norm_item(x) for x in to_buy_flat + assumed}
@@ -243,6 +245,11 @@ def build_recipe(suggestion: str, ingredients: list[str] | None = None) -> dict[
     ings = list(ingredients or _infer_full_ingredients(suggestion) or [])
     if not ings:
         ings = ["gul lök", "vitlök", "olja", "salt", "peppar", "säsongsgrönsaker", "ris"]
+    # Dish-name protein must appear in the recipe ingredient list
+    missing = _missing_main_protein(suggestion, ings)
+    if missing:
+        miss_n = _norm_item(missing)
+        ings = [missing] + [i for i in ings if _norm_item(i) != miss_n]
     steps = _recipe_steps(suggestion, ings)
     return {
         "title": suggestion,
@@ -257,6 +264,13 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
     """Deterministic Swedish cook steps for known dishes (metric)."""
     s = (suggestion or "").lower()
     join = ", ".join(ingredients[:6])
+    protein = _missing_main_protein(suggestion, [])  # canonical from name, if any
+    # If protein already in ingredients, still resolve display name from aliases
+    if protein is None:
+        for canonical, cues in PROTEIN_ALIASES.items():
+            if any(c in s for c in cues):
+                protein = canonical
+                break
 
     if "kycklingwok" in s or ("kyckling" in s and "wok" in s):
         return [
@@ -265,6 +279,14 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Hetta upp 1 msk olja i en wok. Stek kycklingen 5–6 min tills den är genomstekt.",
             "Tillsätt grönsakerna och stek 4–5 min. Krydda med 2 msk sojasås, salt och peppar.",
             "Servera woket över riset. Klart.",
+        ]
+    if "kyckling" in s or "chicken" in s:
+        return [
+            "Skölj 2 dl ris (eller annat tillbehör) och koka enligt förpackningen.",
+            "Skär 400 g kycklingfilé i bitar. Hacka grönsakerna.",
+            "Hetta upp 1 msk olja. Stek kycklingen 6–8 min tills den är genomstekt.",
+            "Tillsätt grönsaker och kryddor. Stek/sjuda 5–8 min. Smaka av med salt och peppar.",
+            "Servera kycklingen med tillbehöret. Klart.",
         ]
     if "pasta" in s or "tomatsås" in s:
         return [
@@ -307,6 +329,14 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Stek kycklingen i 1 msk olja 5–6 min. Skjut åt sidan, stek 2 ägg snabbt.",
             "Tillsätt nudlar, lök, vitlök, 2 msk sojasås och 1 msk fisksås. Rör om 3–4 min.",
             "Servera med limeklyftor. Smaka av med salt och peppar.",
+        ]
+
+    if protein:
+        return [
+            f"Förbered ingredienserna: {join}.",
+            f"Tillaga proteinkällan ({protein}) tills den är genomstekt.",
+            "Fräs lök/vitlök i 1 msk olja, tillsätt övrigt och låt sjuda 8–12 min.",
+            "Smaka av med salt och peppar. Servera med tillbehöret.",
         ]
 
     return [
