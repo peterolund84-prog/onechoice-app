@@ -22,7 +22,15 @@ if Path("/mount/src").exists():
     DB_PATH = Path("/tmp/onechoice.db")
 
 DOMAINS = ("food", "clothes", "movie", "workout", "weekend")
+NEAR_DOMAIN = "other"  # stored domain for NEAR_DOMAIN router route
 DECISION_STATUSES = ("shown", "rejected", "accepted", "locked")
+ROUTER_ROUTES = (
+    "IN_DOMAIN",
+    "NEAR_DOMAIN",
+    "HIGH_STAKES",
+    "AMBIGUOUS",
+    "NOT_A_DECISION",
+)
 
 # Auth context for Supabase RLS (access_token, refresh_token)
 _AUTH: tuple[str, str] | None = None
@@ -135,6 +143,26 @@ def init_db(path: Path | str | None = None) -> None:
 
             CREATE INDEX IF NOT EXISTS idx_preferences_user_domain
                 ON preferences(user_id, domain);
+
+            CREATE TABLE IF NOT EXISTS routed_queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                raw_text TEXT,
+                route TEXT NOT NULL,
+                domain TEXT,
+                confidence REAL,
+                category_guess TEXT,
+                normalized_question TEXT,
+                decision_shown INTEGER NOT NULL DEFAULT 0,
+                accepted INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_routed_queries_route
+                ON routed_queries(route, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_routed_queries_category
+                ON routed_queries(category_guess, created_at DESC);
             """
         )
         # Migrate older DBs missing profile_json
@@ -143,6 +171,47 @@ def init_db(path: Path | str | None = None) -> None:
             conn.execute(
                 "ALTER TABLE users ADD COLUMN profile_json TEXT NOT NULL DEFAULT '{}'"
             )
+        # Ensure routed_queries exists on older DBs (executescript IF NOT EXISTS covers new)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS routed_queries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                raw_text TEXT,
+                route TEXT NOT NULL,
+                domain TEXT,
+                confidence REAL,
+                category_guess TEXT,
+                normalized_question TEXT,
+                decision_shown INTEGER NOT NULL DEFAULT 0,
+                accepted INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE VIEW IF NOT EXISTS near_domain_demand AS
+            SELECT category_guess,
+                   COUNT(*) AS total,
+                   COUNT(DISTINCT user_id) AS unique_users,
+                   AVG(CASE WHEN accepted = 1 THEN 1.0 ELSE 0.0 END) AS accept_rate
+            FROM routed_queries
+            WHERE route = 'NEAR_DOMAIN'
+            GROUP BY category_guess
+            ORDER BY total DESC
+            """
+        )
+        # Privacy: wipe raw_text older than 90 days (normalized_question kept)
+        conn.execute(
+            """
+            UPDATE routed_queries
+            SET raw_text = NULL
+            WHERE raw_text IS NOT NULL
+              AND datetime(created_at) < datetime('now', '-90 days')
+            """
+        )
 
 
 def ensure_user(
@@ -455,3 +524,143 @@ def _decision_row(row: sqlite3.Row) -> dict[str, Any]:
     except json.JSONDecodeError:
         d["context"] = {}
     return d
+
+
+# ---------------------------------------------------------------------------
+# Routed query logging (privacy-aware)
+# ---------------------------------------------------------------------------
+def log_routed_query(
+    user_id: str,
+    *,
+    route: str,
+    domain: str | None = None,
+    confidence: float | None = None,
+    category_guess: str | None = None,
+    normalized_question: str | None = None,
+    raw_text: str | None = None,
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """
+    Insert one router log row.
+
+    HIGH_STAKES privacy: store ONLY route + timestamp + user_id.
+    """
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.log_routed_query(
+            user_id,
+            access_token=at,
+            refresh_token=rt,
+            route=route,
+            domain=domain,
+            confidence=confidence,
+            category_guess=category_guess,
+            normalized_question=normalized_question,
+            raw_text=raw_text,
+        )
+
+    # Hard privacy rule
+    if route == "HIGH_STAKES":
+        raw_text = None
+        domain = None
+        confidence = None
+        category_guess = None
+        normalized_question = None
+
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO routed_queries (
+                user_id, created_at, raw_text, route, domain, confidence,
+                category_guess, normalized_question, decision_shown, accepted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
+            """,
+            (
+                user_id,
+                utc_now(),
+                raw_text,
+                route,
+                domain,
+                confidence,
+                category_guess,
+                normalized_question,
+            ),
+        )
+        row = conn.execute(
+            "SELECT * FROM routed_queries WHERE id = ?", (cur.lastrowid,)
+        ).fetchone()
+        return dict(row)
+
+
+def update_routed_query(
+    query_id: int,
+    *,
+    decision_shown: bool | None = None,
+    accepted: bool | None = None,
+    path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.update_routed_query(
+            query_id,
+            access_token=at,
+            refresh_token=rt,
+            decision_shown=decision_shown,
+            accepted=accepted,
+        )
+    updates: list[str] = []
+    params: list[Any] = []
+    if decision_shown is not None:
+        updates.append("decision_shown = ?")
+        params.append(1 if decision_shown else 0)
+    if accepted is not None:
+        updates.append("accepted = ?")
+        params.append(1 if accepted else 0)
+    if not updates:
+        return None
+    params.append(query_id)
+    with get_conn(path) as conn:
+        conn.execute(
+            f"UPDATE routed_queries SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        row = conn.execute(
+            "SELECT * FROM routed_queries WHERE id = ?", (query_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def purge_expired_raw_text(
+    *,
+    days: int = 90,
+    path: Path | str | None = None,
+) -> int:
+    """Null out raw_text older than `days`. Keeps normalized_question + category_guess."""
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.purge_expired_raw_text(days=days, access_token=at, refresh_token=rt)
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            """
+            UPDATE routed_queries
+            SET raw_text = NULL
+            WHERE raw_text IS NOT NULL
+              AND datetime(created_at) < datetime('now', ?)
+            """,
+            (f"-{int(days)} days",),
+        )
+        return int(cur.rowcount or 0)
+
+
+def near_domain_demand(*, path: Path | str | None = None) -> list[dict[str, Any]]:
+    with get_conn(path) as conn:
+        rows = conn.execute(
+            "SELECT * FROM near_domain_demand"
+        ).fetchall()
+        return [dict(r) for r in rows]

@@ -78,6 +78,10 @@ I18N = {
         "auth_hint": "Supabase Auth — spara beslut i molnet",
         "no_supabase": "Supabase saknas i secrets — kör i lokalt demläge.",
         "logged_in_as": "Inloggad som",
+        "too_long": "Max 200 tecken.",
+        "ambiguous": "Välj vad det handlar om — så tar jag beslutet.",
+        "other": "Annat",
+        "not_a_decision": "Jag tar beslut, inte frågor. Vad behöver du bestämma?",
     },
     "en": {
         "tagline": "One decision. Done.",
@@ -121,6 +125,10 @@ I18N = {
         "auth_hint": "Supabase Auth — save decisions in the cloud",
         "no_supabase": "Supabase missing in secrets — running local demo.",
         "logged_in_as": "Signed in as",
+        "too_long": "Max 200 characters.",
+        "ambiguous": "Pick what this is about — then I’ll decide.",
+        "other": "Other",
+        "not_a_decision": "I make decisions, not answer questions. What do you need decided?",
     },
 }
 
@@ -132,6 +140,8 @@ def t(key: str) -> str:
 
 def domain_label(domain: str) -> str:
     lang = st.session_state.get("language", "sv")
+    if domain in ("other", "annat"):
+        return t("other")
     return I18N.get(lang, I18N["sv"])["domains"].get(domain, domain)
 
 
@@ -300,6 +310,9 @@ def init_state() -> None:
         "last_question": "",
         "last_domain_hint": None,
         "guest_mode": False,
+        "route_log_id": None,
+        "pending_free_text": None,
+        "force_route_domain": None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -465,7 +478,13 @@ def nav() -> None:
     )
 
 
-def run_decision(*, question: str, domain_hint: str | None, reroll: bool) -> None:
+def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_router: bool = False) -> None:
+    """
+    via_router=True: free-text path — MUST go through handle_free_text (no bypass).
+    Domain chips / ambiguous picks use via_router=False with an explicit domain_hint.
+    """
+    import router as rt
+
     require_auth_context()
     if not st.session_state.user_id:
         db.init_db()
@@ -481,8 +500,12 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool) -> Non
         st.session_state.last_domain_hint = domain_hint
 
     q = (st.session_state.last_question or question or "").strip()
+    if len(q) > rt.MAX_INPUT_CHARS:
+        q = q[: rt.MAX_INPUT_CHARS]
+        st.session_state.last_question = q
+
     hint = st.session_state.last_domain_hint or domain_hint
-    if not q and hint:
+    if not q and hint and hint != "other":
         q = pipeline._default_question(str(hint), st.session_state.language)
         st.session_state.last_question = q
 
@@ -493,23 +516,62 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool) -> Non
 
     try:
         with st.spinner(t("loading")):
-            result = pipeline.decide(
-                str(st.session_state.user_id),
-                q,
-                domain_hint=str(hint) if hint else None,
-                language=st.session_state.language,
-                reroll=reroll,
-                reroll_index=int(st.session_state.reroll_index or 0),
-                previous_decision_id=prev_id,
-                grok_api_key=get_secret("GROK_API_KEY"),
-            )
+            if via_router and not reroll:
+                result = pipeline.handle_free_text(
+                    str(st.session_state.user_id),
+                    q,
+                    language=st.session_state.language,
+                    grok_api_key=get_secret("GROK_API_KEY"),
+                    forced_domain=st.session_state.force_route_domain,
+                )
+                st.session_state.force_route_domain = None
+            elif via_router and reroll:
+                result = pipeline.handle_free_text(
+                    str(st.session_state.user_id),
+                    q,
+                    language=st.session_state.language,
+                    grok_api_key=get_secret("GROK_API_KEY"),
+                    reroll=True,
+                    reroll_index=int(st.session_state.reroll_index or 0),
+                    previous_decision_id=prev_id,
+                    forced_domain=str(hint) if hint else None,
+                    prior_route_log_id=st.session_state.route_log_id,
+                )
+            else:
+                # Domain chip / resolved pick — direct pipeline (not free-text)
+                result = pipeline.decide(
+                    str(st.session_state.user_id),
+                    q,
+                    domain_hint=str(hint) if hint else None,
+                    language=st.session_state.language,
+                    reroll=reroll,
+                    reroll_index=int(st.session_state.reroll_index or 0),
+                    previous_decision_id=prev_id,
+                    grok_api_key=get_secret("GROK_API_KEY"),
+                    skip_feasibility=(hint == "other"),
+                )
     except Exception as exc:
         log.exception("decide failed: %s", exc)
         st.error("Kunde inte skapa beslut just nu. Försök igen.")
         st.session_state.page = "home"
         return
 
+    st.session_state.route_log_id = result.route_log_id
     st.session_state.current = result.to_dict()
+    if result.ok and result.domain:
+        st.session_state.last_domain_hint = result.domain
+
+    if result.needs_domain_pick:
+        st.session_state.pending_free_text = q
+        st.session_state.page = "ambiguous"
+        st.rerun()
+        return
+
+    if result.ui_message and not result.ok and not result.refused:
+        st.session_state.page = "not_a_decision"
+        st.rerun()
+        return
+
     st.session_state.page = "result"
     st.rerun()
 
@@ -527,6 +589,8 @@ def _qp_one(value: Any) -> str | None:
 
 
 def page_home() -> None:
+    import router as rt
+
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     st.markdown(f'<p class="oc-tagline">{html.escape(t("tagline"))}</p>', unsafe_allow_html=True)
@@ -537,13 +601,55 @@ def page_home() -> None:
     )
     st.markdown(f'<div class="oc-domains">{chips}</div>', unsafe_allow_html=True)
 
-    q = st.text_area("q", height=110, label_visibility="collapsed", key="home_input", placeholder=t("ask"))
+    q = st.text_area(
+        "q",
+        height=110,
+        label_visibility="collapsed",
+        key="home_input",
+        placeholder=t("ask"),
+        max_chars=rt.MAX_INPUT_CHARS,
+    )
+    st.caption(f"{len(q or '')}/{rt.MAX_INPUT_CHARS}")
     if st.button(t("decide"), type="primary", use_container_width=True):
         question = (q or "").strip()
         if not question:
             st.warning(t("empty"))
+        elif len(question) > rt.MAX_INPUT_CHARS:
+            st.warning(t("too_long"))
         else:
-            run_decision(question=question, domain_hint=None, reroll=False)
+            # Free-text — router gatekeeper, no bypass
+            run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
+    nav()
+
+
+def page_ambiguous() -> None:
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="oc-tagline">{html.escape(t("ambiguous"))}</p>',
+        unsafe_allow_html=True,
+    )
+    domains = ("food", "clothes", "movie", "workout", "weekend")
+    chips = "".join(
+        f'<a href="?pick={d}">{html.escape(domain_label(d))}</a>' for d in domains
+    )
+    chips += f'<a href="?pick=other">{html.escape(t("other"))}</a>'
+    st.markdown(f'<div class="oc-domains">{chips}</div>', unsafe_allow_html=True)
+    if st.button(t("home"), use_container_width=True):
+        st.session_state.page = "home"
+        st.session_state.pending_free_text = None
+        st.rerun()
+    nav()
+
+
+def page_not_a_decision() -> None:
+    lang_bar()
+    cur = st.session_state.current or {}
+    msg = cur.get("ui_message") or t("not_a_decision")
+    st.markdown(f'<div class="oc-refuse">{html.escape(msg)}</div>', unsafe_allow_html=True)
+    if st.button(t("home"), use_container_width=True):
+        st.session_state.page = "home"
+        st.rerun()
     nav()
 
 
@@ -606,21 +712,30 @@ def page_result() -> None:
 
     if locked:
         if cur.get("decision_id") and st.button(t("accepted"), use_container_width=True):
-            pipeline.accept_decision(int(cur["decision_id"]))
+            pipeline.accept_decision(
+                int(cur["decision_id"]),
+                route_log_id=cur.get("route_log_id") or st.session_state.route_log_id,
+            )
             st.toast(t("accepted"))
     else:
         c1, c2 = st.columns(2)
         with c1:
             if st.button(t("new"), use_container_width=True):
+                # Reroll stays on same domain; free-text rerolls keep router context
+                via = bool(cur.get("route") or st.session_state.route_log_id)
                 run_decision(
                     question=st.session_state.last_question,
-                    domain_hint=st.session_state.last_domain_hint,
+                    domain_hint=st.session_state.last_domain_hint or cur.get("domain"),
                     reroll=True,
+                    via_router=via,
                 )
         with c2:
             if st.button(t("do_it"), type="primary", use_container_width=True):
                 if cur.get("decision_id"):
-                    pipeline.accept_decision(int(cur["decision_id"]))
+                    pipeline.accept_decision(
+                        int(cur["decision_id"]),
+                        route_log_id=cur.get("route_log_id") or st.session_state.route_log_id,
+                    )
                 st.toast(t("accepted"))
                 if exec_url:
                     st.markdown(
@@ -737,7 +852,25 @@ def handle_query_params() -> None:
             del st.query_params["domain"]
         except Exception:
             pass
-        run_decision(question="", domain_hint=domain, reroll=False)
+        run_decision(question="", domain_hint=domain, reroll=False, via_router=False)
+
+    # AMBIGUOUS resolution chips
+    pick = _qp_one(qp.get("pick"))
+    if pick in pipeline.ALLOWED_DOMAINS or pick == "other":
+        try:
+            del st.query_params["pick"]
+        except Exception:
+            pass
+        pending = st.session_state.pending_free_text or st.session_state.last_question or ""
+        st.session_state.force_route_domain = pick
+        st.session_state.last_domain_hint = pick
+        st.session_state.pending_free_text = None
+        run_decision(
+            question=pending,
+            domain_hint=pick,
+            reroll=False,
+            via_router=True,
+        )
 
 
 def main() -> None:
@@ -750,6 +883,8 @@ def main() -> None:
         "result": page_result,
         "history": page_history,
         "profile": page_profile,
+        "ambiguous": page_ambiguous,
+        "not_a_decision": page_not_a_decision,
     }.get(st.session_state.page, page_home)()
 
 

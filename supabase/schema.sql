@@ -153,3 +153,82 @@ drop policy if exists "Users delete own preferences" on public.preferences;
 create policy "Users delete own preferences"
   on public.preferences for delete
   using (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- Routed queries (free-text router log)
+-- ---------------------------------------------------------------------------
+-- Allow NEAR_DOMAIN decisions under domain = 'other'
+alter table public.decisions drop constraint if exists decisions_domain_check;
+alter table public.decisions
+  add constraint decisions_domain_check
+  check (domain in ('food', 'clothes', 'movie', 'workout', 'weekend', 'other'));
+
+create table if not exists public.routed_queries (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  raw_text text,
+  route text not null check (route in (
+    'IN_DOMAIN', 'NEAR_DOMAIN', 'HIGH_STAKES', 'AMBIGUOUS', 'NOT_A_DECISION'
+  )),
+  domain text,
+  confidence double precision,
+  category_guess text,
+  normalized_question text,
+  decision_shown boolean not null default false,
+  accepted boolean
+);
+
+create index if not exists idx_routed_queries_route
+  on public.routed_queries (route, created_at desc);
+
+create index if not exists idx_routed_queries_category
+  on public.routed_queries (category_guess, created_at desc);
+
+alter table public.routed_queries enable row level security;
+
+drop policy if exists "Users read own routed queries" on public.routed_queries;
+create policy "Users read own routed queries"
+  on public.routed_queries for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users insert own routed queries" on public.routed_queries;
+create policy "Users insert own routed queries"
+  on public.routed_queries for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users update own routed queries" on public.routed_queries;
+create policy "Users update own routed queries"
+  on public.routed_queries for update
+  using (auth.uid() = user_id);
+
+create or replace view public.near_domain_demand as
+select
+  category_guess,
+  count(*) as total,
+  count(distinct user_id) as unique_users,
+  avg(case when accepted then 1.0 else 0.0 end) as accept_rate
+from public.routed_queries
+where route = 'NEAR_DOMAIN'
+group by category_guess
+order by total desc;
+
+-- Privacy job: null raw_text older than 90 days (run via pg_cron or Edge Function)
+create or replace function public.purge_routed_query_raw_text(days int default 90)
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  n int;
+begin
+  update public.routed_queries
+  set raw_text = null
+  where raw_text is not null
+    and created_at < now() - make_interval(days => days);
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
