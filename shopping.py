@@ -245,10 +245,12 @@ def build_recipe(
     ingredients: list[str] | None = None,
     *,
     active_minutes: int | None = None,
+    servings: int | None = None,
 ) -> dict[str, Any]:
     """Swedish metric recipe: full ingredient list + ordered steps.
 
     active_minutes is the single source of truth for cook time when provided.
+    Always attaches rounded per-portion nutrition estimates (ca-värden).
     """
     ings = list(ingredients or _infer_full_ingredients(suggestion) or [])
     if not ings:
@@ -259,16 +261,229 @@ def build_recipe(
         miss_n = _norm_item(missing)
         ings = [missing] + [i for i in ings if _norm_item(i) != miss_n]
     steps = _recipe_steps(suggestion, ings)
+    portions = max(1, int(servings or _default_servings(suggestion, ings)))
     out: dict[str, Any] = {
         "title": suggestion,
         "ingredients": ings,
         "steps": steps,
         "unit_system": "metric",
         "language": "sv",
+        "nutrition": estimate_nutrition(ings, suggestion=suggestion, servings=portions),
     }
     if active_minutes is not None:
         out["active_minutes"] = int(active_minutes)
     return out
+
+
+# Per 100 g (or per unit where noted): kcal, protein_g, fat_g, carbs_g
+# Honest ballpark for ca-värden — never pretend lab precision.
+_NUTRIENT_PER_100G: dict[str, tuple[float, float, float, float]] = {
+    "kycklingfilé": (110, 23, 1.5, 0),
+    "kyckling": (110, 23, 1.5, 0),
+    "nötfärs": (250, 17, 20, 0),
+    "köttfärs": (250, 17, 20, 0),
+    "färs": (250, 17, 20, 0),
+    "lax": (200, 20, 13, 0),
+    "torsk": (80, 18, 0.5, 0),
+    "bacon": (350, 15, 30, 1),
+    "räkor": (90, 18, 1, 0),
+    "ägg": (140, 12, 10, 1),  # per 100 g ≈ 2 eggs
+    "mjölk": (45, 3.5, 1.5, 5),
+    "grädde": (300, 2, 30, 3),
+    "yoghurt": (60, 4, 3, 5),
+    "fil": (60, 3.5, 3, 4),
+    "ost": (350, 25, 28, 1),
+    "parmesan": (400, 35, 28, 1),
+    "smör": (720, 0.5, 80, 0.5),
+    "olja": (900, 0, 100, 0),
+    "pasta": (350, 12, 1.5, 70),
+    "ris": (350, 7, 0.5, 78),
+    "risnudlar": (350, 1, 0, 85),
+    "bröd": (250, 8, 3, 45),
+    "hamburgerbröd": (270, 9, 4, 48),
+    "havregryn": (370, 13, 7, 60),
+    "linser": (330, 24, 1.5, 50),
+    "röda linser": (330, 24, 1.5, 50),
+    "bönor": (120, 8, 0.5, 18),
+    "kokosmjölk": (180, 1.5, 18, 3),
+    "krossade tomater": (25, 1, 0.2, 4),
+    "tomat": (20, 1, 0.2, 3),
+    "gul lök": (40, 1, 0.1, 8),
+    "lök": (40, 1, 0.1, 8),
+    "vitlök": (140, 6, 0.5, 28),
+    "morot": (40, 1, 0.2, 8),
+    "broccoli": (35, 3, 0.4, 5),
+    "paprika": (30, 1, 0.3, 5),
+    "paprika (färsk)": (30, 1, 0.3, 5),
+    "spenat": (25, 3, 0.4, 1),
+    "sallad": (15, 1, 0.2, 2),
+    "gurka": (15, 0.7, 0.1, 3),
+    "avokado": (160, 2, 15, 7),
+    "zucchini": (20, 1, 0.3, 3),
+    "champinjon": (25, 3, 0.3, 2),
+    "potatis": (80, 2, 0.1, 17),
+    "banan": (90, 1, 0.3, 20),
+    "äpple": (50, 0.3, 0.2, 12),
+    "sojasås": (60, 8, 0, 6),
+    "tonfisk": (110, 25, 1, 0),
+    "skinka": (120, 20, 4, 1),
+    "korv": (250, 12, 22, 2),
+    "tortilla": (300, 8, 7, 50),
+    "müsli": (370, 10, 6, 65),
+    "sylt": (250, 0.3, 0.1, 60),
+}
+
+# Typical whole-recipe grams when the list is name-only (≈ 2 portions)
+_DEFAULT_GRAMS: dict[str, float] = {
+    "kycklingfilé": 400,
+    "kyckling": 400,
+    "nötfärs": 400,
+    "köttfärs": 400,
+    "färs": 400,
+    "lax": 250,
+    "torsk": 300,
+    "bacon": 100,
+    "räkor": 200,
+    "ägg": 150,  # ~3 eggs
+    "mjölk": 100,
+    "grädde": 100,
+    "yoghurt": 200,
+    "fil": 200,
+    "ost": 80,
+    "parmesan": 30,
+    "smör": 15,
+    "olja": 15,
+    "pasta": 200,
+    "ris": 160,  # dry
+    "risnudlar": 200,
+    "bröd": 120,
+    "hamburgerbröd": 160,
+    "havregryn": 80,
+    "linser": 160,
+    "röda linser": 160,
+    "bönor": 200,
+    "kokosmjölk": 200,
+    "krossade tomater": 400,
+    "tomat": 150,
+    "gul lök": 100,
+    "lök": 100,
+    "vitlök": 10,
+    "morot": 100,
+    "broccoli": 200,
+    "paprika": 150,
+    "paprika (färsk)": 150,
+    "spenat": 80,
+    "sallad": 50,
+    "gurka": 100,
+    "avokado": 150,
+    "zucchini": 200,
+    "champinjon": 150,
+    "potatis": 400,
+    "banan": 120,
+    "äpple": 150,
+    "sojasås": 30,
+    "tonfisk": 150,
+    "skinka": 80,
+    "korv": 200,
+    "tortilla": 120,
+    "müsli": 60,
+    "sylt": 30,
+}
+
+
+def _default_servings(suggestion: str, ingredients: list[str]) -> int:
+    s = (suggestion or "").lower()
+    # Single-serve no-cook / fridge snacks
+    if any(w in s for w in ("äggröra", "äggmack", "yoghurt", "macka", "smörgås", "fil ")):
+        return 1
+    if len(ingredients) <= 4 and any(_norm_item(i) in ("ägg", "yoghurt", "fil") for i in ingredients):
+        return 1
+    return 2
+
+
+def _match_nutrient_key(name: str) -> str | None:
+    n = _norm_item(name)
+    if n in _NUTRIENT_PER_100G:
+        return n
+    # Longest substring match among known keys
+    best = None
+    best_len = 0
+    for key in _NUTRIENT_PER_100G:
+        if key in n or n in key:
+            if len(key) > best_len:
+                best = key
+                best_len = len(key)
+    return best
+
+
+def round_nutrition(kcal: float, protein_g: float, fat_g: float, carbs_g: float) -> dict[str, int]:
+    """Aggressive rounding — false precision invites scrutiny."""
+    return {
+        "kcal": int(round(max(0, kcal) / 50.0) * 50),
+        "protein_g": int(round(max(0, protein_g) / 5.0) * 5),
+        "fat_g": int(round(max(0, fat_g) / 5.0) * 5),
+        "carbs_g": int(round(max(0, carbs_g) / 5.0) * 5),
+    }
+
+
+def estimate_nutrition(
+    ingredients: list[str],
+    *,
+    suggestion: str = "",
+    servings: int = 2,
+) -> dict[str, Any]:
+    """Per-portion ca-värden from ingredient names + typical recipe amounts."""
+    portions = max(1, int(servings or 2))
+    tot_kcal = tot_p = tot_f = tot_c = 0.0
+    for raw in ingredients or []:
+        key = _match_nutrient_key(str(raw))
+        if not key:
+            continue
+        per100 = _NUTRIENT_PER_100G[key]
+        grams = float(_DEFAULT_GRAMS.get(key, 80))
+        factor = grams / 100.0
+        tot_kcal += per100[0] * factor
+        tot_p += per100[1] * factor
+        tot_f += per100[2] * factor
+        tot_c += per100[3] * factor
+    # Unknown / empty list → modest default so UI never invents zeros as truth
+    if tot_kcal <= 0:
+        rounded = round_nutrition(400, 20, 15, 40)
+    else:
+        rounded = round_nutrition(
+            tot_kcal / portions,
+            tot_p / portions,
+            tot_f / portions,
+            tot_c / portions,
+        )
+    return {
+        **rounded,
+        "per": "portion",
+        "servings": portions,
+        "label": "ca-värden",
+        "suggestion": suggestion or "",
+    }
+
+
+def format_nutrition_line(nutrition: dict[str, Any] | None, *, language: str = "sv") -> str:
+    """Muted single-line reference — never a tracker UI."""
+    if not nutrition or not isinstance(nutrition, dict):
+        return ""
+    kcal = nutrition.get("kcal")
+    p = nutrition.get("protein_g")
+    f = nutrition.get("fat_g")
+    c = nutrition.get("carbs_g")
+    if kcal is None:
+        return ""
+    if language == "en":
+        return (
+            f"approx. per serving: ~{kcal} kcal · {p} g protein · "
+            f"{f} g fat · {c} g carbs"
+        )
+    return (
+        f"ca-värden per portion: ~{kcal} kcal · {p} g protein · "
+        f"{f} g fett · {c} g kolhydrater"
+    )
 
 
 def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
