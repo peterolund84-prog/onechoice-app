@@ -54,7 +54,8 @@ def init_db(path: Path | str | None = None) -> None:
                 budget TEXT,
                 dietary_json TEXT NOT NULL DEFAULT '[]',
                 location TEXT,
-                wardrobe_json TEXT NOT NULL DEFAULT '[]'
+                wardrobe_json TEXT NOT NULL DEFAULT '[]',
+                profile_json TEXT NOT NULL DEFAULT '{}'
             );
 
             CREATE TABLE IF NOT EXISTS decisions (
@@ -95,6 +96,12 @@ def init_db(path: Path | str | None = None) -> None:
                 ON preferences(user_id, domain);
             """
         )
+        # Migrate older DBs missing profile_json
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()}
+        if "profile_json" not in cols:
+            conn.execute(
+                "ALTER TABLE users ADD COLUMN profile_json TEXT NOT NULL DEFAULT '{}'"
+            )
 
 
 def ensure_user(
@@ -120,6 +127,7 @@ def ensure_user(
 
 
 def update_user(user_id: str, **fields: Any) -> dict[str, Any]:
+    path = fields.pop("path", None)
     allowed = {
         "language",
         "is_pro",
@@ -127,22 +135,23 @@ def update_user(user_id: str, **fields: Any) -> dict[str, Any]:
         "dietary_json",
         "location",
         "wardrobe_json",
+        "profile_json",
     }
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
-        return ensure_user(user_id)
+        return ensure_user(user_id, path=path)
 
     # Serialize list/dict fields
-    for key in ("dietary_json", "wardrobe_json"):
+    for key in ("dietary_json", "wardrobe_json", "profile_json"):
         if key in updates and not isinstance(updates[key], str):
             updates[key] = json.dumps(updates[key], ensure_ascii=False)
 
     cols = ", ".join(f"{k} = ?" for k in updates)
     vals = list(updates.values()) + [user_id]
-    with get_conn() as conn:
+    with get_conn(path) as conn:
         conn.execute(f"UPDATE users SET {cols} WHERE id = ?", vals)
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        return dict(row) if row else ensure_user(user_id)
+        return dict(row) if row else ensure_user(user_id, path=path)
 
 
 def create_decision(

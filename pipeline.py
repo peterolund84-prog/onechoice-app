@@ -2,8 +2,14 @@
 """
 OneChoice decision pipeline.
 
-Single entry point: decide(...)
-  question → classify domain → context + history → candidates → rank → ONE result
+Shared flow (all domains):
+  question → classify domain → profile + context + history
+  → LLM/local generates ~5 candidates
+  → feasibility_check (domain validator) — discard failures, never show broken decisions
+  → rank survivors (80% close to accepted history, 20% wildcard/"Vildkort")
+  → display ONE + one-line justification + execution step
+
+Repetition guard: 7 days per domain. Max 3 rerolls, then lock.
 """
 
 from __future__ import annotations
@@ -20,12 +26,13 @@ from urllib.parse import quote_plus
 import requests
 
 import db
+import feasibility
 
 log = logging.getLogger("onechoice.pipeline")
 
 MAX_REROLLS = 3
-REPEAT_DAYS = 14
-SAFE_RATIO = 0.80  # bandit: 80% safe / 20% explore
+REPEAT_DAYS = 7
+SAFE_RATIO = 0.80  # bandit: 80% safe / 20% explore (wildcard)
 
 ALLOWED_DOMAINS = db.DOMAINS  # food, clothes, movie, workout, weekend
 
@@ -61,7 +68,7 @@ DOMAIN_KEYWORDS: dict[str, tuple[str, ...]] = {
 }
 
 REFUSAL_COPY = {
-    "sv": "Onechoice handles everyday decisions. This one is yours.",
+    "sv": "Onechoice tar vardagsbesluten. Det här beslutet är ditt.",
     "en": "Onechoice handles everyday decisions. This one is yours.",
 }
 
@@ -116,7 +123,9 @@ def collect_context(
         "time_of_day": _time_of_day(now.hour),
         "weekday": now.strftime("%A"),
         "hour": now.hour,
+        "is_weekend": now.weekday() >= 5,
         "weather": (extra or {}).get("weather", "unknown"),
+        "temp_c": (extra or {}).get("temp_c"),
         "location": user.get("location") or (extra or {}).get("location") or "unknown",
         "budget": user.get("budget") or (extra or {}).get("budget") or "medium",
         "dietary": dietary,
@@ -191,6 +200,11 @@ def decide(
     effective_reroll = min(reroll_index, MAX_REROLLS)
 
     ctx = collect_context(user, extra=context_extra)
+    # Infer clothes intent from question
+    if domain == "clothes" and "intent" not in ctx:
+        ql = q.lower()
+        ctx["intent"] = "buy" if any(w in ql for w in ("köp", "beställ", "handla", "buy")) else "wear"
+    profile = feasibility.parse_profile(user, ctx)
     history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
     prefs = db.get_preferences(user_id, domain, path=db_path)
     recent = db.recent_suggestions(user_id, domain, days=REPEAT_DAYS, path=db_path)
@@ -200,21 +214,47 @@ def decide(
         question=q,
         domain=domain,
         context=ctx,
+        profile=profile,
         history=history,
         preferences=prefs,
         recent=recent,
         language=language,
         grok_api_key=grok_api_key,
     )
+    # Feasibility gate — regenerate from local feasible pack if all fail
+    survivors = feasibility.filter_feasible(
+        candidates, domain=domain, profile=profile, context=ctx
+    )
+    if not survivors:
+        survivors = feasibility.filter_feasible(
+            _local_candidates(domain, language, recent, ctx, profile),
+            domain=domain,
+            profile=profile,
+            context=ctx,
+        )
+    if not survivors:
+        survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
+
     ranked = _rank_candidates(
-        candidates,
+        survivors,
         preferences=prefs,
         recent=recent,
         explore=explore,
     )
-    top = ranked[0] if ranked else _fallback_candidate(domain, language, recent)
+    top = ranked[0] if ranked else survivors[0]
+    if explore or top.get("wildcard"):
+        # Mark exploration as Vildkort in context; never mention alternatives to user
+        top = dict(top)
+        top["wildcard"] = True
 
-    execution = _execution_for(domain, top["suggestion"], language, user)
+    justification = top["justification"]
+    if top.get("wildcard") and language == "sv" and "vildkort" not in justification.lower():
+        # Soft tag only in stored context; user-facing stays one confident line
+        pass
+
+    execution = top.get("execution") or _execution_for(domain, top["suggestion"], language, user)
+    # Attach shopping list / workout plan into justification only if still one line?
+    # Spec: one-line justification + separate execution step — keep justification as-is.
     status = "locked" if locked else "shown"
 
     decision = db.create_decision(
@@ -222,13 +262,20 @@ def decide(
         domain=domain,
         question=q,
         suggestion=top["suggestion"],
-        justification=top["justification"],
+        justification=justification,
         status=status,
         reroll_index=effective_reroll,
-        context={**ctx, "explore": explore, "candidates_n": len(candidates)},
-        execution_type=execution["type"],
-        execution_label=execution["label"],
-        execution_url=execution["url"],
+        context={
+            **ctx,
+            "explore": explore,
+            "wildcard": bool(top.get("wildcard")),
+            "candidates_n": len(candidates),
+            "feasible_n": len(survivors),
+            "execution_detail": execution.get("detail"),
+        },
+        execution_type=execution.get("type"),
+        execution_label=execution.get("label"),
+        execution_url=execution.get("url"),
         path=db_path,
     )
 
@@ -247,16 +294,16 @@ def decide(
         ok=True,
         domain=domain,
         suggestion=top["suggestion"],
-        justification=top["justification"],
-        execution_type=execution["type"],
-        execution_label=execution["label"],
-        execution_url=execution["url"],
+        justification=justification,
+        execution_type=execution.get("type"),
+        execution_label=execution.get("label"),
+        execution_url=execution.get("url"),
         decision_id=decision["id"],
         reroll_index=effective_reroll,
         locked=locked,
         refused=False,
         context=decision.get("context") or ctx,
-        explore=explore,
+        explore=explore or bool(top.get("wildcard")),
     )
 
 
@@ -312,32 +359,42 @@ def _generate_candidates(
     question: str,
     domain: str,
     context: dict[str, Any],
+    profile: dict[str, Any],
     history: list[dict[str, Any]],
     preferences: list[dict[str, Any]],
     recent: list[str],
     language: str,
     grok_api_key: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if grok_api_key and not grok_api_key.startswith("din_"):
         try:
             return _grok_candidates(
-                question, domain, context, history, preferences, recent, language, grok_api_key
+                question,
+                domain,
+                context,
+                profile,
+                history,
+                preferences,
+                recent,
+                language,
+                grok_api_key,
             )
         except Exception as exc:
             log.exception("Grok candidates failed: %s", exc)
-    return _local_candidates(domain, language, recent, context)
+    return _local_candidates(domain, language, recent, context, profile)
 
 
 def _grok_candidates(
     question: str,
     domain: str,
     context: dict[str, Any],
+    profile: dict[str, Any],
     history: list[dict[str, Any]],
     preferences: list[dict[str, Any]],
     recent: list[str],
     language: str,
     api_key: str,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     lang = "Swedish" if language == "sv" else "English"
     accepted = [h["suggestion"] for h in history if h.get("status") in ("accepted", "locked")][:8]
     rejected = [h["suggestion"] for h in history if h.get("status") == "rejected"][:8]
@@ -345,34 +402,45 @@ def _grok_candidates(
     neg = [p for p in preferences if p.get("score", 0) < 0][:8]
 
     system = (
-        "You are OneChoice. You make exactly one everyday decision. "
-        "Reason internally. Never hedge. Never offer alternatives to the user. "
+        "You are OneChoice. You make exactly one everyday decision the user can execute TODAY. "
+        "If a candidate would hit any obstacle, discard it before returning. "
+        "Never hedge. Never offer alternatives. Never show substitution notes. "
         f"Write BOTH suggestion and justification entirely in {lang}. "
-        "Do not mix languages. Output valid JSON only."
+        "Output valid JSON only."
     )
+    domain_rules = _domain_prompt_rules(domain, profile)
     user = f"""
 Domain: {domain}
 Question: {question}
-Output language (STRICT): {lang} — every word of suggestion AND justification must be in {lang}.
+Output language (STRICT): {lang}
 Context: {json.dumps(context, ensure_ascii=False)}
-Recently shown/accepted (avoid repeats): {json.dumps(recent[:12], ensure_ascii=False)}
+User profile: {json.dumps(profile, ensure_ascii=False)}
+Recently shown/accepted (avoid repeats within 7 days): {json.dumps(recent[:12], ensure_ascii=False)}
 Accepted before: {json.dumps(accepted, ensure_ascii=False)}
 Rejected before: {json.dumps(rejected, ensure_ascii=False)}
 Positive prefs: {json.dumps(pos, ensure_ascii=False)}
 Negative prefs: {json.dumps(neg, ensure_ascii=False)}
 
-Internally invent 5 strong candidate decisions for this domain.
-Rank them yourself. Return ONLY JSON:
+Domain feasibility rules:
+{domain_rules}
+
+Internally invent 5 strong candidate decisions. Mark ~1 as wildcard=true (adventure in flavor/genre, NEVER in sourcing or unavailable services).
+Return ONLY JSON:
 {{
   "candidates": [
-    {{"suggestion":"...","justification":"one confident line"}},
+    {{
+      "suggestion":"...",
+      "justification":"one confident line",
+      "wildcard": false,
+      "meta": {{}}
+    }},
     ... exactly 5 items ...
   ]
 }}
 Rules:
 - suggestion is the decision itself (short, decisive), fully in {lang}
 - justification is ONE line in {lang}, personal, no hedging, no "you could also"
-- never mix English into Swedish output (or vice versa)
+- every candidate must already pass the domain feasibility rules above
 - avoid anything in the recent/rejected lists when possible
 """
     resp = requests.post(
@@ -397,15 +465,56 @@ Rules:
     if brace:
         raw = brace.group(0)
     data = json.loads(raw)
-    out = []
+    out: list[dict[str, Any]] = []
     for c in data.get("candidates", []):
         s = str(c.get("suggestion", "")).strip()
         j = str(c.get("justification", "")).strip()
         if s and j:
-            out.append({"suggestion": s, "justification": j})
+            out.append(
+                {
+                    "suggestion": s,
+                    "justification": j,
+                    "wildcard": bool(c.get("wildcard")),
+                    "meta": c.get("meta") or {},
+                }
+            )
     if len(out) < 3:
         raise ValueError("not enough candidates from grok")
     return out[:5]
+
+
+def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
+    rules = {
+        "food": (
+            "Only Swedish supermarket basic assortment (ICA/Coop/Willys/Lidl/Hemköp). "
+            "No teff, fresh lemongrass, specialty imports. Max 30 min weekday / 60 min weekend. "
+            "Wildcard = flavor adventure, never sourcing. Eating out only if open + near user."
+        ),
+        "clothes": (
+            f"Section={profile.get('clothes', {}).get('section')}. "
+            "Wear: wardrobe only if registered, else category outfit. "
+            "Buy: Swedish retailers in stock + size. Respect weather/temp."
+        ),
+        "movie": (
+            f"Services={profile.get('movie', {}).get('services')}. "
+            f"Max minutes={profile.get('movie', {}).get('available_minutes')}. "
+            "Must be on a subscribed service. No rentals unless allow_rentals. Include deep link target in meta.title."
+        ),
+        "workout": (
+            f"Context={profile.get('workout', {}).get('context')}, "
+            f"equipment={profile.get('workout', {}).get('equipment')}, "
+            f"minutes={profile.get('workout', {}).get('default_minutes')}, "
+            f"limitations={profile.get('workout', {}).get('limitations')!r}. "
+            "Home users never 'go to gym'. Outdoor respects weather/dark. Write workout plan in meta.plan."
+        ),
+        "weekend": (
+            f"Car={profile.get('weekend', {}).get('has_car')}, "
+            f"budget={profile.get('weekend', {}).get('budget')}, "
+            f"household={profile.get('weekend', {}).get('household')}. "
+            "Must be open/season-possible, age-appropriate, within travel range."
+        ),
+    }
+    return rules.get(domain, "")
 
 
 def _local_candidates(
@@ -413,79 +522,149 @@ def _local_candidates(
     language: str,
     recent: list[str],
     context: dict[str, Any],
-) -> list[dict[str, str]]:
-    packs_sv: dict[str, list[dict[str, str]]] = {
+    profile: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    profile = profile or {}
+    packs_sv: dict[str, list[dict[str, Any]]] = {
         "food": [
-            {"suggestion": "Pad thai", "justification": "Snabb, mättande och du har inte ätit asiatiskt på ett tag."},
-            {"suggestion": "Poke bowl med lax", "justification": "Lätt men rikt — perfekt till lunch."},
-            {"suggestion": "Klassisk burgare", "justification": "Komfort utan krångel. Beställ och ät."},
-            {"suggestion": "Krämig tomatsås-pasta", "justification": "Varmt, enkelt och klart på 20 minuter."},
-            {"suggestion": "Mezze-tallrik", "justification": "Varierat utan att du behöver välja tre saker."},
+            {
+                "suggestion": "Krämig tomatsås-pasta",
+                "justification": "Varmt, enkelt och klart på 20 minuter.",
+                "meta": {"active_minutes": 20},
+            },
+            {
+                "suggestion": "Etiopisk-inspirerad linsgryta",
+                "justification": "Varm krydda från hyllorna du redan har — äventyr utan specialbutik.",
+                "wildcard": True,
+                "meta": {"active_minutes": 30, "shopping_list": {
+                    "frukt & grönt": ["gul lök", "vitlök", "spenat"],
+                    "mejeri": [],
+                    "kött/fisk": [],
+                    "skafferi": ["röda linser", "curry", "paprika", "kokosmjölk", "ris"],
+                    "fryst": [],
+                }},
+            },
+            {
+                "suggestion": "Proteinomelett med grönt",
+                "justification": "Snabb, mättande och håller dig till nästa mål.",
+                "meta": {"active_minutes": 15},
+            },
+            {
+                "suggestion": "Kycklingwok med ris",
+                "justification": "Vardagsfavorit med det som alltid finns i kylen.",
+                "meta": {"active_minutes": 25},
+            },
+            {
+                "suggestion": "Klassisk burgare hemma",
+                "justification": "Komfort utan krångel — du vet redan att det funkar.",
+                "meta": {"active_minutes": 25},
+            },
         ],
         "clothes": [
             {"suggestion": "Mörka jeans + vit t-shirt + sneakers", "justification": "Rent, säkert och funkar hela dagen."},
             {"suggestion": "Beiga byxor + stickad tröja", "justification": "Mjukt och premium — noll stylingångest."},
-            {"suggestion": "Svarta byxor + skarp skjorta", "justification": "Smart casual som ser medvetet ut."},
             {"suggestion": "Hoodie + cargobyxor", "justification": "Bekvämt när dagen ska flyta."},
-            {"suggestion": "Helsvart outfit", "justification": "Ett beslut. Ser alltid skärpt ut."},
+            {"suggestion": "Svarta byxor + skarp skjorta", "justification": "Smart casual som ser medvetet ut."},
+            {"suggestion": "Helsvart outfit", "justification": "Ett beslut. Ser alltid skärpt ut.", "wildcard": True},
         ],
         "movie": [
-            {"suggestion": "Titta på en tajt thriller ikväll", "justification": "Högt tempo, noll beslutströtthet."},
-            {"suggestion": "Ett avsnitt av en varm komediserie", "justification": "Lätt efter en lång dag."},
-            {"suggestion": "En visuellt stark sci-fi-film", "justification": "Något nytt utan research."},
-            {"suggestion": "En kort dokumentär under 90 minuter", "justification": "Känns produktivt men är fortfarande vila."},
-            {"suggestion": "Omtitta en trygg favorit", "justification": "Du vet redan att det funkar."},
+            {
+                "suggestion": "Wednesday",
+                "justification": "Mörk humor i lagom dos — ett avsnitt och du är klar.",
+                "meta": {"title": "wednesday"},
+            },
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Lätt efter en lång dag — 22 minuter, noll ångest.",
+                "meta": {"title": "seinfeld"},
+            },
+            {
+                "suggestion": "The Night Agent",
+                "justification": "Högt tempo när du vill bli uppslukad.",
+                "meta": {"title": "the night agent"},
+                "wildcard": True,
+            },
+            {
+                "suggestion": "Det sista kapitlet",
+                "justification": "Svenskt och bra — öppna SVT Play och tryck play.",
+                "meta": {"title": "det sista kapitlet"},
+            },
+            {
+                "suggestion": "Ett avsnitt av en varm komediserie",
+                "justification": "Lätt efter en lång dag.",
+            },
         ],
         "workout": [
-            {"suggestion": "30 minuters helkroppsstyrka", "justification": "Effektivt och klart innan motivationen sviktar."},
-            {"suggestion": "Zon-2-promenad i 40 minuter", "justification": "Låg tröskel, hög utdelning idag."},
-            {"suggestion": "20 minuters HIIT", "justification": "Kort, hårt, sedan vidare med dagen."},
-            {"suggestion": "Yogaflöde i 25 minuter", "justification": "Mobilitet och lugn i ett pass."},
-            {"suggestion": "Armhävningar + knäböj-stege", "justification": "Ingen utrustning. Inga ursäkter."},
+            {
+                "suggestion": "30 minuters helkroppsstyrka hemma",
+                "justification": "Effektivt och klart innan motivationen sviktar.",
+                "meta": {"minutes": 30},
+            },
+            {
+                "suggestion": "Zon-2-promenad i 30 minuter",
+                "justification": "Låg tröskel, hög utdelning idag.",
+                "meta": {"minutes": 30},
+            },
+            {
+                "suggestion": "20 minuters HIIT",
+                "justification": "Kort, hårt, sedan vidare med dagen.",
+                "meta": {"minutes": 20},
+            },
+            {
+                "suggestion": "Yogaflöde i 25 minuter",
+                "justification": "Mobilitet och lugn i ett pass.",
+                "meta": {"minutes": 25},
+            },
+            {
+                "suggestion": "Armhävningar + knäböj-stege",
+                "justification": "Ingen utrustning. Inga ursäkter.",
+                "meta": {"minutes": 20},
+                "wildcard": True,
+            },
         ],
         "weekend": [
             {"suggestion": "Kaffepromenad + en bokhandel", "justification": "Enkelt, lagom socialt, noll planeringskaos."},
             {"suggestion": "Laga en längre helglunch", "justification": "Helgkänsla utan biljetter eller köer."},
+            {"suggestion": "Picknick i parken", "justification": "Ute, enkelt, minnesvärt."},
             {"suggestion": "Museum eller galleri i 90 minuter", "justification": "Lagom stort äventyr."},
-            {"suggestion": "Picknick i parken med en vän", "justification": "Ute, enkelt, minnesvärt."},
-            {"suggestion": "Städa ett rum, sen belöning på café", "justification": "Framåtanda plus belöning."},
+            {"suggestion": "Städa ett rum, sen belöning på café", "justification": "Framåtanda plus belöning.", "wildcard": True},
         ],
     }
-    packs_en: dict[str, list[dict[str, str]]] = {
+    packs_en: dict[str, list[dict[str, Any]]] = {
         "food": [
-            {"suggestion": "Pad thai", "justification": "Fast, filling — you haven’t had Asian food in a while."},
-            {"suggestion": "Salmon poke bowl", "justification": "Light but rich — perfect for lunch."},
-            {"suggestion": "Classic burger", "justification": "Comfort without friction. Order it."},
-            {"suggestion": "Creamy tomato pasta", "justification": "Warm, simple, done in 20 minutes."},
-            {"suggestion": "Mezze plate", "justification": "Variety without making three choices."},
+            {"suggestion": "Creamy tomato pasta", "justification": "Warm, simple, done in 20 minutes.", "meta": {"active_minutes": 20}},
+            {"suggestion": "Ethiopian-inspired lentil stew", "justification": "Shelf spices only — adventure without specialty shops.", "wildcard": True, "meta": {"active_minutes": 30}},
+            {"suggestion": "Protein omelette with greens", "justification": "Fast, filling, carries you to the next meal.", "meta": {"active_minutes": 15}},
+            {"suggestion": "Chicken stir-fry with rice", "justification": "Weeknight classic from what you already have.", "meta": {"active_minutes": 25}},
+            {"suggestion": "Classic burger at home", "justification": "Comfort without friction.", "meta": {"active_minutes": 25}},
         ],
         "clothes": [
             {"suggestion": "Dark jeans + white tee + sneakers", "justification": "Clean, safe, works all day."},
             {"suggestion": "Beige trousers + knit sweater", "justification": "Soft and premium — zero styling stress."},
-            {"suggestion": "Black trousers + crisp shirt", "justification": "Smart casual that looks intentional."},
             {"suggestion": "Hoodie + cargo pants", "justification": "Comfort when the day should flow."},
-            {"suggestion": "All-black outfit", "justification": "One decision. Always sharp."},
+            {"suggestion": "Black trousers + crisp shirt", "justification": "Smart casual that looks intentional."},
+            {"suggestion": "All-black outfit", "justification": "One decision. Always sharp.", "wildcard": True},
         ],
         "movie": [
-            {"suggestion": "Watch a tight thriller tonight", "justification": "High pace, zero decision fatigue."},
+            {"suggestion": "Wednesday", "justification": "Dark humor in a right-sized dose.", "meta": {"title": "wednesday"}},
+            {"suggestion": "Seinfeld", "justification": "Easy after a long day — 22 minutes.", "meta": {"title": "seinfeld"}},
+            {"suggestion": "The Night Agent", "justification": "High pace when you want to disappear into a story.", "meta": {"title": "the night agent"}, "wildcard": True},
             {"suggestion": "One episode of a warm comedy series", "justification": "Easy after a long day."},
-            {"suggestion": "A visually rich sci-fi film", "justification": "Something fresh without research."},
             {"suggestion": "A short documentary under 90 minutes", "justification": "Feels productive, still rest."},
-            {"suggestion": "Rewatch a comfort favorite", "justification": "You already know it works."},
         ],
         "workout": [
-            {"suggestion": "30-minute full-body strength", "justification": "Efficient — done before motivation dips."},
-            {"suggestion": "Zone-2 walk for 40 minutes", "justification": "Low barrier, high payoff today."},
-            {"suggestion": "20-minute HIIT", "justification": "Short, hard, then move on."},
-            {"suggestion": "25-minute yoga flow", "justification": "Mobility and calm in one session."},
-            {"suggestion": "Push-ups + squats ladder", "justification": "No equipment. No excuses."},
+            {"suggestion": "30-minute full-body strength at home", "justification": "Efficient — done before motivation dips.", "meta": {"minutes": 30}},
+            {"suggestion": "Zone-2 walk for 30 minutes", "justification": "Low barrier, high payoff today.", "meta": {"minutes": 30}},
+            {"suggestion": "20-minute HIIT", "justification": "Short, hard, then move on.", "meta": {"minutes": 20}},
+            {"suggestion": "25-minute yoga flow", "justification": "Mobility and calm in one session.", "meta": {"minutes": 25}},
+            {"suggestion": "Push-ups + squats ladder", "justification": "No equipment. No excuses.", "meta": {"minutes": 20}, "wildcard": True},
         ],
         "weekend": [
             {"suggestion": "Coffee walk + one bookstore", "justification": "Simple, social enough, zero planning chaos."},
             {"suggestion": "Cook a longer weekend lunch", "justification": "Weekend energy without tickets or queues."},
+            {"suggestion": "Park picnic", "justification": "Outside, easy, memorable."},
             {"suggestion": "Museum or gallery for 90 minutes", "justification": "A right-sized adventure."},
-            {"suggestion": "Park picnic with one friend", "justification": "Outside, easy, memorable."},
-            {"suggestion": "Deep-clean one room, then a café reward", "justification": "Progress plus a reward."},
+            {"suggestion": "Deep-clean one room, then a café reward", "justification": "Progress plus a reward.", "wildcard": True},
         ],
     }
     packs = packs_sv if language == "sv" else packs_en
@@ -499,22 +678,67 @@ def _local_candidates(
             pool.insert(0, {
                 "suggestion": "Proteinomelett med frukt",
                 "justification": "Snabb frukost som håller dig till lunch.",
+                "meta": {"active_minutes": 15},
             })
         else:
             pool.insert(0, {
                 "suggestion": "Protein omelette with fruit",
                 "justification": "A quick breakfast that carries you to lunch.",
+                "meta": {"active_minutes": 15},
             })
+    # Mark one wildcard if none flagged
+    if pool and not any(c.get("wildcard") for c in pool):
+        pool[-1] = dict(pool[-1], wildcard=True)
     return pool[:5]
 
 
+def _guaranteed_feasible(
+    domain: str,
+    language: str,
+    profile: dict[str, Any],
+    context: dict[str, Any],
+) -> dict[str, Any]:
+    """Last-resort candidate known to pass validators for default profiles."""
+    sv = language == "sv"
+    if domain == "food":
+        c = {
+            "suggestion": "Krämig tomatsås-pasta" if sv else "Creamy tomato pasta",
+            "justification": "Varmt, enkelt och klart på 20 minuter." if sv else "Warm, simple, done in 20 minutes.",
+            "meta": {"active_minutes": 20},
+        }
+    elif domain == "clothes":
+        c = {
+            "suggestion": "Mörka jeans + vit t-shirt + sneakers" if sv else "Dark jeans + white tee + sneakers",
+            "justification": "Rent, säkert och funkar hela dagen." if sv else "Clean, safe, works all day.",
+        }
+    elif domain == "movie":
+        c = {
+            "suggestion": "Seinfeld",
+            "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
+            "meta": {"title": "seinfeld"},
+        }
+    elif domain == "workout":
+        c = {
+            "suggestion": "Armhävningar + knäböj-stege" if sv else "Push-ups + squats ladder",
+            "justification": "Ingen utrustning. Inga ursäkter." if sv else "No equipment. No excuses.",
+            "meta": {"minutes": 20},
+        }
+    else:
+        c = {
+            "suggestion": "Kaffepromenad + en bokhandel" if sv else "Coffee walk + one bookstore",
+            "justification": "Enkelt, lagom socialt, noll planeringskaos." if sv else "Simple, social enough, zero planning chaos.",
+        }
+    survivors = feasibility.filter_feasible([c], domain=domain, profile=profile, context=context)
+    return survivors[0] if survivors else c
+
+
 def _rank_candidates(
-    candidates: list[dict[str, str]],
+    candidates: list[dict[str, Any]],
     *,
     preferences: list[dict[str, Any]],
     recent: list[str],
     explore: bool,
-) -> list[dict[str, str]]:
+) -> list[dict[str, Any]]:
     if not candidates:
         return []
     recent_l = {r.strip().lower() for r in recent}
@@ -524,23 +748,25 @@ def _rank_candidates(
         if p.get("key") == "suggestion"
     }
 
-    scored: list[tuple[float, dict[str, str]]] = []
+    scored: list[tuple[float, dict[str, Any]]] = []
     for c in candidates:
         key = c["suggestion"].strip().lower()
         score = pref_map.get(key, 0.0)
         if key in recent_l:
             score -= 5.0
-        # Soft boost for positive prefs substring match
         for pref_val, pref_score in pref_map.items():
             if pref_val and pref_val in key:
                 score += pref_score * 0.25
+        # Safe bias: non-wildcards rank slightly higher unless exploring
+        if c.get("wildcard"):
+            score -= 0.15
         scored.append((score, c))
 
     scored.sort(key=lambda x: x[0], reverse=True)
 
     if explore and len(scored) > 1:
-        # Pick from lower half occasionally
-        explore_pool = scored[len(scored) // 2 :]
+        wild = [pair for pair in scored if pair[1].get("wildcard")]
+        explore_pool = wild or scored[len(scored) // 2 :]
         pick = random.choice(explore_pool)
         rest = [c for s, c in scored if c is not pick[1]]
         return [pick[1]] + rest
@@ -549,7 +775,7 @@ def _rank_candidates(
 
 def _fallback_candidate(
     domain: str, language: str, recent: list[str]
-) -> dict[str, str]:
+) -> dict[str, Any]:
     return _local_candidates(domain, language, recent, {})[0]
 
 
@@ -558,11 +784,10 @@ def _execution_for(
     suggestion: str,
     language: str,
     user: dict[str, Any],
-) -> dict[str, str | None]:
+) -> dict[str, Any]:
     q = quote_plus(suggestion)
     sv = language == "sv"
     if domain == "food":
-        # Heuristic: words that imply eating out vs home cook
         out_words = ("restaurang", "beställ", "bestall", "burger", "sushi", "thai", "order", "takeout")
         if any(w in suggestion.lower() for w in out_words):
             return {
@@ -572,29 +797,30 @@ def _execution_for(
             }
         return {
             "type": "recipe",
-            "label": "Se recept" if sv else "See recipe",
+            "label": "Handla & laga" if sv else "Shop & cook",
             "url": f"https://www.google.com/search?q={quote_plus(suggestion + ' recept' if sv else suggestion + ' recipe')}",
         }
     if domain == "clothes":
         return {
             "type": "wardrobe",
-            "label": "Visa outfit-tips" if sv else "Show outfit tips",
+            "label": "Bygg outfiten" if sv else "Build the outfit",
             "url": f"https://www.google.com/search?q={quote_plus(suggestion + ' outfit')}",
         }
     if domain == "movie":
         return {
             "type": "stream",
-            "label": "Hitta var den streamas" if sv else "Find where to stream",
-            "url": f"https://www.google.com/search?q={quote_plus(suggestion + ' stream')}",
+            "label": "Öppna streaming" if sv else "Open streaming",
+            "url": f"https://www.justwatch.com/se/search?q={q}",
         }
     if domain == "workout":
         return {
             "type": "workout",
-            "label": "Öppna passet" if sv else "Open workout",
-            "url": f"https://www.google.com/search?q={quote_plus(suggestion + ' workout')}",
+            "label": "Starta passet" if sv else "Start workout",
+            "url": None,
+            "detail": suggestion,
         }
     return {
         "type": "activity",
-        "label": "Planera nu" if sv else "Plan it now",
-        "url": f"https://www.google.com/search?q={q}",
+        "label": "Öppna karta" if sv else "Open map",
+        "url": f"https://www.google.com/maps/search/{q}",
     }

@@ -44,7 +44,7 @@ I18N = {
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
         "accepted": "Sparat — bra val.",
-        "refuse": "Onechoice handles everyday decisions. This one is yours.",
+        "refuse": "Onechoice tar vardagsbesluten. Det här beslutet är ditt.",
         "home": "Hem",
         "history": "Historik",
         "profile": "Profil",
@@ -416,8 +416,16 @@ def page_result() -> None:
     # Execution CTA
     exec_url = cur.get("execution_url")
     exec_label = cur.get("execution_label") or t("do_it")
+    exec_detail = (cur.get("context") or {}).get("execution_detail")
+    if exec_detail:
+        st.markdown(
+            f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
+            unsafe_allow_html=True,
+        )
     if exec_url:
         st.link_button(exec_label, exec_url, use_container_width=True, type="primary")
+    elif exec_detail and not exec_url:
+        st.button(exec_label, type="primary", use_container_width=True, disabled=True)
 
     if locked:
         if cur.get("decision_id") and st.button(t("accepted"), use_container_width=True):
