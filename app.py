@@ -245,7 +245,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"]) {{
     position: absolute !important;
     top: 1.05rem !important;
-    right: max(0.95rem, calc(50% - 200px + 0.95rem)) !important;
+    right: max(0.95rem, calc(50% - 340px + 0.95rem)) !important;
     width: auto !important;
     gap: 0.4rem !important;
     z-index: 60 !important;
