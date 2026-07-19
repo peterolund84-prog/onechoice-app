@@ -216,6 +216,7 @@ def build_shopping(
         "ingredients": ingredients,
         "to_buy": to_buy,
         "assumed_at_home": assumed or ["salt", "peppar", "olja"],
+        "recipe": build_recipe(suggestion, ingredients),
     }
 
 
@@ -235,6 +236,85 @@ def format_assumed_line(assumed: list[str], *, language: str = "sv") -> str:
     if language == "en":
         return f"Assumed at home: {items}."
     return f"Hemma antas: {items}."
+
+
+def build_recipe(suggestion: str, ingredients: list[str] | None = None) -> dict[str, Any]:
+    """Swedish metric recipe: full ingredient list + ordered steps."""
+    ings = list(ingredients or _infer_full_ingredients(suggestion) or [])
+    if not ings:
+        ings = ["gul lök", "vitlök", "olja", "salt", "peppar", "säsongsgrönsaker", "ris"]
+    steps = _recipe_steps(suggestion, ings)
+    return {
+        "title": suggestion,
+        "ingredients": ings,
+        "steps": steps,
+        "unit_system": "metric",
+        "language": "sv",
+    }
+
+
+def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
+    """Deterministic Swedish cook steps for known dishes (metric)."""
+    s = (suggestion or "").lower()
+    join = ", ".join(ingredients[:6])
+
+    if "kycklingwok" in s or ("kyckling" in s and "wok" in s):
+        return [
+            "Skölj 2 dl ris och koka enligt förpackningen (ca 1,5 dl vatten per dl ris).",
+            "Skär 400 g kycklingfilé i bitar. Strimla grönsakerna (lök, morot, broccoli, paprika).",
+            "Hetta upp 1 msk olja i en wok. Stek kycklingen 5–6 min tills den är genomstekt.",
+            "Tillsätt grönsakerna och stek 4–5 min. Krydda med 2 msk sojasås, salt och peppar.",
+            "Servera woket över riset. Klart.",
+        ]
+    if "pasta" in s or "tomatsås" in s:
+        return [
+            "Koka pasta enligt förpackningen i saltat vatten (ca 100 g per person).",
+            "Fräs finhackad gul lök och 1 klyfta vitlök i 1 msk olja i 3 min.",
+            "Häll i 400 g krossade tomater, låt sjuda 8–10 min. Krydda med oregano, salt och peppar.",
+            "Rör ihop pastan med såsen. Toppa med riven parmesan.",
+        ]
+    if "lins" in s:
+        return [
+            "Skölj 2 dl ris och koka. Skölj 2 dl röda linser.",
+            "Fräs lök, vitlök och morot i 1 msk olja i 4 min. Tillsätt curry.",
+            "Häll i linser, 4 dl vatten och 2 dl kokosmjölk. Koka 15–18 min.",
+            "Rör i spenat sista minuten. Smaka av med salt och peppar. Servera med ris.",
+        ]
+    if "omelett" in s or "omelette" in s:
+        return [
+            "Vispa 3 ägg med 2 msk mjölk, salt och peppar.",
+            "Hacka tomat och skölj spenat. Riv ost.",
+            "Smält 1 tsk smör i en nonstick-panna. Häll i äggblandningen.",
+            "När ytan börjar stelna: lägg på grönt och ost, vik ihop. Stek 1 min till. Servera.",
+        ]
+    if "burgare" in s or "burger" in s:
+        return [
+            "Blanda 400 g nötfärs med salt och peppar. Forma 2–4 biffar (ca 2 cm tjocka).",
+            "Stek i 1 msk olja 3–4 min per sida. Lägg ost sista minuten om du vill.",
+            "Rosta hamburgerbröden. Stapla: bröd, sallad, tomat, lök, biff.",
+            "Servera direkt.",
+        ]
+    if "poke" in s or "poké" in s or ("lax" in s and "bowl" in s):
+        return [
+            "Koka 2 dl ris. Låt svalna något.",
+            "Skär 250 g lax i tärningar. Skiva gurka och avokado.",
+            "Blanda ris, lax och grönt. Ringla över 1 msk sojasås och 1 tsk sesamolja.",
+            "Smaka av med salt och peppar. Servera kallt eller ljummet.",
+        ]
+    if "pad thai" in s or "padthai" in s:
+        return [
+            "Blögg 200 g risnudlar enligt förpackningen. Skär 300 g kycklingfilé i strimlor.",
+            "Stek kycklingen i 1 msk olja 5–6 min. Skjut åt sidan, stek 2 ägg snabbt.",
+            "Tillsätt nudlar, lök, vitlök, 2 msk sojasås och 1 msk fisksås. Rör om 3–4 min.",
+            "Servera med limeklyftor. Smaka av med salt och peppar.",
+        ]
+
+    return [
+        f"Förbered ingredienserna: {join}.",
+        "Fräs lök och vitlök i 1 msk olja i 3–4 minuter.",
+        "Tillsätt huvudråvaran och övriga ingredienser. Tillaga tills allt är genomstekt (ca 10–15 min).",
+        "Krydda med salt och peppar. Servera med tillbehöret (ris/pasta/bröd).",
+    ]
 
 
 def _norm_item(name: str) -> str:

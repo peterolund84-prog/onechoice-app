@@ -302,6 +302,8 @@ def decide(
             "skip_feasibility": skip_feasibility,
             "execution_detail": execution.get("detail"),
             "shopping": execution.get("shopping"),
+            "recipe": execution.get("recipe")
+            or (execution.get("shopping") or {}).get("recipe"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
         },
         execution_type=execution.get("type"),
@@ -480,18 +482,30 @@ def handle_free_text(
 
 
 def accept_decision(
-    decision_id: int,
+    decision_id: int | None = None,
     *,
     db_path: str | None = None,
     route_log_id: int | None = None,
 ) -> dict[str, Any]:
-    out = db.record_feedback(decision_id, accepted=True, path=db_path)
+    """Mark a decision accepted. decision_id is required (None → clear error)."""
+    if decision_id is None:
+        raise ValueError(
+            "accept_decision requires decision_id; session state may be uninitialized"
+        )
+    try:
+        did = int(decision_id)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid decision_id: {decision_id!r}") from exc
+
+    out = db.record_feedback(did, accepted=True, path=db_path)
     rid = route_log_id
     if rid is None and isinstance(out, dict):
         rid = (out.get("context") or {}).get("route_log_id")
     if rid is not None:
         try:
             db.update_routed_query(int(rid), accepted=True, path=db_path)
+        except (TypeError, ValueError) as exc:
+            log.warning("invalid route_log_id %r: %s", rid, exc)
         except Exception as exc:
             log.warning("failed to mark routed accept: %s", exc)
     return out
@@ -1246,9 +1260,13 @@ def _ensure_food_shopping(
         return execution
     out = dict(execution)
     out["type"] = out.get("type") or "recipe"
-    out["label"] = out.get("label") or ("Gör det nu" if language == "sv" else "Do it now")
+    # "Handla & laga" = accept + open execution view (shopping + recipe)
+    out["label"] = "Handla & laga" if language == "sv" else "Shop & cook"
     out["shopping"] = shop
     out["shopping_list"] = shop.get("to_buy")
+    out["recipe"] = shop.get("recipe") or shopping.build_recipe(
+        suggestion, shop.get("ingredients")
+    )
     out["detail"] = shopping.format_assumed_line(
         list(shop.get("assumed_at_home") or []),
         language=language,
@@ -1288,12 +1306,16 @@ def _execution_for(
                 "url": f"https://www.google.com/maps/search/{q}",
             }
         shop = shopping.build_shopping(suggestion, store="ICA")
+        recipe = (shop or {}).get("recipe") or shopping.build_recipe(
+            suggestion, (shop or {}).get("ingredients")
+        )
         return {
             "type": "recipe",
-            "label": "Gör det nu" if sv else "Do it now",
+            "label": "Handla & laga" if sv else "Shop & cook",
             "url": None,
             "shopping": shop,
             "shopping_list": (shop or {}).get("to_buy"),
+            "recipe": recipe,
             "detail": shopping.format_assumed_line(
                 list((shop or {}).get("assumed_at_home") or []),
                 language=language,
