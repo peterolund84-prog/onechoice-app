@@ -9,11 +9,12 @@ STATE DIAGRAM (pages / session_state / buttons) — keep code in sync
 
 Pages:
   auth              → login / signup / guest
-  home              → free text + domain chips
+  home              → free text + domain chips + fridge CTA
+  fridge            → photo capture → invent confirm → decide (source=fridge_photo)
   ambiguous         → domain pick after free-text AMBIGUOUS
   not_a_decision    → soft refuse (not a decision question)
   result            → ONE decision card (food / other domains)
-  execute           → food only: checkable shopping + full recipe
+  execute           → food: shopping+recipe OR fridge recipe-only; workout player
   history | profile
 
 Session keys (all set via setdefault in init_state):
@@ -106,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "handla-v4-20260719"
+BUILD_ID = "fridge-v1-20260719"
 
 I18N = {
     "sv": {
@@ -187,6 +188,23 @@ I18N = {
         "share_landing_sub": "Ett beslut. Klart.",
         "share_open_recipe": "Recept & lista",
         "share_open_workout": "Passet",
+        "fridge_cta": "Vad finns i kylen?",
+        "fridge_title": "Kylskåp & skafferi",
+        "fridge_hint": "1–3 foton — jag listar det jag ser. Du bekräftar innan jag bestämmer.",
+        "fridge_camera": "Ta foto",
+        "fridge_upload": "Ladda upp",
+        "fridge_scan": "Läs av",
+        "fridge_scanning": "Tittar i kylen…",
+        "fridge_confirm_title": "Jag ser",
+        "fridge_confirm_q": "Stämmer?",
+        "fridge_confirm": "Ja — bestäm rätt",
+        "fridge_add": "Lägg till",
+        "fridge_add_placeholder": "t.ex. ägg",
+        "fridge_empty_scan": "Jag såg inget tydligt — lägg till själv eller ta om foto.",
+        "fridge_need_photo": "Lägg till minst ett foto.",
+        "fridge_cook": "Laga nu",
+        "fridge_shop_alt": "Föreslå med inköpslista",
+        "fridge_remove": "Ta bort",
     },
     "en": {
         "tagline": "One decision. Done.",
@@ -266,6 +284,23 @@ I18N = {
         "share_landing_sub": "One decision. Done.",
         "share_open_recipe": "Recipe & list",
         "share_open_workout": "The workout",
+        "fridge_cta": "What’s in the fridge?",
+        "fridge_title": "Fridge & pantry",
+        "fridge_hint": "1–3 photos — I’ll list what I see. You confirm before I decide.",
+        "fridge_camera": "Take photo",
+        "fridge_upload": "Upload",
+        "fridge_scan": "Scan",
+        "fridge_scanning": "Looking in the fridge…",
+        "fridge_confirm_title": "I see",
+        "fridge_confirm_q": "Looks right?",
+        "fridge_confirm": "Yes — pick a dish",
+        "fridge_add": "Add",
+        "fridge_add_placeholder": "e.g. eggs",
+        "fridge_empty_scan": "Nothing clear — add items yourself or retake.",
+        "fridge_need_photo": "Add at least one photo.",
+        "fridge_cook": "Cook now",
+        "fridge_shop_alt": "Suggest with shopping list",
+        "fridge_remove": "Remove",
     },
 }
 
@@ -643,6 +678,11 @@ def init_state() -> None:
         "shared_token": None,
         "shared_payload": None,
         "shared_ref": None,
+        # Fridge photo flow (capture → confirm → decide)
+        "fridge_step": "capture",  # capture | confirm
+        "fridge_inventory": [],  # [{name, confidence}]
+        "fridge_photos": [],  # unused mirror; widgets hold bytes
+        "fridge_mode": False,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -1123,6 +1163,13 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         st.session_state.food_meal_type = fd.default_meal_type()
     # Pass inferred/override meal type into food decisions (confirmable chips on result)
     context_extra["meal_type"] = st.session_state.food_meal_type
+    if st.session_state.get("fridge_mode"):
+        import fridge_domain as fr
+
+        context_extra["source"] = fr.SOURCE
+        context_extra["available_ingredients"] = fr.names_only(
+            st.session_state.get("fridge_inventory") or []
+        )
 
     try:
         with st.spinner(t("loading")):
@@ -1634,6 +1681,13 @@ def page_home() -> None:
                             st.session_state.food_meal_type = fd.default_meal_type()
                     run_decision(question="", domain_hint=d, reroll=False, via_router=False)
 
+    if st.button(t("fridge_cta"), use_container_width=True, key="home_fridge"):
+        st.session_state.fridge_step = "capture"
+        st.session_state.fridge_inventory = []
+        st.session_state.fridge_mode = False
+        st.session_state.page = "fridge"
+        st.rerun()
+
     q = st.text_area(
         "q",
         height=110,
@@ -1651,6 +1705,160 @@ def page_home() -> None:
             st.warning(t("too_long"))
         else:
             run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
+    nav()
+
+
+def _clear_fridge_session() -> None:
+    st.session_state.fridge_step = "capture"
+    st.session_state.fridge_inventory = []
+    st.session_state.fridge_mode = False
+
+
+def page_fridge() -> None:
+    """Capture photos → invent inventory → confirm chips → decide (two LLM steps)."""
+    import fridge_domain as fr
+
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="oc-tagline">{html.escape(t("fridge_title"))}</p>',
+        unsafe_allow_html=True,
+    )
+    st.caption(t("fridge_hint"))
+
+    step = st.session_state.get("fridge_step") or "capture"
+
+    if step == "capture":
+        cam = st.camera_input(t("fridge_camera"), key="fridge_cam")
+        uploads = st.file_uploader(
+            t("fridge_upload"),
+            type=["jpg", "jpeg", "png", "webp"],
+            accept_multiple_files=True,
+            key="fridge_uploads",
+        )
+        if st.button(t("fridge_scan"), type="primary", use_container_width=True, key="fridge_scan_btn"):
+            blobs: list[bytes] = []
+            mimes: list[str] = []
+            if cam is not None:
+                try:
+                    blobs.append(cam.getvalue())
+                    mimes.append(getattr(cam, "type", None) or "image/jpeg")
+                except Exception:
+                    pass
+            for f in list(uploads or [])[: fr.MAX_PHOTOS]:
+                try:
+                    blobs.append(f.getvalue())
+                    mimes.append(getattr(f, "type", None) or "image/jpeg")
+                except Exception:
+                    continue
+            blobs = blobs[: fr.MAX_PHOTOS]
+            mimes = mimes[: len(blobs)]
+            if not blobs:
+                st.warning(t("fridge_need_photo"))
+            else:
+                with st.spinner(t("fridge_scanning")):
+                    invent = fr.invent_from_images(
+                        blobs,
+                        api_key=get_secret("GROK_API_KEY"),
+                        language=st.session_state.get("language", "sv"),
+                        mime_types=mimes,
+                    )
+                st.session_state.fridge_inventory = invent
+                st.session_state.fridge_step = "confirm"
+                st.rerun()
+                return
+        if st.button(t("home"), use_container_width=True, key="fridge_home_cap"):
+            _clear_fridge_session()
+            st.session_state.page = "home"
+            st.rerun()
+        nav()
+        return
+
+    # ----- confirm inventory -----
+    inventory = list(st.session_state.get("fridge_inventory") or [])
+    names = fr.names_only(inventory)
+    if not names:
+        st.info(t("fridge_empty_scan"))
+    else:
+        st.markdown(
+            f'<p class="oc-tagline" style="font-size:1.05rem">'
+            f'{html.escape(t("fridge_confirm_title"))}: '
+            f'{html.escape(", ".join(names))}.</p>',
+            unsafe_allow_html=True,
+        )
+        st.caption(t("fridge_confirm_q"))
+
+    # Editable chips — remove per item
+    if names:
+        cols = st.columns(min(3, max(1, len(names))))
+        for i, name in enumerate(names):
+            with cols[i % len(cols)]:
+                if st.button(
+                    f"× {name}",
+                    key=f"fridge_rm_{i}_{name}",
+                    use_container_width=True,
+                ):
+                    st.session_state.fridge_inventory = [
+                        x
+                        for x in inventory
+                        if fr.normalize_name(
+                            x.get("name") if isinstance(x, dict) else str(x)
+                        )
+                        != name
+                    ]
+                    st.rerun()
+                    return
+
+    add_cols = st.columns([3, 1])
+    with add_cols[0]:
+        new_item = st.text_input(
+            t("fridge_add"),
+            key="fridge_add_input",
+            placeholder=t("fridge_add_placeholder"),
+            label_visibility="collapsed",
+        )
+    with add_cols[1]:
+        if st.button(t("fridge_add"), use_container_width=True, key="fridge_add_btn"):
+            n = fr.normalize_name(new_item or "")
+            if n and n not in names:
+                inventory = list(inventory)
+                inventory.append({"name": n, "confidence": 1.0})
+                st.session_state.fridge_inventory = inventory
+                st.rerun()
+                return
+
+    if st.button(
+        t("fridge_confirm"),
+        type="primary",
+        use_container_width=True,
+        key="fridge_confirm_btn",
+    ):
+        confirmed = fr.names_only(st.session_state.get("fridge_inventory") or [])
+        st.session_state.fridge_inventory = [
+            {"name": n, "confidence": 1.0} for n in confirmed
+        ]
+        st.session_state.fridge_mode = True
+        st.session_state.last_domain_hint = "food"
+        import food_domain as fd
+
+        if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
+            st.session_state.food_meal_type = fd.default_meal_type()
+        q = (
+            "Vad ska jag laga av det som finns i kylen?"
+            if st.session_state.get("language", "sv") == "sv"
+            else "What should I cook from what’s in the fridge?"
+        )
+        run_decision(question=q, domain_hint="food", reroll=False, via_router=False)
+        return
+
+    if st.button(t("fridge_scan"), use_container_width=True, key="fridge_rescan"):
+        st.session_state.fridge_step = "capture"
+        st.rerun()
+        return
+    if st.button(t("home"), use_container_width=True, key="fridge_home_conf"):
+        _clear_fridge_session()
+        st.session_state.page = "home"
+        st.rerun()
     nav()
 
 
@@ -1850,15 +2058,36 @@ def page_result() -> None:
         )
         if food_cook:
             ctx_l = _as_dict(cur.get("context"))
+            fridge_locked = str(ctx_l.get("source") or "") == "fridge_photo"
             mt = ctx_l.get("meal_type") or st.session_state.get("food_meal_type")
-            show_shop = True
-            try:
-                import food_domain as fd
+            show_shop = False
+            if not fridge_locked:
+                try:
+                    import food_domain as fd
 
-                show_shop = fd.show_shopping(str(mt or "middag"))
-            except Exception:
-                pass
-            if show_shop:
+                    show_shop = fd.show_shopping(str(mt or "middag"))
+                except Exception:
+                    show_shop = True
+            if fridge_locked:
+                has_recipe = bool(ctx_l.get("recipe"))
+                if has_recipe:
+                    if st.button(
+                        cur.get("execution_label") or t("fridge_cook"),
+                        type="primary",
+                        use_container_width=True,
+                        key="fridge_reopen",
+                    ):
+                        open_execute_now(cur)
+                elif st.button(
+                    t("fridge_shop_alt"),
+                    type="primary",
+                    use_container_width=True,
+                    key="fridge_shop_reopen",
+                ):
+                    st.session_state.fridge_mode = False
+                    st.session_state.page = "home"
+                    st.rerun()
+            elif show_shop:
                 if st.button(
                     t("handla_laga"),
                     type="primary",
@@ -1889,14 +2118,17 @@ def page_result() -> None:
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
                 on_accept_primary(cur)
         if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
+            _clear_fridge_session()
             st.session_state.page = "home"
             st.rerun()
         nav()
         return
 
     # Unlocked decision card
-    # Food: meal-type chips ABOVE the decision (inferred, one tap to change)
-    if domain == "food" and not accepted:
+    ctx = _as_dict(cur.get("context"))
+    fridge_mode = str(ctx.get("source") or "") == "fridge_photo"
+    # Food: meal-type chips ABOVE the decision (not for fridge — inventory is the constraint)
+    if domain == "food" and not accepted and not fridge_mode:
         render_meal_type_chips(cur)
 
     st.markdown(
@@ -1909,12 +2141,11 @@ def page_result() -> None:
     )
     render_reroll_dots(reroll_index)
 
-    # Preview shopping on result (read-only) for dinner only
-    ctx = _as_dict(cur.get("context"))
+    # Preview shopping on result (read-only) for dinner only — never for fridge
     shop = ctx.get("shopping")
     meal_type = ctx.get("meal_type") or st.session_state.get("food_meal_type")
-    show_shop = True
-    if domain == "food":
+    show_shop = False if fridge_mode else True
+    if domain == "food" and not fridge_mode:
         try:
             import food_domain as fd
 
@@ -1938,7 +2169,35 @@ def page_result() -> None:
                 unsafe_allow_html=True,
             )
 
-    if food_cook and show_shop:
+    if food_cook and fridge_mode:
+        # Cook from inventory — recipe execute, no shopping list
+        empty_fallback = bool(ctx.get("offers_shopping")) and not ctx.get("recipe")
+        if not empty_fallback:
+            label = cur.get("execution_label") or t("fridge_cook")
+            if st.button(
+                label,
+                type="primary",
+                use_container_width=True,
+                key="fridge_cook_accept",
+            ):
+                open_execute_now(cur)
+        if ctx.get("offers_shopping"):
+            if st.button(
+                t("fridge_shop_alt"),
+                type="secondary" if not empty_fallback else "primary",
+                use_container_width=True,
+                key="fridge_shop_escape",
+            ):
+                st.session_state.fridge_mode = False
+                st.session_state.fridge_inventory = []
+                st.session_state.accepted = False
+                run_decision(
+                    question="",
+                    domain_hint="food",
+                    reroll=False,
+                    via_router=False,
+                )
+    elif food_cook and show_shop:
         # Primary: Handla & laga → execute (plain button — Cloud-safe)
         label = cur.get("execution_label") or t("handla_laga")
         if st.button(
@@ -1980,6 +2239,7 @@ def page_result() -> None:
         )
 
     if st.button(t("home"), key="back_home", type="secondary", use_container_width=True):
+        _clear_fridge_session()
         st.session_state.page = "home"
         st.rerun()
     nav()
@@ -2888,6 +3148,7 @@ def main() -> None:
         "ambiguous": page_ambiguous,
         "not_a_decision": page_not_a_decision,
         "clothes_occasion": page_clothes_occasion,
+        "fridge": page_fridge,
         "shared": page_shared,
         "home": page_home,
     }

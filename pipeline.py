@@ -239,6 +239,24 @@ def decide(
             meal_type = fd.default_meal_type()
         ctx["meal_type"] = meal_type
 
+    # Fridge photo → cook only from confirmed inventory (no shopping list)
+    fridge_mode = False
+    available_ingredients: list[str] = []
+    if domain == "food":
+        import fridge_domain as fr
+
+        src = str((context_extra or {}).get("source") or ctx.get("source") or "")
+        if src == fr.SOURCE:
+            fridge_mode = True
+            ctx["source"] = fr.SOURCE
+            raw_ings = (
+                (context_extra or {}).get("available_ingredients")
+                or ctx.get("available_ingredients")
+                or []
+            )
+            available_ingredients = fr.names_only(raw_ings)  # type: ignore[arg-type]
+            ctx["available_ingredients"] = available_ingredients
+
     if domain == "clothes" and "intent" not in ctx:
         ql = q.lower()
         ctx["intent"] = "buy" if any(w in ql for w in ("köp", "beställ", "handla", "buy")) else "wear"
@@ -295,7 +313,7 @@ def decide(
             candidates = [pin] + [c for c in candidates if c.get("suggestion") != pin["suggestion"]]
 
     # Meal type drives food generation (not just a filter)
-    if domain == "food" and meal_type:
+    if domain == "food" and meal_type and not fridge_mode:
         import food_domain as fd
 
         pinned = fd.meal_candidates(meal_type, language)
@@ -311,6 +329,32 @@ def decide(
             else:
                 candidates = pinned + typed
 
+    # Fridge: pin cook-from-inventory dishes; never fall back to supermarket packs
+    if domain == "food" and fridge_mode:
+        import fridge_domain as fr
+
+        pinned = fr.fridge_candidates(available_ingredients, language=language)
+        # Keep only LLM candidates that declare ingredients cookable from inventory
+        typed: list[dict[str, Any]] = []
+        for c in candidates:
+            meta = c.get("meta") if isinstance(c.get("meta"), dict) else {}
+            ings = list(meta.get("ingredients") or [])
+            if ings and fr.can_cook(ings, available_ingredients):
+                row = dict(c)
+                m = dict(meta)
+                m["source"] = fr.SOURCE
+                m["available_ingredients"] = available_ingredients
+                m["assume_at_home_only"] = True
+                row["meta"] = m
+                if not row.get("justification"):
+                    row["justification"] = fr.justify_from_inventory(
+                        str(row.get("suggestion") or ""), ings, language
+                    )
+                typed.append(row)
+        candidates = pinned + typed
+        if not candidates:
+            candidates = [fr.fridge_fallback(available_ingredients, language=language)]
+
     if skip_feasibility or domain == db.NEAR_DOMAIN:
         survivors = list(candidates) or _local_candidates(
             domain, language, recent, ctx, profile
@@ -319,6 +363,15 @@ def decide(
         survivors = feasibility.filter_feasible(
             candidates, domain=domain, profile=profile, context=ctx
         )
+        if not survivors and fridge_mode:
+            import fridge_domain as fr
+
+            survivors = feasibility.filter_feasible(
+                [fr.fridge_fallback(available_ingredients, language=language)],
+                domain=domain,
+                profile=profile,
+                context=ctx,
+            )
         if not survivors:
             survivors = feasibility.filter_feasible(
                 _local_candidates(domain, language, recent, ctx, profile),
@@ -369,7 +422,18 @@ def decide(
         )
 
     execution = _ensure_food_shopping(domain, suggestion, execution, top, user, language)
-    if domain == "food" and meal_type:
+    if domain == "food" and fridge_mode:
+        import fridge_domain as fr
+
+        meta_ings = list((top.get("meta") or {}).get("ingredients") or available_ingredients)
+        execution = fr.apply_fridge_execution(
+            suggestion,
+            execution,
+            ingredients=meta_ings,
+            language=language,
+            fallback=bool((top.get("meta") or {}).get("no_cook_empty")),
+        )
+    elif domain == "food" and meal_type:
         import food_domain as fd
 
         execution = fd.apply_meal_execution(
@@ -407,6 +471,10 @@ def decide(
         context={
             **ctx,
             "meal_type": meal_type,
+            "source": ctx.get("source") or ((top.get("meta") or {}).get("source")),
+            "available_ingredients": available_ingredients if fridge_mode else ctx.get("available_ingredients"),
+            "fridge_fallback": bool((top.get("meta") or {}).get("fridge_fallback")),
+            "offers_shopping": bool((top.get("meta") or {}).get("offers_shopping")),
             "explore": explore,
             "wildcard": bool(top.get("wildcard")),
             "candidates_n": len(candidates),
@@ -759,6 +827,11 @@ def _grok_candidates(
         "Output valid JSON only."
     )
     domain_rules = _domain_prompt_rules(domain, profile)
+    if domain == "food" and str(context.get("source") or "") == "fridge_photo":
+        domain_rules = _fridge_prompt_rules(
+            list(context.get("available_ingredients") or []),
+            language,
+        )
     user = f"""
 Domain: {domain}
 Question: {question}
@@ -792,6 +865,7 @@ Rules:
 - justification is ONE line in {lang}, personal, no hedging, no "you could also"
 - every candidate must already pass the domain feasibility rules above
 - avoid anything in the recent/rejected lists when possible
+- for fridge mode: meta.ingredients MUST list every non-staple ingredient required
 """
     resp = requests.post(
         "https://api.x.ai/v1/chat/completions",
@@ -880,6 +954,20 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
         ),
     }
     return rules.get(domain, "")
+
+
+def _fridge_prompt_rules(available: list[str], language: str) -> str:
+    lang = "Swedish" if language == "sv" else "English"
+    return (
+        "FRIDGE PHOTO MODE — hard constraints:\n"
+        f"- Available ingredients (confirmed by user): {json.dumps(available, ensure_ascii=False)}\n"
+        "- The dish MUST be cookable from ONLY those ingredients plus assumed staples "
+        "(salt, pepper, oil, butter, sugar, flour, common dried spices).\n"
+        "- Do NOT require any ingredient not in the available list.\n"
+        "- No shopping list. No eating out. No 'buy X on the way'.\n"
+        f"- Put required ingredients in meta.ingredients. Write suggestion + justification in {lang}.\n"
+        "- Justification should reference what they have (e.g. 'Du har ägg, paprika och ost — det blir omelett.')."
+    )
 
 
 def _local_candidates(
@@ -1245,11 +1333,19 @@ def _guaranteed_feasible(
     """Last-resort candidate known to pass validators for default profiles."""
     sv = language == "sv"
     if domain == "food":
-        c = {
-            "suggestion": "Krämig tomatsås-pasta" if sv else "Creamy tomato pasta",
-            "justification": "Varmt, enkelt och klart på 20 minuter." if sv else "Warm, simple, done in 20 minutes.",
-            "meta": {"active_minutes": 20},
-        }
+        import fridge_domain as fr
+
+        if fr.is_fridge_mode(context):
+            c = fr.fridge_fallback(
+                list(context.get("available_ingredients") or []),
+                language=language,
+            )
+        else:
+            c = {
+                "suggestion": "Krämig tomatsås-pasta" if sv else "Creamy tomato pasta",
+                "justification": "Varmt, enkelt och klart på 20 minuter." if sv else "Warm, simple, done in 20 minutes.",
+                "meta": {"active_minutes": 20},
+            }
     elif domain == "clothes":
         c = {
             "suggestion": "Mörka jeans + vit t-shirt + sneakers" if sv else "Dark jeans + white tee + sneakers",
@@ -1387,6 +1483,22 @@ def _ensure_food_shopping(
         return execution
     if execution.get("type") == "map":
         return execution
+    # Fridge photo — never invent a shopping list
+    if str((top.get("meta") or {}).get("source") or execution.get("source") or "") == "fridge_photo":
+        import fridge_domain as fr
+
+        ings = list(
+            (top.get("meta") or {}).get("ingredients")
+            or (top.get("meta") or {}).get("available_ingredients")
+            or []
+        )
+        return fr.apply_fridge_execution(
+            suggestion,
+            execution,
+            ingredients=ings,
+            language=language,
+            fallback=bool((top.get("meta") or {}).get("no_cook_empty")),
+        )
     meal_type = str(
         (top.get("meta") or {}).get("meal_type")
         or execution.get("meal_type")

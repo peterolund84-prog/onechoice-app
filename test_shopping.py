@@ -112,6 +112,7 @@ class ShoppingTests(unittest.TestCase):
                 domain_hint="food",
                 language="sv",
                 db_path=path,
+                context_extra={"meal_type": "middag"},
             )
             self.assertTrue(r.ok)
             shop = (r.context or {}).get("shopping")
