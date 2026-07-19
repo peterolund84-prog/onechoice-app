@@ -202,6 +202,16 @@ create policy "Users update own routed queries"
   on public.routed_queries for update
   using (auth.uid() = user_id);
 
+drop policy if exists "Users delete own routed queries" on public.routed_queries;
+create policy "Users delete own routed queries"
+  on public.routed_queries for delete
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users delete own profile" on public.profiles;
+create policy "Users delete own profile"
+  on public.profiles for delete
+  using (auth.uid() = id);
+
 create or replace view public.near_domain_demand as
 select
   category_guess,
@@ -244,7 +254,8 @@ create table if not exists public.public_shares (
   payload jsonb not null default '{}'::jsonb,
   language text not null default 'sv',
   open_count int not null default 0,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  owner_id uuid references public.profiles (id) on delete cascade
 );
 
 create index if not exists idx_public_shares_decision
@@ -270,16 +281,25 @@ create policy "Public read shares"
   on public.public_shares for select
   using (true);
 
--- Authenticated users can create shares (app writes via user session / service)
+-- Authenticated users can create shares; guests may insert without owner_id
 drop policy if exists "Users insert shares" on public.public_shares;
 create policy "Users insert shares"
   on public.public_shares for insert
-  with check (true);
+  with check (
+    owner_id is null
+    or owner_id = auth.uid()
+    or auth.role() = 'authenticated'
+  );
 
 drop policy if exists "Users update share counts" on public.public_shares;
 create policy "Users update share counts"
   on public.public_shares for update
   using (true);
+
+drop policy if exists "Owners delete own shares" on public.public_shares;
+create policy "Owners delete own shares"
+  on public.public_shares for delete
+  using (owner_id = auth.uid());
 
 -- Open events: insertable by anyone (attribution), readable by authenticated
 drop policy if exists "Anyone log share opens" on public.share_opens;
@@ -291,3 +311,110 @@ drop policy if exists "Users read share opens" on public.share_opens;
 create policy "Users read share opens"
   on public.share_opens for select
   using (auth.role() = 'authenticated');
+
+-- ---------------------------------------------------------------------------
+-- User photos (fridge/wardrobe) — private metadata + 24h expiry
+-- ---------------------------------------------------------------------------
+create table if not exists public.user_photos (
+  id bigint generated always as identity primary key,
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind text not null check (kind in ('fridge', 'wardrobe', 'other')),
+  path text not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default (now() + interval '24 hours')
+);
+
+create index if not exists idx_user_photos_user
+  on public.user_photos (user_id, created_at desc);
+
+alter table public.user_photos enable row level security;
+
+drop policy if exists "Users read own photos meta" on public.user_photos;
+create policy "Users read own photos meta"
+  on public.user_photos for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users insert own photos meta" on public.user_photos;
+create policy "Users insert own photos meta"
+  on public.user_photos for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users delete own photos meta" on public.user_photos;
+create policy "Users delete own photos meta"
+  on public.user_photos for delete
+  using (auth.uid() = user_id);
+
+-- Private storage bucket (run once; safe if already exists)
+insert into storage.buckets (id, name, public)
+values ('user-photos', 'user-photos', false)
+on conflict (id) do nothing;
+
+drop policy if exists "Users read own photo objects" on storage.objects;
+create policy "Users read own photo objects"
+  on storage.objects for select
+  using (
+    bucket_id = 'user-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "Users upload own photo objects" on storage.objects;
+create policy "Users upload own photo objects"
+  on storage.objects for insert
+  with check (
+    bucket_id = 'user-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+drop policy if exists "Users delete own photo objects" on storage.objects;
+create policy "Users delete own photo objects"
+  on storage.objects for delete
+  using (
+    bucket_id = 'user-photos'
+    and auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Self-service hard delete (Art. 17)
+create or replace function public.delete_own_account()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'not authenticated';
+  end if;
+  delete from storage.objects
+  where bucket_id = 'user-photos'
+    and (storage.foldername(name))[1] = uid::text;
+  delete from auth.users where id = uid;
+end;
+$$;
+
+revoke all on function public.delete_own_account() from public;
+grant execute on function public.delete_own_account() to authenticated;
+
+create or replace function public.purge_expired_user_photos()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  n int := 0;
+  r record;
+begin
+  for r in
+    select id, path from public.user_photos
+    where expires_at < now()
+  loop
+    delete from storage.objects
+    where bucket_id = 'user-photos' and name = r.path;
+    delete from public.user_photos where id = r.id;
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;

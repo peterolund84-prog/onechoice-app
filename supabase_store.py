@@ -45,8 +45,24 @@ def update_profile(
     refresh_token: str,
     **fields: Any,
 ) -> dict[str, Any]:
-    allowed = {"language", "is_pro", "budget", "dietary", "location", "wardrobe", "email"}
+    allowed = {
+        "language",
+        "is_pro",
+        "budget",
+        "dietary",
+        "location",
+        "wardrobe",
+        "email",
+        "profile_json",
+    }
     updates = {k: v for k, v in fields.items() if k in allowed}
+    if "profile_json" in fields and "profile_json" not in updates:
+        updates["profile_json"] = fields["profile_json"]
+    if "profile_json" in updates and isinstance(updates["profile_json"], str):
+        try:
+            updates["profile_json"] = json.loads(updates["profile_json"])
+        except json.JSONDecodeError:
+            updates["profile_json"] = {}
     # Accept dietary_json / wardrobe_json aliases from sqlite API
     if "dietary_json" in fields:
         updates["dietary"] = fields["dietary_json"]
@@ -357,3 +373,174 @@ def purge_expired_raw_text(
         return int(res.data or 0)
     except Exception:
         return 0
+
+
+def export_user_data(
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+) -> dict[str, Any]:
+    client = _client(access_token, refresh_token)
+    profile = ensure_profile(user_id, access_token, refresh_token)
+    decisions = list_decisions(user_id, access_token, refresh_token, limit=5000)
+    prefs = get_preferences(user_id, access_token, refresh_token)
+    routed = (
+        client.table("routed_queries")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    shares = (
+        client.table("public_shares")
+        .select("*")
+        .eq("owner_id", user_id)
+        .execute()
+    )
+    photos = (
+        client.table("user_photos")
+        .select("id,user_id,kind,path,created_at,expires_at")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    share_rows = list(shares.data or [])
+    opens: list[dict[str, Any]] = []
+    for s in share_rows:
+        tok = s.get("token")
+        if not tok:
+            continue
+        try:
+            op = (
+                client.table("share_opens")
+                .select("*")
+                .eq("token", tok)
+                .execute()
+            )
+            opens.extend(list(op.data or []))
+        except Exception:
+            pass
+    return {
+        "exported_at": _utc_now(),
+        "user_id": user_id,
+        "profile": profile,
+        "decisions": decisions,
+        "preferences": prefs,
+        "routed_queries": list(routed.data or []),
+        "public_shares": share_rows,
+        "share_opens": opens,
+        "user_photos": list(photos.data or []),
+    }
+
+
+def delete_all_user_rows(
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    """Fallback wipe when delete_own_account RPC is unavailable."""
+    client = _client(access_token, refresh_token)
+    for table in ("user_photos", "routed_queries", "preferences", "decisions"):
+        try:
+            client.table(table).delete().eq("user_id", user_id).execute()
+        except Exception:
+            pass
+    try:
+        client.table("public_shares").delete().eq("owner_id", user_id).execute()
+    except Exception:
+        pass
+    try:
+        client.table("profiles").delete().eq("id", user_id).execute()
+    except Exception:
+        pass
+
+
+def delete_user_photos(
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+) -> int:
+    """Remove storage objects + metadata for user. Returns approx object count."""
+    client = _client(access_token, refresh_token)
+    n = 0
+    try:
+        meta = (
+            client.table("user_photos")
+            .select("id,path")
+            .eq("user_id", user_id)
+            .execute()
+        )
+        rows = list(meta.data or [])
+        for row in rows:
+            path = row.get("path")
+            if path:
+                try:
+                    client.storage.from_("user-photos").remove([path])
+                    n += 1
+                except Exception:
+                    pass
+        client.table("user_photos").delete().eq("user_id", user_id).execute()
+    except Exception:
+        # Folder listing fallback
+        try:
+            listed = client.storage.from_("user-photos").list(user_id)
+            names = [
+                f"{user_id}/{item['name']}"
+                for item in (listed or [])
+                if isinstance(item, dict) and item.get("name")
+            ]
+            if names:
+                client.storage.from_("user-photos").remove(names)
+                n = len(names)
+        except Exception:
+            pass
+    return n
+
+
+def upload_fridge_photo(
+    user_id: str,
+    blob: bytes,
+    *,
+    access_token: str,
+    refresh_token: str,
+    mime: str = "image/jpeg",
+) -> dict[str, Any] | None:
+    """Store fridge photo privately; expires_at = now+24h (safety net)."""
+    import uuid as _uuid
+
+    client = _client(access_token, refresh_token)
+    ext = "jpg" if "jpeg" in (mime or "") or "jpg" in (mime or "") else "png"
+    path = f"{user_id}/fridge/{_uuid.uuid4().hex}.{ext}"
+    try:
+        client.storage.from_("user-photos").upload(
+            path,
+            blob,
+            file_options={"content-type": mime or "image/jpeg", "upsert": "false"},
+        )
+        expires = (datetime.now(timezone.utc) + timedelta(hours=24)).isoformat()
+        row = {
+            "user_id": user_id,
+            "kind": "fridge",
+            "path": path,
+            "expires_at": expires,
+        }
+        ins = client.table("user_photos").insert(row).execute()
+        return (ins.data or [row])[0]
+    except Exception:
+        return None
+
+
+def delete_photo_path(
+    path: str,
+    *,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    client = _client(access_token, refresh_token)
+    try:
+        client.storage.from_("user-photos").remove([path])
+    except Exception:
+        pass
+    try:
+        client.table("user_photos").delete().eq("path", path).execute()
+    except Exception:
+        pass

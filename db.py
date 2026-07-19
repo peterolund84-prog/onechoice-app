@@ -121,7 +121,7 @@ def init_db(path: Path | str | None = None) -> None:
                 reroll_index INTEGER NOT NULL DEFAULT 0,
                 context_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_decisions_user_domain
@@ -138,7 +138,7 @@ def init_db(path: Path | str | None = None) -> None:
                 score REAL NOT NULL DEFAULT 0,
                 updated_at TEXT NOT NULL,
                 UNIQUE(user_id, domain, key, value),
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_preferences_user_domain
@@ -156,7 +156,7 @@ def init_db(path: Path | str | None = None) -> None:
                 normalized_question TEXT,
                 decision_shown INTEGER NOT NULL DEFAULT 0,
                 accepted INTEGER,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
             CREATE INDEX IF NOT EXISTS idx_routed_queries_route
@@ -172,7 +172,8 @@ def init_db(path: Path | str | None = None) -> None:
                 payload_json TEXT NOT NULL,
                 language TEXT NOT NULL DEFAULT 'sv',
                 open_count INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                owner_id TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_public_shares_decision
@@ -268,6 +269,25 @@ def init_db(path: Path | str | None = None) -> None:
             )
             """
         )
+        # GDPR: owner_id on shares + user_photos metadata (SQLite)
+        share_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(public_shares)").fetchall()
+        }
+        if "owner_id" not in share_cols:
+            conn.execute("ALTER TABLE public_shares ADD COLUMN owner_id TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_photos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
 
 
 def ensure_public_share(
@@ -305,14 +325,25 @@ def ensure_public_share(
     blob = json.dumps(payload, ensure_ascii=False, default=str)
     domain = str(decision.get("domain") or payload.get("domain") or "other")
     suggestion = str(decision.get("suggestion") or payload.get("suggestion") or "")
+    owner_id = decision.get("user_id") or payload.get("user_id")
     with get_conn(path) as conn:
         conn.execute(
             """
             INSERT INTO public_shares (
-                token, decision_id, domain, suggestion, payload_json, language, open_count, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+                token, decision_id, domain, suggestion, payload_json, language,
+                open_count, created_at, owner_id
+            ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
             """,
-            (token, did_int, domain, suggestion, blob, language, utc_now()),
+            (
+                token,
+                did_int,
+                domain,
+                suggestion,
+                blob,
+                language,
+                utc_now(),
+                str(owner_id) if owner_id else None,
+            ),
         )
         row = conn.execute(
             "SELECT * FROM public_shares WHERE token = ?", (token,)

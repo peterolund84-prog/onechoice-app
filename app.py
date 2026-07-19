@@ -67,6 +67,8 @@ from typing import Any, Callable
 
 import streamlit as st
 
+from pathlib import Path
+
 import db
 import pipeline
 
@@ -107,7 +109,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-camera-ux-v9-20260719"
+BUILD_ID = "gdpr-v10-20260719"
 
 I18N = {
     "sv": {
@@ -174,6 +176,18 @@ I18N = {
         "login_cta": "Logga in",
         "signup_cta": "Registrera",
         "logout": "Logga ut",
+        "privacy_link": "Integritetspolicy",
+        "privacy_consent": "Jag har läst och godkänner integritetspolicyn",
+        "privacy_consent_required": "Du måste godkänna integritetspolicyn för att skapa konto.",
+        "gdpr_title": "Dina data",
+        "gdpr_export": "Ladda ner min data",
+        "gdpr_export_hint": "JSON med allt vi sparat om dig (artikel 20).",
+        "gdpr_delete": "Radera mitt konto",
+        "gdpr_delete_confirm": "Detta raderar allt permanent — konto, historik, preferenser och foton. Går inte att ångra.",
+        "gdpr_delete_yes": "Ja, radera allt",
+        "gdpr_delete_done": "Ditt konto och all data är raderade.",
+        "gdpr_guest_note": "Gästläge: data finns bara lokalt i den här enheten tills du rensar den.",
+
         "guest": "Fortsätt som gäst (lokal demo)",
         "auth_hint": "Supabase Auth — spara beslut i molnet",
         "no_supabase": "Supabase saknas i secrets — kör i lokalt demläge.",
@@ -281,6 +295,18 @@ I18N = {
         "login_cta": "Log in",
         "signup_cta": "Sign up",
         "logout": "Log out",
+        "privacy_link": "Privacy policy",
+        "privacy_consent": "I have read and accept the privacy policy",
+        "privacy_consent_required": "You must accept the privacy policy to create an account.",
+        "gdpr_title": "Your data",
+        "gdpr_export": "Download my data",
+        "gdpr_export_hint": "JSON of everything we store about you (Article 20).",
+        "gdpr_delete": "Delete my account",
+        "gdpr_delete_confirm": "This permanently deletes everything — account, history, preferences and photos. Cannot be undone.",
+        "gdpr_delete_yes": "Yes, delete everything",
+        "gdpr_delete_done": "Your account and all data have been deleted.",
+        "gdpr_guest_note": "Guest mode: data stays only on this device until you clear it.",
+
         "guest": "Continue as guest (local demo)",
         "auth_hint": "Supabase Auth — save decisions in the cloud",
         "no_supabase": "Supabase missing in secrets — running local demo.",
@@ -1193,33 +1219,46 @@ def page_auth() -> None:
             st.session_state.auth_mode = "signup"
             st.rerun()
     else:
+        import gdpr as gdpr_mod
+
+        privacy_url = gdpr_mod.privacy_policy_url() or "?privacy=1"
+        st.markdown(
+            f'<p style="font-size:0.9rem;margin:0.4rem 0">'
+            f'<a href="{html.escape(privacy_url)}" target="_blank" rel="noopener">'
+            f'{html.escape(t("privacy_link"))}</a></p>',
+            unsafe_allow_html=True,
+        )
+        consent = st.checkbox(t("privacy_consent"), key="signup_privacy_consent")
         if st.button(t("signup_cta"), type="primary", use_container_width=True):
-            try:
-                sess = sb.sign_up(
-                    email.strip(), password, language=st.session_state.language
-                )
-                if sess.get("access_token") and sess.get("refresh_token"):
-                    st.session_state.user_id = sess["user_id"]
-                    st.session_state.user_email = sess.get("email")
-                    st.session_state.access_token = sess["access_token"]
-                    st.session_state.refresh_token = sess["refresh_token"]
-                    st.session_state.guest_mode = False
-                    db.set_auth(sess["access_token"], sess["refresh_token"])
-                    db.ensure_user(
-                        sess["user_id"],
-                        language=st.session_state.language,
-                        email=sess.get("email"),
+            if not consent:
+                st.error(t("privacy_consent_required"))
+            else:
+                try:
+                    sess = sb.sign_up(
+                        email.strip(), password, language=st.session_state.language
                     )
-                    st.session_state.page = "home"
-                    st.success("Konto skapat.")
-                    st.rerun()
-                else:
-                    st.info(
-                        "Konto skapat. Bekräfta e-post i Supabase (om aktiverat), sedan logga in."
-                    )
-                    st.session_state.auth_mode = "login"
-            except Exception as exc:
-                st.error(str(exc))
+                    if sess.get("access_token") and sess.get("refresh_token"):
+                        st.session_state.user_id = sess["user_id"]
+                        st.session_state.user_email = sess.get("email")
+                        st.session_state.access_token = sess["access_token"]
+                        st.session_state.refresh_token = sess["refresh_token"]
+                        st.session_state.guest_mode = False
+                        db.set_auth(sess["access_token"], sess["refresh_token"])
+                        db.ensure_user(
+                            sess["user_id"],
+                            language=st.session_state.language,
+                            email=sess.get("email"),
+                        )
+                        st.session_state.page = "home"
+                        st.success("Konto skapat.")
+                        st.rerun()
+                    else:
+                        st.info(
+                            "Konto skapat. Bekräfta e-post i Supabase (om aktiverat), sedan logga in."
+                        )
+                        st.session_state.auth_mode = "login"
+                except Exception as exc:
+                    st.error(str(exc))
         if st.button(t("login_title"), use_container_width=True):
             st.session_state.auth_mode = "login"
             st.rerun()
@@ -3198,6 +3237,76 @@ def page_profile() -> None:
         safe_toast(t("clothes_saved"))
         st.rerun()
 
+    # --- GDPR: export + hard delete (Art. 17 / 20) ---
+    import gdpr as gdpr_mod
+
+    st.markdown(
+        f'<p class="oc-logo" style="font-size:1.15rem;margin-top:1.4rem">'
+        f'{html.escape(t("gdpr_title"))}</p>',
+        unsafe_allow_html=True,
+    )
+    if st.session_state.guest_mode:
+        st.caption(t("gdpr_guest_note"))
+    st.caption(t("gdpr_export_hint"))
+    if st.button(t("gdpr_export"), use_container_width=True, key="gdpr_export_btn"):
+        try:
+            payload = gdpr_mod.export_user_data(str(st.session_state.user_id))
+            blob = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+            st.download_button(
+                label=t("gdpr_export"),
+                data=blob.encode("utf-8"),
+                file_name=f"onechoice-data-{str(st.session_state.user_id)[:8]}.json",
+                mime="application/json",
+                use_container_width=True,
+                key="gdpr_export_dl",
+            )
+        except Exception as exc:
+            st.error(str(exc))
+
+    if st.button(t("gdpr_delete"), use_container_width=True, key="gdpr_delete_btn"):
+        st.session_state["gdpr_delete_pending"] = True
+        st.rerun()
+    if st.session_state.get("gdpr_delete_pending"):
+        st.error(t("gdpr_delete_confirm"))
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button(t("gdpr_delete_yes"), type="primary", use_container_width=True, key="gdpr_delete_yes"):
+                try:
+                    gdpr_mod.delete_user_account(
+                        str(st.session_state.user_id),
+                        access_token=st.session_state.get("access_token"),
+                        refresh_token=st.session_state.get("refresh_token"),
+                    )
+                except Exception as exc:
+                    st.error(str(exc))
+                else:
+                    db.clear_auth()
+                    for key in (
+                        "user_id",
+                        "user_email",
+                        "access_token",
+                        "refresh_token",
+                        "current",
+                        "guest_mode",
+                        "gdpr_delete_pending",
+                        "fridge_photos",
+                    ):
+                        st.session_state[key] = None if key != "guest_mode" else False
+                    st.session_state.page = "auth"
+                    st.success(t("gdpr_delete_done"))
+                    st.rerun()
+        with c2:
+            if st.button(t("home"), use_container_width=True, key="gdpr_delete_cancel"):
+                st.session_state["gdpr_delete_pending"] = False
+                st.rerun()
+
+    privacy_url = gdpr_mod.privacy_policy_url() or "?privacy=1"
+    st.markdown(
+        f'<p style="text-align:center;margin:1rem 0 0.5rem">'
+        f'<a href="{html.escape(privacy_url)}">{html.escape(t("privacy_link"))}</a></p>',
+        unsafe_allow_html=True,
+    )
+
     if st.button(t("logout"), use_container_width=True):
         import supabase_client as sb
 
@@ -3217,8 +3326,34 @@ def page_profile() -> None:
     nav()
 
 
+def page_privacy() -> None:
+    """In-app privacy policy (Swedish). Override with PRIVACY_URL secret if hosted elsewhere."""
+    lang_bar()
+    st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="oc-tagline">{html.escape(t("privacy_link"))}</p>',
+        unsafe_allow_html=True,
+    )
+    path = Path(__file__).resolve().parent / "PRIVACY.md"
+    if path.exists():
+        st.markdown(path.read_text(encoding="utf-8"))
+    else:
+        st.info("Integritetspolicyn saknas i repot (PRIVACY.md).")
+    if st.button(t("home"), use_container_width=True, key="privacy_home"):
+        st.session_state.page = "home" if st.session_state.get("user_id") else "auth"
+        try:
+            del st.query_params["privacy"]
+        except Exception:
+            pass
+        st.rerun()
+
+
 def handle_query_params() -> None:
     qp = st.query_params
+
+    privacy = _qp_one(qp.get("privacy"))
+    if privacy in ("1", "true", "yes") or st.session_state.get("page") == "privacy":
+        st.session_state.page = "privacy"
 
     # Public share landing — distribution channel; works without login
     share_tok = _qp_one(qp.get("share"))
@@ -3542,6 +3677,7 @@ def main() -> None:
         "execute": page_execute,
         "history": page_history,
         "profile": page_profile,
+        "privacy": page_privacy,
         "ambiguous": page_ambiguous,
         "not_a_decision": page_not_a_decision,
         "clothes_occasion": page_clothes_occasion,
