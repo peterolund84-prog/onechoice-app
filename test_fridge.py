@@ -22,6 +22,8 @@ class FridgeDomainUnitTests(unittest.TestCase):
         avail = ["ägg", "paprika", "ost"]
         self.assertTrue(fr.can_cook(["ägg", "paprika", "ost", "smör", "salt"], avail))
         self.assertFalse(fr.can_cook(["ägg", "paprika", "ost", "kyckling"], avail))
+        # smör must NOT satisfy bröd via substring of "smörgås"
+        self.assertFalse(fr.can_cook(["ägg", "bröd", "smör"], ["ägg", "smör", "sylt"]))
 
     def test_omelette_candidate_from_inventory(self) -> None:
         cands = fr.fridge_candidates(["ägg", "paprika", "ost"], language="sv")

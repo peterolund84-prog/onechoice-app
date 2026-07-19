@@ -213,7 +213,11 @@ def _is_staple(name: str) -> bool:
 
 
 def _covers(need: str, available: set[str]) -> bool:
-    """True if need is a staple or matched by an available ingredient."""
+    """True if need is a staple or matched by an available ingredient.
+
+    Inventory items may be more specific than the need (kycklingfilé → kyckling),
+    but a short item must NOT satisfy a longer alias (smör must not cover smörgås/bröd).
+    """
     need_n = normalize_name(need)
     if not need_n:
         return True
@@ -221,16 +225,22 @@ def _covers(need: str, available: set[str]) -> bool:
         return True
     if need_n in available:
         return True
+
+    group: set[str] = {need_n}
     for canonical, aliases in _ALIASES.items():
-        cue_hit = any(a in need_n or need_n in a for a in aliases) or need_n == canonical
-        if not cue_hit:
-            continue
-        for a in available:
-            if a == canonical or any(al in a or a in al for al in aliases):
-                return True
-    if len(need_n) >= 4:
-        for a in available:
-            if need_n in a or (len(a) >= 4 and a in need_n):
+        alias_set = {canonical, *[normalize_name(x) for x in aliases]}
+        if need_n in alias_set or any(
+            len(a) >= 4 and (a in need_n or need_n in a) for a in alias_set
+        ):
+            group |= alias_set
+            break
+
+    for a in available:
+        if a in group:
+            return True
+        for cue in group:
+            # available is a compound/specific form of the needed cue
+            if len(cue) >= 3 and cue in a:
                 return True
     return False
 
