@@ -574,16 +574,23 @@ def record_feedback(
             logging.getLogger("onechoice.db").warning(
                 "supabase record_feedback failed (%s); falling back to sqlite", exc
             )
-            # Force sqlite for the remainder of this call
             path = path or DB_PATH
 
+    return _record_feedback_sqlite(decision_id, accepted=accepted, path=path or DB_PATH)
+
+
+def _record_feedback_sqlite(
+    decision_id: int,
+    *,
+    accepted: bool,
+    path: Path | str,
+) -> dict[str, Any]:
+    """SQLite-only accept/reject — never routes back to Supabase."""
     status = "accepted" if accepted else "rejected"
-    # path set → _use_supabase is False
     try:
-        decision = set_decision_status(decision_id, status, path=path or DB_PATH)
+        # Pass explicit path so _use_supabase is False
+        decision = set_decision_status(decision_id, status, path=path)
     except KeyError:
-        # Decision may exist only in Supabase after a remote write; UI must still
-        # treat accept as success (session mirrors accepted/locked).
         import logging
 
         logging.getLogger("onechoice.db").warning(
@@ -600,14 +607,14 @@ def record_feedback(
         }
     delta = 1.0 if accepted else -1.0
     suggestion = str(decision.get("suggestion") or "").strip().lower()
-    if suggestion:
+    if suggestion and decision.get("user_id") and decision.get("domain"):
         upsert_preference(
             decision["user_id"],
             decision["domain"],
             "suggestion",
             suggestion,
             delta,
-            path=path or DB_PATH,
+            path=path,
         )
     return decision
 

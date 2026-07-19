@@ -179,33 +179,65 @@ class AppAcceptUiTests(unittest.TestCase):
             err = any("Något gick fel" in (m.value or "") for m in at.markdown)
             self.assertFalse(err, domain)
 
-    def test_meal_type_buttons_visible_on_food_result(self) -> None:
+    def test_meal_type_pills_visible_on_food_result(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
-        uid = at.session_state["user_id"]
-        at.session_state["food_meal_type"] = "middag"
-        r = pipeline.decide(
-            str(uid),
-            "",
-            domain_hint="food",
-            language="sv",
-            context_extra={"meal_type": "middag"},
-        )
-        at.session_state["current"] = r.to_dict()
-        at.session_state["decision_id"] = r.decision_id
-        at.session_state["accepted"] = False
-        at.session_state["page"] = "result"
-        at.session_state["ui_error"] = None
-        at.run()
+        # Full path: home → Mat
+        for b in at.button:
+            if b.label == "Mat":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
         self.assertFalse(at.exception)
-        labels = [b.label or "" for b in at.button]
+        self.assertTrue(at.pills, "meal pills missing")
+        # AppTest exposes formatted labels when format_func is used
+        opts = list(at.pills[0].options)
         for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
-            self.assertTrue(
-                any(needle in lab for lab in labels),
-                f"missing meal button {needle}: {labels}",
-            )
+            self.assertIn(needle, opts)
+        at.pills[0].select("Lunch").run()
+        self.assertFalse(at.exception)
+        self.assertFalse(bool(at.session_state["ui_error"]))
+        self.assertEqual(at.session_state["food_meal_type"], "lunch")
+        cur = at.session_state["current"] or {}
+        self.assertEqual((cur.get("context") or {}).get("meal_type"), "lunch")
+        # Accept must work after meal switch
+        labels = [b.label or "" for b in at.button]
+        needle = "Ät nu" if any("Ät" in L for L in labels) else "Handla"
+        for b in at.button:
+            if needle in (b.label or ""):
+                b.click().run()
+                break
+        self.assertTrue(at.session_state["accepted"])
+        self.assertFalse(bool(at.session_state["ui_error"]))
+
+    def test_css_chip_rules_override_ghost_secondary(self) -> None:
+        """Regression: secondary buttons in grids must not be transparent underlines."""
+        import app as app_mod
+        from unittest import mock
+
+        captured: list[str] = []
+
+        class FakeSt:
+            def markdown(self, body, **kwargs):
+                captured.append(str(body))
+
+            def __getattr__(self, name):
+                return lambda *a, **k: None
+
+        with mock.patch.object(app_mod, "st", FakeSt()):
+            app_mod.inject_css()
+        css = "\n".join(captured)
+        self.assertIn("stHorizontalBlock", css)
+        self.assertIn("stButtonGroup", css)
+        # Chip override must force white background (not transparent ghost links)
+        self.assertIn(
+            'div[data-testid="stHorizontalBlock"] div.stButton > button',
+            css,
+        )
+        self.assertIn("background: #fff !important", css)
+        self.assertIn("border-radius: 999px !important", css)
 
     def test_clothes_occasion_buttons_visible(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -223,6 +255,57 @@ class AppAcceptUiTests(unittest.TestCase):
                 any(needle in lab for lab in labels),
                 f"missing occasion button {needle}: {labels}",
             )
+
+    def test_e2e_workout_starta_from_home(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        for b in at.button:
+            if b.label == "Träning":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
+        self.assertFalse(at.exception)
+        hit = False
+        for b in at.button:
+            if "Starta" in (b.label or ""):
+                b.click().run()
+                hit = True
+                break
+        self.assertTrue(hit)
+        self.assertFalse(at.exception)
+        self.assertTrue(at.session_state["accepted"])
+        self.assertFalse(bool(at.session_state["ui_error"]))
+        err = any("Något gick fel" in (m.value or "") for m in at.markdown)
+        self.assertFalse(err)
+        # Locked card title
+        locked = any("Låst:" in (m.value or "") for m in at.markdown)
+        self.assertTrue(locked)
+
+    def test_e2e_clothes_occasion_from_home(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        for b in at.button:
+            if b.label == "Kläder":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "clothes_occasion")
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(any("Fest" in L for L in labels), labels)
+        for b in at.button:
+            if "Fest" in (b.label or ""):
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
+        for b in at.button:
+            if "Bygg" in (b.label or ""):
+                b.click().run()
+                break
+        self.assertTrue(at.session_state["accepted"])
+        self.assertFalse(bool(at.session_state["ui_error"]))
 
     def test_home_domain_buttons_visible(self) -> None:
         from streamlit.testing.v1 import AppTest
