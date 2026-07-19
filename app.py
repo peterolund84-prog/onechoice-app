@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 OneChoice – generell AI-beslutshjälpare
-Koreansk premium-estetik (Kakao / Naver-inspirerad).
+Minimalistisk premium koreansk estetik.
 """
 
 from __future__ import annotations
@@ -20,9 +20,6 @@ import streamlit.components.v1 as components
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("onechoice")
 
-# =============================================================================
-# SIDKONFIGURATION
-# =============================================================================
 st.set_page_config(
     page_title="OneChoice",
     page_icon="\u25cb",
@@ -30,9 +27,9 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# =============================================================================
-# DESIGNTOKENS – koreansk minimalism
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Design
+# ---------------------------------------------------------------------------
 BG = "#f8f9fa"
 PRIMARY = "#5A8BFF"
 BEIGE = "#F5F0E6"
@@ -42,7 +39,6 @@ GREEN = "#4CAF70"
 SHADOW = "0 10px 36px rgba(0, 0, 0, 0.06)"
 FREE_LIMIT = 5
 
-# Ämnes-matchande bilder (rätt ämne per kategori)
 IMAGES: dict[str, list[str]] = {
     "food": [
         "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=500&h=500&fit=crop",
@@ -76,9 +72,7 @@ IMAGES: dict[str, list[str]] = {
     ],
 }
 
-# =============================================================================
-# ÖVERSÄTTNINGAR
-# =============================================================================
+# Unicode-escapes = s\u00e4kra \u00e5/\u00e4/\u00f6 p\u00e5 Windows
 I18N: dict[str, dict[str, str]] = {
     "sv": {
         "tagline": "Vad beh\u00f6ver du hj\u00e4lp att v\u00e4lja idag?",
@@ -104,13 +98,10 @@ I18N: dict[str, dict[str, str]] = {
         "loading": "T\u00e4nker igenom dina alternativ\u2026",
         "empty": "Skriv in din fr\u00e5ga f\u00f6rst.",
         "api_err": "Kunde inte n\u00e5 Grok. Visar lokala f\u00f6rslag.",
-        "api_parse_err": "Kunde inte tolka AI-svar. Visar lokala f\u00f6rslag.",
-        "api_timeout": "Grok tog f\u00f6r l\u00e5ng tid. Visar lokala f\u00f6rslag.",
         "back": "Tillbaka",
         "view": "Visa",
         "free": "Gratis: 5 poster.",
         "stripe_off": "Stripe saknas \u2013 anv\u00e4nd demo.",
-        "stripe_err": "Stripe-fel. F\u00f6rs\u00f6k igen eller anv\u00e4nd demo.",
         "topic": "\u00c4mne",
     },
     "en": {
@@ -137,13 +128,10 @@ I18N: dict[str, dict[str, str]] = {
         "loading": "Thinking through your options\u2026",
         "empty": "Please enter your question first.",
         "api_err": "Could not reach Grok. Showing local suggestions.",
-        "api_parse_err": "Could not parse AI reply. Showing local suggestions.",
-        "api_timeout": "Grok timed out. Showing local suggestions.",
         "back": "Back",
         "view": "View",
         "free": "Free: 5 items.",
         "stripe_off": "Stripe missing \u2013 use demo.",
-        "stripe_err": "Stripe error. Try again or use demo.",
         "topic": "Topic",
     },
 }
@@ -168,9 +156,6 @@ TOPIC_LABELS = {
 }
 
 
-# =============================================================================
-# SESSION STATE
-# =============================================================================
 def init_state() -> None:
     defaults: dict[str, Any] = {
         "language": "sv",
@@ -197,9 +182,6 @@ def topic_label(cat: str) -> str:
     return TOPIC_LABELS.get(lang, TOPIC_LABELS["sv"]).get(cat, cat)
 
 
-# =============================================================================
-# CSS – Kakao/Naver-känsla: luft, soft shadow, runda hörn
-# =============================================================================
 def inject_css() -> None:
     st.markdown(
         f"""
@@ -209,7 +191,6 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
     font-family: "Helvetica Neue", Helvetica, "Apple SD Gothic Neo",
                  system-ui, -apple-system, "Segoe UI", sans-serif !important;
     color: #1a1a1a;
-    -webkit-font-smoothing: antialiased;
 }}
 #MainMenu, footer, header, [data-testid="stToolbar"],
 [data-testid="stDecoration"], .stDeployButton,
@@ -225,7 +206,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 }}
 .oc-logo {{
     text-align: center; font-weight: 700; font-size: 1.55rem;
-    letter-spacing: -0.045em; color: #111; line-height: 1;
+    letter-spacing: -0.045em; color: #111;
 }}
 .oc-logo em {{ font-style: normal; color: {PRIMARY}; }}
 .oc-logo-sm {{
@@ -242,14 +223,13 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
 .oc-topic {{
     display: inline-block; background: {PASTEL}; color: {PRIMARY};
     font-size: 0.72rem; font-weight: 600; padding: 0.28rem 0.7rem;
-    border-radius: 999px; margin: 0 0 1rem; letter-spacing: 0.01em;
+    border-radius: 999px; margin: 0 0 1rem;
 }}
 div[class*="st-key-lang_sv"] button,
 div[class*="st-key-lang_en"] button {{
     width: 40px !important; height: 40px !important; min-height: 40px !important;
     max-width: 40px !important; padding: 0 !important; border-radius: 50% !important;
     font-size: 0.7rem !important; font-weight: 700 !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
 }}
 div[class*="st-key-lang_sv"] button[data-testid="baseButton-primary"],
 div[class*="st-key-lang_en"] button[data-testid="baseButton-primary"] {{
@@ -270,9 +250,8 @@ div[data-testid="stTextArea"] {{
     font-family: inherit !important; font-size: 1.05rem !important;
     background: transparent !important; border: none !important;
     min-height: 170px !important; color: #222 !important;
-    padding: 0.35rem 0.15rem !important; line-height: 1.55 !important;
-    box-shadow: none !important; caret-color: {PRIMARY} !important;
-    pointer-events: auto !important; z-index: 6 !important;
+    padding: 0.35rem 0.15rem !important; box-shadow: none !important;
+    caret-color: {PRIMARY} !important; pointer-events: auto !important; z-index: 6 !important;
 }}
 .stTextArea textarea:focus {{
     border: none !important; box-shadow: none !important; outline: none !important;
@@ -283,14 +262,10 @@ div.stButton > button[data-testid="baseButton-primary"] {{
     height: 3.45rem !important; width: 100% !important;
     box-shadow: 0 8px 24px rgba(90, 139, 255, 0.3) !important;
 }}
-div.stButton > button[data-testid="baseButton-primary"]:hover {{
-    background: #4a7af0 !important; color: #fff !important;
-}}
 div.stButton > button[data-testid="baseButton-secondary"] {{
     background: #fff !important; color: #555 !important; border: 1px solid #e8e8ec !important;
     border-radius: 14px !important; font-weight: 500 !important; font-size: 0.8rem !important;
     min-height: 2.55rem !important; width: 100% !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03) !important;
 }}
 .oc-label {{ text-align: center; font-size: 0.95rem; color: #888; margin: 0.75rem 0 0; }}
 .oc-q {{
@@ -318,8 +293,7 @@ div.stButton > button[data-testid="baseButton-secondary"] {{
 .oc-card p {{ font-size: 0.8rem; color: #6e6e76; margin: 0; line-height: 1.4; }}
 .oc-badge {{
     position: absolute; top: 0.9rem; left: 0.9rem; background: {GREEN}; color: #fff;
-    font-size: 0.68rem; font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 999px;
-    z-index: 2; box-shadow: 0 4px 12px rgba(76, 175, 112, 0.3);
+    font-size: 0.68rem; font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 999px; z-index: 2;
 }}
 div[data-testid="stLinkButton"] a {{
     border-radius: 14px !important; font-weight: 600 !important; font-size: 0.78rem !important;
@@ -339,7 +313,7 @@ div:has(> #share-mark) + div button[data-testid="baseButton-primary"] {{
     background: #fff; border-radius: 28px; padding: 2.1rem 1.6rem;
     text-align: center; box-shadow: {SHADOW}; margin-top: 1.75rem;
 }}
-.oc-pro h2 {{ font-size: 1.65rem; letter-spacing: -0.035em; margin: 0 0 0.55rem; }}
+.oc-pro h2 {{ font-size: 1.65rem; margin: 0 0 0.55rem; }}
 .oc-pro p {{ color: #6e6e76; font-size: 0.92rem; margin: 0; line-height: 1.45; }}
 .oc-price {{ font-size: 1.65rem; font-weight: 700; color: {PRIMARY}; margin: 1.3rem 0 0.2rem; }}
 .oc-pill {{
@@ -372,97 +346,17 @@ div.stButton > button[data-testid="baseButton-primary"] {{
     )
 
 
-# =============================================================================
-# 1) DETEKTERA ÄMNE
-# =============================================================================
+# ---------------------------------------------------------------------------
+# \u00c4mnesdetektering + l\u00e4nkar
+# ---------------------------------------------------------------------------
 def detect_category(question: str) -> str:
-    """Steg 1: klassificera frågan till rätt ämne."""
     q = question.lower()
     rules = [
-        (
-            "food",
-            (
-                "äta",
-                "ata",
-                "mat",
-                "lunch",
-                "middag",
-                "frukost",
-                "eat",
-                "food",
-                "dinner",
-                "breakfast",
-                "restaurang",
-                "hungrig",
-                "recept",
-                "meny",
-            ),
-        ),
-        (
-            "clothes",
-            (
-                "kläd",
-                "klad",
-                "skor",
-                "outfit",
-                "på mig",
-                "pa mig",
-                "ha på",
-                "ha pa",
-                "clothes",
-                "wear",
-                "fashion",
-                "imorgon",
-                "dress",
-                "stil",
-            ),
-        ),
-        (
-            "travel",
-            (
-                "resa",
-                "semester",
-                "flyg",
-                "hotell",
-                "travel",
-                "vacation",
-                "trip",
-                "sommar",
-                "destination",
-                "stad",
-                "land",
-            ),
-        ),
-        (
-            "career",
-            (
-                "jobb",
-                "karriär",
-                "karriar",
-                "career",
-                "job",
-                "arbete",
-                "intervju",
-                "cv",
-                "lön",
-                "lon",
-            ),
-        ),
-        (
-            "evening",
-            (
-                "ikväll",
-                "ikvall",
-                "kväll",
-                "kvall",
-                "tonight",
-                "evening",
-                "göra",
-                "gora",
-                "planera",
-                "helg",
-            ),
-        ),
+        ("food", ("äta", "ata", "mat", "lunch", "middag", "frukost", "eat", "food", "dinner", "breakfast", "hungrig", "recept")),
+        ("clothes", ("kläd", "klad", "skor", "outfit", "på mig", "pa mig", "ha på", "ha pa", "clothes", "wear", "fashion", "imorgon")),
+        ("travel", ("resa", "semester", "flyg", "hotell", "travel", "vacation", "trip", "sommar", "destination")),
+        ("career", ("jobb", "karriär", "karriar", "career", "job", "arbete", "intervju", "cv")),
+        ("evening", ("ikväll", "ikvall", "kväll", "kvall", "tonight", "evening", "göra", "gora", "helg")),
     ]
     for cat, words in rules:
         if any(w in q for w in words):
@@ -518,20 +412,14 @@ def order_url(title: str, index: int, category: str) -> str:
     return links[index % len(links)]
 
 
-# =============================================================================
-# SECRETS + ENRICH
-# =============================================================================
 def get_secret(name: str, default: str = "") -> str:
     try:
-        val = st.secrets.get(name, default)
-        return str(val or default)
-    except Exception as exc:
-        log.warning("secrets: %s", exc)
+        return str(st.secrets.get(name, default) or default)
+    except Exception:
         return default
 
 
 def enrich(choices: list[dict[str, Any]], category: str) -> list[dict[str, Any]]:
-    """Lägg till matchande bild + länkar. Säkerställ exakt en rekommenderad."""
     imgs = IMAGES.get(category, IMAGES["general"])
     rec_count = sum(1 for c in choices if c.get("recommended"))
     for i, c in enumerate(choices):
@@ -550,308 +438,109 @@ def enrich(choices: list[dict[str, Any]], category: str) -> list[dict[str, Any]]
     return choices
 
 
-# =============================================================================
-# DEMO (fallback)
-# =============================================================================
 def demo_choices(question: str, language: str) -> list[dict[str, Any]]:
     sv = language == "sv"
     cat = detect_category(question)
     packs: dict[str, list[dict[str, Any]]] = {
         "food": [
-            {
-                "title": "Fresh Salad Bowl",
-                "description": (
-                    "L\u00e4tt och fr\u00e4sch n\u00e4r du vill k\u00e4nna dig pigg."
-                    if sv
-                    else "Light and fresh when you want to feel sharp."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Sushi Set",
-                "description": (
-                    "Balanserad smakresa med ris, fisk och gr\u00f6nt."
-                    if sv
-                    else "Balanced taste with rice, fish and greens."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Pasta Primavera",
-                "description": (
-                    "Varm pasta med s\u00e4songens gr\u00f6nsaker \u2013 v\u00e5rt tips."
-                    if sv
-                    else "Warm pasta with seasonal vegetables \u2013 our pick."
-                ),
-                "recommended": True,
-            },
+            {"title": "Fresh Salad Bowl", "description": "L\u00e4tt och fr\u00e4sch." if sv else "Light and fresh.", "recommended": False},
+            {"title": "Sushi Set", "description": "Balanserad smakresa." if sv else "Balanced taste journey.", "recommended": False},
+            {"title": "Pasta Primavera", "description": "Varm pasta \u2013 v\u00e5rt tips." if sv else "Warm pasta \u2013 our pick.", "recommended": True},
         ],
         "clothes": [
-            {
-                "title": "Casual denim",
-                "description": (
-                    "Jeans + vit t-shirt \u2013 tidl\u00f6st och enkelt."
-                    if sv
-                    else "Jeans + white tee \u2013 timeless and easy."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Smart casual",
-                "description": (
-                    "Chinos och skjorta \u2013 funkar n\u00e4stan \u00f6verallt."
-                    if sv
-                    else "Chinos and a shirt \u2013 works almost anywhere."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Neutrala lager" if sv else "Layered neutrals",
-                "description": (
-                    "Mjuka lager i beige/gr\u00e5 \u2013 rekommenderas."
-                    if sv
-                    else "Soft beige/grey layers \u2013 recommended."
-                ),
-                "recommended": True,
-            },
+            {"title": "Casual denim", "description": "Jeans + vit t-shirt." if sv else "Jeans + white tee.", "recommended": False},
+            {"title": "Smart casual", "description": "Chinos och skjorta." if sv else "Chinos and a shirt.", "recommended": False},
+            {"title": "Neutrala lager" if sv else "Layered neutrals", "description": "Mjuka beige/gr\u00e5 lager." if sv else "Soft beige/grey layers.", "recommended": True},
         ],
         "travel": [
-            {
-                "title": "K\u00f6penhamn" if sv else "Copenhagen",
-                "description": (
-                    "N\u00e4ra, designigt och matigt \u2013 perfekt weekend."
-                    if sv
-                    else "Close, design-forward and tasty \u2013 perfect weekend."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Stuga i naturen" if sv else "Nature cabin",
-                "description": (
-                    "Tystnad, skog och \u00e5terh\u00e4mtning."
-                    if sv
-                    else "Quiet woods and real rest."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Lissabon" if sv else "Lisbon",
-                "description": (
-                    "Sol, mat och bra vibe \u2013 v\u00e5rt tips."
-                    if sv
-                    else "Sun, food and great vibe \u2013 our tip."
-                ),
-                "recommended": True,
-            },
+            {"title": "K\u00f6penhamn" if sv else "Copenhagen", "description": "N\u00e4ra och designigt." if sv else "Close and design-forward.", "recommended": False},
+            {"title": "Stuga i naturen" if sv else "Nature cabin", "description": "Tystnad och \u00e5terh\u00e4mtning." if sv else "Quiet rest in nature.", "recommended": False},
+            {"title": "Lissabon" if sv else "Lisbon", "description": "Sol, mat och vibe." if sv else "Sun, food and vibe.", "recommended": True},
         ],
         "career": [
-            {
-                "title": "Uppdatera CV" if sv else "Update your CV",
-                "description": (
-                    "Ett konkret steg som \u00f6ppnar fler d\u00f6rrar."
-                    if sv
-                    else "A concrete step that opens more doors."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "N\u00e4tverka idag" if sv else "Network today",
-                "description": (
-                    "Skicka ett meddelande till n\u00e5gon i branschen."
-                    if sv
-                    else "Message someone in your field."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "S\u00f6k en roll" if sv else "Apply to one role",
-                "description": (
-                    "V\u00e4lj en annons och s\u00f6k nu \u2013 rekommenderas."
-                    if sv
-                    else "Pick one listing and apply now \u2013 recommended."
-                ),
-                "recommended": True,
-            },
+            {"title": "Uppdatera CV" if sv else "Update your CV", "description": "\u00d6ppnar fler d\u00f6rrar." if sv else "Opens more doors.", "recommended": False},
+            {"title": "N\u00e4tverka idag" if sv else "Network today", "description": "Kontakta n\u00e5gon i branschen." if sv else "Reach someone in your field.", "recommended": False},
+            {"title": "S\u00f6k en roll" if sv else "Apply to one role", "description": "S\u00f6k nu \u2013 rekommenderas." if sv else "Apply now \u2013 recommended.", "recommended": True},
         ],
         "evening": [
-            {
-                "title": "Filmhemma" if sv else "Movie night in",
-                "description": (
-                    "L\u00e5g energi, h\u00f6g mysfaktor."
-                    if sv
-                    else "Low energy, high coziness."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Promenad + caf\u00e9" if sv else "Walk + caf\u00e9",
-                "description": (
-                    "Frisk luft och en enkel bel\u00f6ning."
-                    if sv
-                    else "Fresh air and a simple treat."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Middag ute" if sv else "Dinner out",
-                "description": (
-                    "Byt milj\u00f6 och njut \u2013 v\u00e5rt tips ikv\u00e4ll."
-                    if sv
-                    else "Change of scenery \u2013 our tip tonight."
-                ),
-                "recommended": True,
-            },
+            {"title": "Filmhemma" if sv else "Movie night in", "description": "Mysigt och enkelt." if sv else "Cozy and simple.", "recommended": False},
+            {"title": "Promenad + caf\u00e9" if sv else "Walk + caf\u00e9", "description": "Frisk luft och bel\u00f6ning." if sv else "Fresh air and a treat.", "recommended": False},
+            {"title": "Middag ute" if sv else "Dinner out", "description": "Byt milj\u00f6 \u2013 v\u00e5rt tips." if sv else "Change of scenery \u2013 our tip.", "recommended": True},
         ],
         "general": [
-            {
-                "title": "Alternativ A" if sv else "Option A",
-                "description": (
-                    "Tryggt och enkelt \u2013 sparar tid."
-                    if sv
-                    else "Safe and simple \u2013 saves time."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Alternativ B" if sv else "Option B",
-                "description": (
-                    "Lite mer sp\u00e4nnande om du vill bryta rutinen."
-                    if sv
-                    else "A bit more exciting to break the routine."
-                ),
-                "recommended": False,
-            },
-            {
-                "title": "Alternativ C" if sv else "Option C",
-                "description": (
-                    "B\u00e4sta balansen just nu \u2013 rekommenderas."
-                    if sv
-                    else "Best balance right now \u2013 recommended."
-                ),
-                "recommended": True,
-            },
+            {"title": "Alternativ A" if sv else "Option A", "description": "Tryggt och enkelt." if sv else "Safe and simple.", "recommended": False},
+            {"title": "Alternativ B" if sv else "Option B", "description": "Lite mer sp\u00e4nnande." if sv else "A bit more exciting.", "recommended": False},
+            {"title": "Alternativ C" if sv else "Option C", "description": "B\u00e4sta balansen." if sv else "Best balance.", "recommended": True},
         ],
     }
     return enrich(packs.get(cat, packs["general"]), cat)
 
 
-# =============================================================================
-# GROK MED CHAIN-OF-THOUGHT
-# =============================================================================
-def _parse_choices_payload(raw: str) -> list[dict[str, Any]]:
-    """Extrahera JSON-choices; tål markdown-fence och trailing text."""
-    text = raw.strip()
-    fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
-    if fence:
-        text = fence.group(1).strip()
-    # Försök hitta objekt med "choices"
-    brace = re.search(r"\{[\s\S]*\"choices\"[\s\S]*\}", text)
-    if brace:
-        text = brace.group(0)
-    data = json.loads(text)
-    choices = data.get("choices", data if isinstance(data, list) else [])
-    if not isinstance(choices, list):
-        raise ValueError("choices is not a list")
-    return choices
-
-
 def call_grok(question: str, language: str) -> tuple[list[dict[str, Any]], str]:
-    """
-    Steg 2–3: anropa Grok med chain-of-thought-prompt.
-    Vid fel → graceful fallback till demo.
-    """
+    """Grok med chain-of-thought; fallback till demo."""
     cat = detect_category(question)
     key = get_secret("GROK_API_KEY")
-
     if not key or key.startswith("din_"):
-        log.info("Ingen Grok-nyckel – demo för kategori=%s", cat)
         return demo_choices(question, language), cat
 
     lang = "Swedish" if language == "sv" else "English"
-
-    # Chain-of-thought: tänk stegvis internt, svara bara med JSON
-    system_prompt = (
-        "You are OneChoice, a calm decision assistant inspired by Korean "
-        "minimalist product design (Kakao, Naver). "
-        "Always think step by step internally, but NEVER expose your reasoning. "
-        "Output valid JSON only — no markdown, no prose."
+    system = (
+        "You are OneChoice, a calm Korean-minimalist decision assistant. "
+        "Think step by step internally. Output valid JSON only."
     )
-    user_prompt = f"""
-User decision: "{question}"
+    user = f"""
+Decision: "{question}"
 Detected topic: {cat}
-Language for titles/descriptions: {lang}
+Language: {lang}
 
-Think step by step (internally only):
-1) Confirm the topic fits: food / clothes / travel / career / evening / general.
-2) Brainstorm 5 concrete options that truly match the topic.
-3) Pick the best 3; mark exactly one as recommended (best overall fit).
-4) Write short titles (max 4 words) and one calm sentence each.
+Think step by step (internally):
+1) Confirm topic.
+2) Brainstorm options that match the topic.
+3) Pick best 3; mark exactly one recommended.
+4) Short titles, one calm sentence each.
 
-Return ONLY this JSON shape:
-{{
-  "topic": "{cat}",
-  "choices": [
-    {{"title": "...", "description": "...", "recommended": false}},
-    {{"title": "...", "description": "...", "recommended": false}},
-    {{"title": "...", "description": "...", "recommended": true}}
-  ]
-}}
-Rules: exactly 3 choices, exactly one recommended:true, practical options only.
+Return ONLY:
+{{"topic":"{cat}","choices":[
+  {{"title":"...","description":"...","recommended":false}},
+  {{"title":"...","description":"...","recommended":false}},
+  {{"title":"...","description":"...","recommended":true}}
+]}}
 """
-
     try:
         resp = requests.post(
             "https://api.x.ai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
             json={
                 "model": "grok-2-latest",
                 "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
                 ],
                 "temperature": 0.65,
             },
             timeout=45,
         )
         resp.raise_for_status()
-        payload = resp.json()
-        content = payload["choices"][0]["message"]["content"]
-        choices = _parse_choices_payload(content)
-        if len(choices) < 3:
-            raise ValueError(f"expected 3 choices, got {len(choices)}")
-        # Respektera topic från API om giltig
-        try:
-            parsed_topic = json.loads(
-                re.search(r"\{[\s\S]*\}", content).group(0)  # type: ignore[union-attr]
-            ).get("topic")
-            if parsed_topic in IMAGES:
-                cat = parsed_topic
-        except Exception:
-            pass
-        return enrich(choices[:3], cat), cat
-
-    except requests.Timeout:
-        log.exception("Grok timeout")
-        st.session_state.last_error = t("api_timeout")
-    except requests.RequestException as exc:
-        log.exception("Grok request error: %s", exc)
-        st.session_state.last_error = t("api_err")
-    except (json.JSONDecodeError, ValueError, KeyError, TypeError, AttributeError) as exc:
-        log.exception("Grok parse error: %s", exc)
-        st.session_state.last_error = t("api_parse_err")
+        raw = resp.json()["choices"][0]["message"]["content"].strip()
+        fence = re.search(r"```(?:json)?\s*([\s\S]*?)```", raw)
+        if fence:
+            raw = fence.group(1).strip()
+        brace = re.search(r"\{[\s\S]*\"choices\"[\s\S]*\}", raw)
+        if brace:
+            raw = brace.group(0)
+        data = json.loads(raw)
+        choices = list(data.get("choices", []))
+        if data.get("topic") in IMAGES:
+            cat = data["topic"]
+        if len(choices) >= 3:
+            return enrich(choices[:3], cat), cat
     except Exception as exc:
-        log.exception("Grok unexpected: %s", exc)
+        log.exception("Grok error: %s", exc)
         st.session_state.last_error = t("api_err")
 
     return demo_choices(question, language), cat
 
 
-# =============================================================================
-# STRIPE
-# =============================================================================
 def stripe_checkout_url() -> str | None:
     secret = get_secret("STRIPE_SECRET_KEY")
     if not secret or secret.startswith("din_"):
@@ -863,24 +552,21 @@ def stripe_checkout_url() -> str | None:
         sv = st.session_state.language == "sv"
         session = stripe.checkout.Session.create(
             mode="subscription",
-            line_items=[
-                {
-                    "price_data": {
-                        "currency": "sek" if sv else "usd",
-                        "unit_amount": 4900 if sv else 500,
-                        "recurring": {"interval": "month"},
-                        "product_data": {"name": "OneChoice Pro"},
-                    },
-                    "quantity": 1,
-                }
-            ],
+            line_items=[{
+                "price_data": {
+                    "currency": "sek" if sv else "usd",
+                    "unit_amount": 4900 if sv else 500,
+                    "recurring": {"interval": "month"},
+                    "product_data": {"name": "OneChoice Pro"},
+                },
+                "quantity": 1,
+            }],
             success_url="http://localhost:8501/?pro=success",
             cancel_url="http://localhost:8501/?pro=cancel",
         )
         return session.url
     except Exception as exc:
-        log.exception("Stripe error: %s", exc)
-        st.session_state.last_error = t("stripe_err")
+        log.exception("Stripe: %s", exc)
         return None
 
 
@@ -896,27 +582,17 @@ def save_history(question: str, choices: list[dict[str, Any]]) -> None:
     st.session_state.history = hist
 
 
-# =============================================================================
+# ---------------------------------------------------------------------------
 # UI
-# =============================================================================
+# ---------------------------------------------------------------------------
 def lang_switcher() -> None:
     a, b = st.columns(2)
     with a:
-        if st.button(
-            "SV",
-            key="lang_sv",
-            type="primary" if st.session_state.language == "sv" else "secondary",
-            use_container_width=True,
-        ):
+        if st.button("SV", key="lang_sv", type="primary" if st.session_state.language == "sv" else "secondary", use_container_width=True):
             st.session_state.language = "sv"
             st.rerun()
     with b:
-        if st.button(
-            "EN",
-            key="lang_en",
-            type="primary" if st.session_state.language == "en" else "secondary",
-            use_container_width=True,
-        ):
+        if st.button("EN", key="lang_en", type="primary" if st.session_state.language == "en" else "secondary", use_container_width=True):
             st.session_state.language = "en"
             st.rerun()
 
@@ -927,10 +603,7 @@ def header(mode: str = "home") -> None:
         if mode == "results":
             st.markdown('<div class="oc-logo-sm">One</div>', unsafe_allow_html=True)
         else:
-            st.markdown(
-                '<div class="oc-logo"><em>One</em>Choice</div>',
-                unsafe_allow_html=True,
-            )
+            st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     with right:
         lang_switcher()
 
@@ -938,22 +611,13 @@ def header(mode: str = "home") -> None:
 def nav() -> None:
     page = st.session_state.page
     home_on = page in ("home", "results")
-    icons = {
-        "home": ("\U0001f3e0", t("home")),
-        "history": ("\U0001f552", t("history")),
-        "profile": ("\U0001f464", t("profile")),
-    }
+    icons = {"home": ("\U0001f3e0", t("home")), "history": ("\U0001f552", t("history")), "profile": ("\U0001f464", t("profile"))}
     cols = st.columns(3)
     for col, key in zip(cols, ("home", "history", "profile")):
         with col:
             active = (key == "home" and home_on) or page == key
             icon, name = icons[key]
-            if st.button(
-                f"{icon}\n{name}",
-                key=f"nav_{key}",
-                type="primary" if active else "secondary",
-                use_container_width=True,
-            ):
+            if st.button(f"{icon}\n{name}", key=f"nav_{key}", type="primary" if active else "secondary", use_container_width=True):
                 st.session_state.page = key
                 st.rerun()
 
@@ -961,73 +625,36 @@ def nav() -> None:
 def result_card(choice: dict[str, Any], index: int) -> None:
     title = choice.get("title", "")
     desc = choice.get("description", "")
-    cat = choice.get("category", st.session_state.get("current_category", "general"))
+    cat = choice.get("category", "general")
     imgs = IMAGES.get(cat, IMAGES["general"])
     img = choice.get("image_url", imgs[index % 3])
     tint = "tint-blue" if index == 0 else "tint-beige"
-    badge = (
-        f'<span class="oc-badge">{t("recommended")}</span>'
-        if choice.get("recommended")
-        else ""
-    )
+    badge = f'<span class="oc-badge">{t("recommended")}</span>' if choice.get("recommended") else ""
 
     if index == 0:
-        html = f"""
-        <div class="oc-card {tint}">
-          <div class="oc-row">
-            <img class="oc-img" src="{img}" alt="" />
-            <div><h3>{title}</h3><p>{desc}</p></div>
-          </div>
-        </div>"""
+        html = f'<div class="oc-card {tint}"><div class="oc-row"><img class="oc-img" src="{img}" alt="" /><div><h3>{title}</h3><p>{desc}</p></div></div></div>'
     elif index == 1:
-        html = f"""
-        <div class="oc-card {tint}">
-          <div class="oc-row">
-            <div style="flex:1"><h3>{title}</h3><p>{desc}</p></div>
-            <img class="oc-img-rect" src="{img}" alt="" />
-          </div>
-        </div>"""
+        html = f'<div class="oc-card {tint}"><div class="oc-row"><div style="flex:1"><h3>{title}</h3><p>{desc}</p></div><img class="oc-img-rect" src="{img}" alt="" /></div></div>'
     else:
-        html = f"""
-        <div class="oc-card {tint}">
-          {badge}
-          <div class="oc-col" style="padding-top:0.4rem">
-            <img class="oc-img" src="{img}" alt="" />
-            <div><h3>{title}</h3><p>{desc}</p></div>
-          </div>
-        </div>"""
+        html = f'<div class="oc-card {tint}">{badge}<div class="oc-col" style="padding-top:0.4rem"><img class="oc-img" src="{img}" alt="" /><div><h3>{title}</h3><p>{desc}</p></div></div></div>'
 
     st.markdown(html, unsafe_allow_html=True)
 
-    info_label = t("info_food") if cat == "food" else t("info_other")
-    i_url = choice.get("info_url") or info_url(title, cat)
-    o_url = choice.get("order_url") or order_url(title, index, cat)
-
+    label = t("info_food") if cat == "food" else t("info_other")
     c1, c2 = st.columns(2)
     with c1:
-        st.link_button(info_label, i_url, use_container_width=True, type="secondary")
+        st.link_button(label, choice.get("info_url") or info_url(title, cat), use_container_width=True, type="secondary")
     with c2:
-        st.link_button(t("order"), o_url, use_container_width=True, type="primary")
-
+        st.link_button(t("order"), choice.get("order_url") or order_url(title, index, cat), use_container_width=True, type="primary")
     st.markdown("<div style='height:0.65rem'></div>", unsafe_allow_html=True)
 
 
-# =============================================================================
-# SIDOR
-# =============================================================================
 def page_home() -> None:
     header("home")
-    st.markdown(
-        f'<div class="oc-hero"><h1>{t("tagline")}</h1></div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<div class="oc-hero"><h1>{t("tagline")}</h1></div>', unsafe_allow_html=True)
 
-    q_raw = st.text_area(
-        "q",
-        height=170,
-        label_visibility="collapsed",
-        key="home_input",
-    )
+    # Endast key= – annars nollställs texten vid varje tangenttryck
+    q_raw = st.text_area("q", height=170, label_visibility="collapsed", key="home_input")
 
     if st.button(t("cta"), type="primary", use_container_width=True):
         q = (q_raw or "").strip()
@@ -1046,7 +673,6 @@ def page_home() -> None:
     if st.session_state.last_error:
         st.caption(st.session_state.last_error)
         st.session_state.last_error = None
-
     nav()
 
 
@@ -1059,8 +685,7 @@ def page_results() -> None:
     st.markdown(
         f'<p class="oc-label">{t("decision")}</p>'
         f'<p class="oc-q">{question}</p>'
-        f'<div style="text-align:center">'
-        f'<span class="oc-topic">{t("topic")}: {topic_label(cat)}</span></div>',
+        f'<div style="text-align:center"><span class="oc-topic">{t("topic")}: {topic_label(cat)}</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -1073,58 +698,34 @@ def page_results() -> None:
     for i, c in enumerate(choices[:3]):
         result_card(c, i)
 
-    rec_title = next(
-        (c.get("title", "") for c in choices if c.get("recommended")),
-        choices[0].get("title", "") if choices else "",
-    )
+    rec_title = next((c.get("title", "") for c in choices if c.get("recommended")), choices[0].get("title", "") if choices else "")
     share = f"OneChoice: {question} \u2192 {rec_title}"
 
     st.markdown('<div id="share-mark"></div>', unsafe_allow_html=True)
-    if st.button(
-        f"\u22ef  {t('share')}",
-        type="primary",
-        use_container_width=True,
-        key="share_btn",
-    ):
-        components.html(
-            f"<script>navigator.clipboard.writeText({json.dumps(share)});</script>",
-            height=0,
-        )
+    if st.button(f"\u22ef  {t('share')}", type="primary", use_container_width=True, key="share_btn"):
+        components.html(f"<script>navigator.clipboard.writeText({json.dumps(share)});</script>", height=0)
         st.toast(share)
 
     if st.button(t("back"), key="back_home", use_container_width=True):
         st.session_state.page = "home"
         st.rerun()
-
     nav()
 
 
 def page_history() -> None:
     header("home")
-    st.markdown(
-        f'<p class="oc-q" style="text-align:left;font-size:1.45rem">'
-        f'{t("history_title")}</p>',
-        unsafe_allow_html=True,
-    )
+    st.markdown(f'<p class="oc-q" style="text-align:left;font-size:1.45rem">{t("history_title")}</p>', unsafe_allow_html=True)
     if not st.session_state.is_pro:
         st.caption(t("free"))
-
     hist = st.session_state.history
     if not hist:
         st.info(t("history_empty"))
     else:
         for i, e in enumerate(hist):
-            rec = next(
-                (c.get("title") for c in e.get("choices", []) if c.get("recommended")),
-                "\u2014",
-            )
+            rec = next((c.get("title") for c in e.get("choices", []) if c.get("recommended")), "\u2014")
             st.markdown(
-                f"""
-                <div class="oc-hist">
-                  <strong>{e.get("question", "")}</strong>
-                  <span>{e.get("timestamp", "")} \u00b7 \u2192 {rec}</span>
-                </div>
-                """,
+                f'<div class="oc-hist"><strong>{e.get("question", "")}</strong>'
+                f'<span>{e.get("timestamp", "")} \u00b7 \u2192 {rec}</span></div>',
                 unsafe_allow_html=True,
             )
             if st.button(t("view"), key=f"hist_{i}", use_container_width=True):
@@ -1141,32 +742,21 @@ def page_history() -> None:
 def page_profile() -> None:
     header("home")
     st.markdown(
-        f"""
-        <div class="oc-pro">
-          <h2>{t("pro_title")}</h2>
-          <p>{t("pro_desc")}</p>
-          <div class="oc-price">{t("pro_price")}</div>
-        </div>
-        """,
+        f'<div class="oc-pro"><h2>{t("pro_title")}</h2><p>{t("pro_desc")}</p>'
+        f'<div class="oc-price">{t("pro_price")}</div></div>',
         unsafe_allow_html=True,
     )
     st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
 
     if st.session_state.is_pro:
-        st.markdown(
-            f'<div style="text-align:center">'
-            f'<span class="oc-pill">{t("pro_on")}</span></div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown(f'<div style="text-align:center"><span class="oc-pill">{t("pro_on")}</span></div>', unsafe_allow_html=True)
     else:
-        if st.button(
-            t("pro_cta"), type="primary", use_container_width=True, key="stripe_cta"
-        ):
+        if st.button(t("pro_cta"), type="primary", use_container_width=True, key="stripe_cta"):
             url = stripe_checkout_url()
             if url:
                 st.link_button("Stripe Checkout \u2192", url, use_container_width=True)
             else:
-                st.info(t("stripe_off") if not st.session_state.last_error else t("stripe_err"))
+                st.info(t("stripe_off"))
         if st.button(t("pro_demo"), key="pro_demo", use_container_width=True):
             st.session_state.is_pro = True
             st.rerun()

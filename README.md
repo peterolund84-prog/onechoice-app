@@ -1,6 +1,17 @@
 # OneChoice
 
-Generell AI-beslutshjälpare inspirerad av koreanska appar (Kakao / Naver).
+Generell AI-beslutshjälpare med minimalistisk premium koreansk estetik.
+
+## Filer
+
+```
+onechoice/
+├── app.py
+├── requirements.txt
+├── README.md
+└── .streamlit/
+    └── secrets.toml
+```
 
 ## Starta
 
@@ -9,8 +20,6 @@ cd C:\Users\DELL\Projekt\onechoice
 pip install -r requirements.txt
 python -m streamlit run app.py
 ```
-
-Eller dubbelklicka `desktop_shortcut.bat`.
 
 ## Hemligheter
 
@@ -21,17 +30,20 @@ GROK_API_KEY = "xai-..."
 STRIPE_SECRET_KEY = "sk_test_..."
 ```
 
-Utan nycklar: demo-läge med kategori-anpassade förslag.
+Utan nycklar körs **demo-läge**.
 
-## Logik
+## Funktioner
 
-1. Detektera ämne (mat, kläder, resor, karriär, kväll, generellt)
-2. Grok med chain-of-thought → 3 förslag
-3. Matchande bilder + länkar (Se recept/Mer info, Beställ nu)
+- SV / EN språkväxlare
+- Ämnesdetektering (mat, kläder, resor, karriär, kväll …)
+- 3 förslag med matchande bilder
+- **Se recept** / **Mer info** + **Beställ nu**
+- Historik + Pro (Stripe)
+- Grok API med chain-of-thought
 
 ## Design
 
 - Bakgrund `#f8f9fa`
 - Primär `#5A8BFF`
 - Beige `#F5F0E6`
-- Mobil-först, mycket luft, soft shadow
+- Mobil-först, runda hörn, soft shadow
