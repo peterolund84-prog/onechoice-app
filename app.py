@@ -28,15 +28,20 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Design
+# Design – premium Korean minimal
 # ---------------------------------------------------------------------------
-BG = "#f8f9fa"
+BG = "#F4F6F8"
+BG_SOFT = "#EEF2F7"
 PRIMARY = "#5A8BFF"
-BEIGE = "#F5F0E6"
+PRIMARY_SOFT = "#EAF1FF"
+BEIGE = "#F3EEE6"
 PASTEL = "#E8F0FA"
 NAVY = "#3E5B84"
 GREEN = "#4CAF70"
-SHADOW = "0 10px 36px rgba(0, 0, 0, 0.06)"
+INK = "#1C1C1E"
+MUTED = "#8A8A96"
+SHADOW = "0 12px 40px rgba(62, 91, 132, 0.08)"
+SHADOW_SOFT = "0 6px 24px rgba(62, 91, 132, 0.06)"
 FREE_LIMIT = 5
 
 IMAGES: dict[str, list[str]] = {
@@ -186,11 +191,16 @@ def inject_css() -> None:
     st.markdown(
         f"""
 <style>
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+
 html, body, .stApp, [data-testid="stAppViewContainer"] {{
-    background: {BG} !important;
-    font-family: "Helvetica Neue", Helvetica, "Apple SD Gothic Neo",
-                 system-ui, -apple-system, "Segoe UI", sans-serif !important;
-    color: #1a1a1a;
+    background:
+        radial-gradient(120% 80% at 50% -10%, {PRIMARY_SOFT} 0%, transparent 55%),
+        linear-gradient(180deg, {BG} 0%, {BG_SOFT} 100%) !important;
+    font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR",
+                 "Helvetica Neue", Helvetica, sans-serif !important;
+    color: {INK};
+    -webkit-font-smoothing: antialiased;
 }}
 #MainMenu, footer, header, [data-testid="stToolbar"],
 [data-testid="stDecoration"], .stDeployButton,
@@ -198,148 +208,258 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {{
     display: none !important;
 }}
 .block-container {{
-    max-width: 420px !important;
-    padding: 1.75rem 1.5rem 8.5rem !important;
+    max-width: 400px !important;
+    padding: 1.35rem 1.35rem 9rem !important;
 }}
 @media (max-width: 480px) {{
-    .block-container {{ padding: 1.25rem 1.1rem 8rem !important; }}
+    .block-container {{ padding: 1.1rem 1.15rem 8.5rem !important; }}
+}}
+
+/* ----- Top bar: brand + round lang buttons ----- */
+.oc-topbar {{
+    display: flex; align-items: center; justify-content: center;
+    position: relative; min-height: 3rem; margin: 0.15rem 0 0.5rem;
 }}
 .oc-logo {{
-    text-align: center; font-weight: 700; font-size: 1.55rem;
-    letter-spacing: -0.045em; color: #111;
+    text-align: center; font-weight: 700; font-size: 1.6rem;
+    letter-spacing: -0.05em; color: {INK}; line-height: 1;
 }}
 .oc-logo em {{ font-style: normal; color: {PRIMARY}; }}
 .oc-logo-sm {{
-    text-align: center; font-weight: 600; font-size: 1.35rem; color: #111;
+    text-align: center; font-weight: 600; font-size: 1.35rem;
+    letter-spacing: -0.04em; color: {INK};
 }}
-.oc-hero {{
-    background: #fff; border-radius: 28px 28px 0 0;
-    padding: 1.85rem 1.55rem 0.1rem; margin-top: 2.5rem;
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"]) {{
+    position: absolute !important;
+    top: 1.15rem !important;
+    right: max(1.15rem, calc(50% - 200px + 1.15rem)) !important;
+    width: auto !important;
+    gap: 0.45rem !important;
+    z-index: 50 !important;
+    justify-content: flex-end !important;
 }}
-.oc-hero h1 {{
-    font-size: 1.28rem; font-weight: 600; letter-spacing: -0.03em;
-    line-height: 1.35; margin: 0; color: #111;
+div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-lang_sv"])
+> div[data-testid="stColumn"] {{
+    width: auto !important; flex: 0 0 auto !important;
+    min-width: 0 !important;
 }}
-.oc-topic {{
-    display: inline-block; background: {PASTEL}; color: {PRIMARY};
-    font-size: 0.72rem; font-weight: 600; padding: 0.28rem 0.7rem;
-    border-radius: 999px; margin: 0 0 1rem;
+div[class*="st-key-lang_sv"],
+div[class*="st-key-lang_en"] {{
+    width: 42px !important;
 }}
 div[class*="st-key-lang_sv"] button,
 div[class*="st-key-lang_en"] button {{
-    width: 40px !important; height: 40px !important; min-height: 40px !important;
-    max-width: 40px !important; padding: 0 !important; border-radius: 50% !important;
-    font-size: 0.7rem !important; font-weight: 700 !important;
+    width: 42px !important; height: 42px !important;
+    min-height: 42px !important; max-width: 42px !important;
+    padding: 0 !important; border-radius: 50% !important;
+    font-size: 0.68rem !important; font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+    box-shadow: {SHADOW_SOFT} !important;
+    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}}
+div[class*="st-key-lang_sv"] button:hover,
+div[class*="st-key-lang_en"] button:hover {{
+    transform: translateY(-1px) !important;
 }}
 div[class*="st-key-lang_sv"] button[data-testid="baseButton-primary"],
 div[class*="st-key-lang_en"] button[data-testid="baseButton-primary"] {{
-    background: {PRIMARY} !important; color: #fff !important; border: none !important;
+    background: {PRIMARY} !important; color: #fff !important;
+    border: none !important;
+    box-shadow: 0 8px 20px rgba(90, 139, 255, 0.35) !important;
 }}
 div[class*="st-key-lang_sv"] button[data-testid="baseButton-secondary"],
 div[class*="st-key-lang_en"] button[data-testid="baseButton-secondary"] {{
-    background: #fff !important; color: #888 !important; border: 1px solid #e8e8ec !important;
+    background: rgba(255,255,255,0.92) !important; color: {MUTED} !important;
+    border: 1px solid rgba(62, 91, 132, 0.08) !important;
+}}
+
+/* ----- Hero tagline (no card) ----- */
+.oc-hero {{
+    background: transparent; border-radius: 0;
+    padding: 2.4rem 0.35rem 1.15rem; margin: 0;
+    text-align: center;
+}}
+.oc-hero h1 {{
+    font-size: 1.42rem; font-weight: 600; letter-spacing: -0.035em;
+    line-height: 1.4; margin: 0; color: {INK};
+}}
+.oc-topic {{
+    display: inline-block; background: {PRIMARY_SOFT}; color: {PRIMARY};
+    font-size: 0.72rem; font-weight: 600; padding: 0.32rem 0.85rem;
+    border-radius: 999px; margin: 0.35rem 0 1.25rem;
+}}
+
+/* ----- Clean input: one soft field, no nested white boxes ----- */
+div[data-testid="stTextArea"],
+div[data-testid="stTextArea"] > div,
+div[data-testid="stTextArea"] > div > div,
+.stTextArea, .stTextArea > div, .stTextArea [data-baseweb="textarea"] {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
 }}
 div[data-testid="stTextArea"] {{
-    background: #fff !important; border-radius: 0 0 28px 28px !important;
-    box-shadow: {SHADOW} !important; padding: 0.55rem 1.4rem 1.6rem !important;
-    margin: 0 0 1.2rem !important; position: relative !important; z-index: 5 !important;
+    margin: 0 0 1.5rem !important;
 }}
 .stTextArea label {{ display: none !important; }}
-.stTextArea > div {{ border: none !important; background: transparent !important; }}
 .stTextArea textarea {{
-    font-family: inherit !important; font-size: 1.05rem !important;
-    background: transparent !important; border: none !important;
-    min-height: 170px !important; color: #222 !important;
-    padding: 0.35rem 0.15rem !important; box-shadow: none !important;
-    caret-color: {PRIMARY} !important; pointer-events: auto !important; z-index: 6 !important;
+    font-family: inherit !important;
+    font-size: 1.08rem !important;
+    line-height: 1.55 !important;
+    background: #fff !important;
+    border: 1px solid rgba(62, 91, 132, 0.06) !important;
+    border-radius: 28px !important;
+    min-height: 200px !important;
+    color: {INK} !important;
+    padding: 1.35rem 1.4rem !important;
+    box-shadow: {SHADOW} !important;
+    caret-color: {PRIMARY} !important;
+    resize: none !important;
 }}
 .stTextArea textarea:focus {{
-    border: none !important; box-shadow: none !important; outline: none !important;
+    border-color: rgba(90, 139, 255, 0.35) !important;
+    box-shadow: 0 12px 40px rgba(90, 139, 255, 0.12) !important;
+    outline: none !important;
+}}
+.stTextArea textarea::placeholder {{
+    color: #B0B0BA !important;
+}}
+
+/* ----- Large rounded centered buttons ----- */
+div.stButton {{
+    display: flex !important;
+    justify-content: center !important;
+}}
+div.stButton > button {{
+    transition: transform 0.18s ease, box-shadow 0.18s ease !important;
+}}
+div.stButton > button:hover {{
+    transform: translateY(-1px) !important;
 }}
 div.stButton > button[data-testid="baseButton-primary"] {{
     background: {PRIMARY} !important; color: #fff !important; border: none !important;
-    border-radius: 18px !important; font-weight: 600 !important; font-size: 1.05rem !important;
-    height: 3.45rem !important; width: 100% !important;
-    box-shadow: 0 8px 24px rgba(90, 139, 255, 0.3) !important;
+    border-radius: 999px !important; font-weight: 600 !important;
+    font-size: 1.08rem !important; letter-spacing: -0.01em !important;
+    height: 3.65rem !important; width: 100% !important;
+    max-width: 360px !important;
+    box-shadow: 0 12px 28px rgba(90, 139, 255, 0.32) !important;
 }}
 div.stButton > button[data-testid="baseButton-secondary"] {{
-    background: #fff !important; color: #555 !important; border: 1px solid #e8e8ec !important;
-    border-radius: 14px !important; font-weight: 500 !important; font-size: 0.8rem !important;
-    min-height: 2.55rem !important; width: 100% !important;
+    background: #fff !important; color: #555 !important;
+    border: 1px solid rgba(62, 91, 132, 0.08) !important;
+    border-radius: 999px !important; font-weight: 500 !important;
+    font-size: 0.88rem !important;
+    min-height: 2.85rem !important; width: 100% !important;
+    box-shadow: {SHADOW_SOFT} !important;
 }}
-.oc-label {{ text-align: center; font-size: 0.95rem; color: #888; margin: 0.75rem 0 0; }}
+div[data-testid="stLinkButton"] {{
+    display: flex !important; justify-content: center !important;
+}}
+div[data-testid="stLinkButton"] a {{
+    border-radius: 999px !important; font-weight: 600 !important;
+    font-size: 0.82rem !important;
+    min-height: 2.85rem !important; width: 100% !important;
+    display: flex !important; justify-content: center !important;
+    align-items: center !important; text-decoration: none !important;
+    box-shadow: {SHADOW_SOFT} !important;
+}}
+
+.oc-spacer {{ height: 0.85rem; }}
+.oc-label {{
+    text-align: center; font-size: 0.9rem; color: {MUTED};
+    margin: 1rem 0 0; letter-spacing: 0.01em;
+}}
 .oc-q {{
-    text-align: center; font-size: 1.7rem; font-weight: 700;
-    letter-spacing: -0.035em; line-height: 1.2; margin: 0.3rem 0 0.75rem; color: #111;
+    text-align: center; font-size: 1.65rem; font-weight: 700;
+    letter-spacing: -0.04em; line-height: 1.25;
+    margin: 0.4rem 0 0.9rem; color: {INK};
 }}
 .oc-card {{
-    background: #fff; border-radius: 24px; padding: 1.25rem 1.2rem 0.35rem;
-    margin-bottom: 0.35rem; position: relative; box-shadow: {SHADOW};
+    background: #fff; border-radius: 26px; padding: 1.35rem 1.3rem 0.4rem;
+    margin-bottom: 0.55rem; position: relative;
+    box-shadow: {SHADOW}; border: 1px solid rgba(62, 91, 132, 0.04);
 }}
 .oc-card.tint-blue {{ background: {PASTEL}; }}
 .oc-card.tint-beige {{ background: {BEIGE}; }}
-.oc-row {{ display: flex; align-items: center; gap: 1rem; }}
-.oc-col {{ display: flex; flex-direction: column; gap: 0.75rem; }}
+.oc-row {{ display: flex; align-items: center; gap: 1.05rem; }}
+.oc-col {{ display: flex; flex-direction: column; gap: 0.85rem; }}
 .oc-img {{
-    width: 78px; height: 78px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.07); background: #fff;
+    width: 80px; height: 80px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.07); background: #fff;
 }}
 .oc-img-rect {{
-    width: 108px; height: 88px; border-radius: 18px; object-fit: cover; flex-shrink: 0;
+    width: 110px; height: 90px; border-radius: 20px; object-fit: cover; flex-shrink: 0;
 }}
 .oc-card h3 {{
-    font-size: 1.18rem; font-weight: 700; margin: 0 0 0.25rem; letter-spacing: -0.025em;
+    font-size: 1.18rem; font-weight: 700; margin: 0 0 0.3rem; letter-spacing: -0.03em;
 }}
-.oc-card p {{ font-size: 0.8rem; color: #6e6e76; margin: 0; line-height: 1.4; }}
+.oc-card p {{ font-size: 0.82rem; color: #6e6e76; margin: 0; line-height: 1.45; }}
 .oc-badge {{
-    position: absolute; top: 0.9rem; left: 0.9rem; background: {GREEN}; color: #fff;
-    font-size: 0.68rem; font-weight: 600; padding: 0.3rem 0.75rem; border-radius: 999px; z-index: 2;
-}}
-div[data-testid="stLinkButton"] a {{
-    border-radius: 14px !important; font-weight: 600 !important; font-size: 0.78rem !important;
-    min-height: 2.55rem !important; display: flex !important; justify-content: center !important;
-    align-items: center !important; text-decoration: none !important;
+    position: absolute; top: 1rem; left: 1rem; background: {GREEN}; color: #fff;
+    font-size: 0.68rem; font-weight: 600; padding: 0.32rem 0.8rem;
+    border-radius: 999px; z-index: 2;
 }}
 div:has(> #share-mark) + div button[data-testid="baseButton-primary"] {{
-    background: {NAVY} !important; box-shadow: none !important; border-radius: 20px !important;
+    background: {NAVY} !important;
+    box-shadow: 0 10px 24px rgba(62, 91, 132, 0.25) !important;
+    border-radius: 999px !important;
 }}
 .oc-hist {{
-    background: #fff; border-radius: 20px; padding: 1.15rem 1.25rem;
-    margin-bottom: 0.8rem; box-shadow: {SHADOW};
+    background: #fff; border-radius: 22px; padding: 1.25rem 1.35rem;
+    margin-bottom: 0.95rem; box-shadow: {SHADOW};
+    border: 1px solid rgba(62, 91, 132, 0.04);
 }}
-.oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.2rem; }}
+.oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.25rem; }}
 .oc-hist span {{ font-size: 0.75rem; color: #999; }}
 .oc-pro {{
-    background: #fff; border-radius: 28px; padding: 2.1rem 1.6rem;
-    text-align: center; box-shadow: {SHADOW}; margin-top: 1.75rem;
+    background: #fff; border-radius: 30px; padding: 2.35rem 1.75rem;
+    text-align: center; box-shadow: {SHADOW}; margin-top: 2rem;
+    border: 1px solid rgba(62, 91, 132, 0.04);
 }}
-.oc-pro h2 {{ font-size: 1.65rem; margin: 0 0 0.55rem; }}
-.oc-pro p {{ color: #6e6e76; font-size: 0.92rem; margin: 0; line-height: 1.45; }}
-.oc-price {{ font-size: 1.65rem; font-weight: 700; color: {PRIMARY}; margin: 1.3rem 0 0.2rem; }}
+.oc-pro h2 {{ font-size: 1.7rem; margin: 0 0 0.6rem; letter-spacing: -0.03em; }}
+.oc-pro p {{ color: #6e6e76; font-size: 0.95rem; margin: 0; line-height: 1.5; }}
+.oc-price {{
+    font-size: 1.7rem; font-weight: 700; color: {PRIMARY};
+    margin: 1.45rem 0 0.25rem; letter-spacing: -0.02em;
+}}
 .oc-pill {{
-    display: inline-block; background: {PASTEL}; color: {PRIMARY}; font-weight: 600;
-    font-size: 0.88rem; padding: 0.55rem 1.25rem; border-radius: 999px; margin-top: 0.85rem;
+    display: inline-block; background: {PRIMARY_SOFT}; color: {PRIMARY};
+    font-weight: 600; font-size: 0.88rem; padding: 0.6rem 1.35rem;
+    border-radius: 999px; margin-top: 0.95rem;
 }}
+
+/* ----- Bottom nav ----- */
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) {{
     position: fixed !important; left: 50% !important; transform: translateX(-50%) !important;
-    bottom: 0.9rem !important; width: min(380px, calc(100% - 2rem)) !important;
-    background: #ebeaf2 !important; border-radius: 22px !important;
-    padding: 0.35rem 0.3rem 0.45rem !important;
-    box-shadow: 0 6px 28px rgba(0,0,0,0.06) !important; z-index: 1000 !important; gap: 0 !important;
+    bottom: 1rem !important; width: min(360px, calc(100% - 2rem)) !important;
+    background: rgba(255,255,255,0.92) !important;
+    backdrop-filter: blur(14px) !important;
+    border-radius: 999px !important;
+    padding: 0.4rem 0.45rem 0.5rem !important;
+    box-shadow: 0 10px 32px rgba(62, 91, 132, 0.12) !important;
+    border: 1px solid rgba(62, 91, 132, 0.06) !important;
+    z-index: 1000 !important; gap: 0 !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
 div.stButton > button {{
     background: transparent !important; border: none !important; box-shadow: none !important;
-    color: #8e8e9a !important; font-size: 0.68rem !important; font-weight: 500 !important;
-    white-space: pre-line !important; line-height: 1.25 !important;
-    height: 3.5rem !important; padding: 0.25rem !important;
+    color: {MUTED} !important; font-size: 0.68rem !important; font-weight: 500 !important;
+    white-space: pre-line !important; line-height: 1.3 !important;
+    height: 3.55rem !important; padding: 0.25rem !important;
+    border-radius: 999px !important; max-width: none !important;
+    transform: none !important;
 }}
 div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"])
 div.stButton > button[data-testid="baseButton-primary"] {{
-    background: transparent !important; color: {PRIMARY} !important;
+    background: {PRIMARY_SOFT} !important; color: {PRIMARY} !important;
     font-weight: 700 !important; box-shadow: none !important;
 }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
+div[data-testid="stVerticalBlockBorderWrapper"] {{
+    border: none !important; background: transparent !important;
+    box-shadow: none !important;
+}}
 </style>
         """,
         unsafe_allow_html=True,
@@ -586,26 +706,35 @@ def save_history(question: str, choices: list[dict[str, Any]]) -> None:
 # UI
 # ---------------------------------------------------------------------------
 def lang_switcher() -> None:
-    a, b = st.columns(2)
+    a, b = st.columns([1, 1], gap="small")
     with a:
-        if st.button("SV", key="lang_sv", type="primary" if st.session_state.language == "sv" else "secondary", use_container_width=True):
+        if st.button(
+            "SV",
+            key="lang_sv",
+            type="primary" if st.session_state.language == "sv" else "secondary",
+            use_container_width=True,
+        ):
             st.session_state.language = "sv"
             st.rerun()
     with b:
-        if st.button("EN", key="lang_en", type="primary" if st.session_state.language == "en" else "secondary", use_container_width=True):
+        if st.button(
+            "EN",
+            key="lang_en",
+            type="primary" if st.session_state.language == "en" else "secondary",
+            use_container_width=True,
+        ):
             st.session_state.language = "en"
             st.rerun()
 
 
 def header(mode: str = "home") -> None:
-    _, mid, right = st.columns([0.9, 2.2, 1.1])
-    with mid:
-        if mode == "results":
-            st.markdown('<div class="oc-logo-sm">One</div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
-    with right:
-        lang_switcher()
+    lang_switcher()
+    st.markdown('<div class="oc-topbar">', unsafe_allow_html=True)
+    if mode == "results":
+        st.markdown('<div class="oc-logo-sm">One</div>', unsafe_allow_html=True)
+    else:
+        st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def nav() -> None:
@@ -651,10 +780,20 @@ def result_card(choice: dict[str, Any], index: int) -> None:
 
 def page_home() -> None:
     header("home")
-    st.markdown(f'<div class="oc-hero"><h1>{t("tagline")}</h1></div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="oc-hero"><h1>{t("tagline")}</h1></div>',
+        unsafe_allow_html=True,
+    )
 
     # Endast key= – annars nollställs texten vid varje tangenttryck
-    q_raw = st.text_area("q", height=170, label_visibility="collapsed", key="home_input")
+    q_raw = st.text_area(
+        "q",
+        height=200,
+        label_visibility="collapsed",
+        key="home_input",
+    )
+
+    st.markdown('<div class="oc-spacer"></div>', unsafe_allow_html=True)
 
     if st.button(t("cta"), type="primary", use_container_width=True):
         q = (q_raw or "").strip()
