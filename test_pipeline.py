@@ -110,10 +110,46 @@ class OneChoiceTests(unittest.TestCase):
             self.user["id"],
             "Vad ska jag äta?",
             domain_hint="food",
+            language="sv",
             db_path=self.db_path,
         )
         self.assertTrue(r.execution_type in ("recipe", "map"))
         self.assertTrue(r.execution_url)
+
+    def test_swedish_output_not_mixed(self) -> None:
+        r = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag äta?",
+            language="sv",
+            db_path=self.db_path,
+        )
+        self.assertTrue(r.ok)
+        # Suggestion + justification should be Swedish phrasing (no English sentence starters)
+        eng_markers = (
+            "watch a ", "a warm ", "classic burger", "creamy tomato", "dark jeans",
+            "you haven’t", "you haven't", "perfect for lunch", "order it",
+        )
+        blob = f"{r.suggestion} {r.justification}".lower()
+        for m in eng_markers:
+            self.assertNotIn(m, blob, f"found English marker {m!r} in {blob!r}")
+        # Swedish justification should contain Swedish characters or common words
+        self.assertTrue(
+            any(w in r.justification.lower() for w in ("och", "på", "att", "en", "det", "du", "för", "utan", "med")),
+            r.justification,
+        )
+
+    def test_english_output_when_en(self) -> None:
+        r = pipeline.decide(
+            self.user["id"],
+            "What should I eat?",
+            language="en",
+            domain_hint="food",
+            db_path=self.db_path,
+        )
+        self.assertTrue(r.ok)
+        # Should not be Swedish justification
+        self.assertNotRegex(r.justification.lower(), r"\b(mättande|krångel|klart på)\b")
+
 
 
 if __name__ == "__main__":

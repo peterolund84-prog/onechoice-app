@@ -132,6 +132,7 @@ def decide(
     question: str,
     *,
     domain_hint: str | None = None,
+    language: str | None = None,
     reroll: bool = False,
     reroll_index: int = 0,
     previous_decision_id: int | None = None,
@@ -147,7 +148,11 @@ def decide(
     """
     db.init_db(db_path)
     user = db.ensure_user(user_id, path=db_path)
-    language = user.get("language") or "sv"
+    language = language if language in ("sv", "en") else (user.get("language") or "sv")
+    if user.get("language") != language:
+        with db.get_conn(db_path) as conn:
+            conn.execute("UPDATE users SET language = ? WHERE id = ?", (language, user_id))
+        user = db.ensure_user(user_id, path=db_path)
     q = (question or "").strip()
     if not q and domain_hint:
         q = _default_question(domain_hint, language)
@@ -342,12 +347,13 @@ def _grok_candidates(
     system = (
         "You are OneChoice. You make exactly one everyday decision. "
         "Reason internally. Never hedge. Never offer alternatives to the user. "
-        "Output valid JSON only."
+        f"Write BOTH suggestion and justification entirely in {lang}. "
+        "Do not mix languages. Output valid JSON only."
     )
     user = f"""
 Domain: {domain}
 Question: {question}
-Language: {lang}
+Output language (STRICT): {lang} — every word of suggestion AND justification must be in {lang}.
 Context: {json.dumps(context, ensure_ascii=False)}
 Recently shown/accepted (avoid repeats): {json.dumps(recent[:12], ensure_ascii=False)}
 Accepted before: {json.dumps(accepted, ensure_ascii=False)}
@@ -364,8 +370,9 @@ Rank them yourself. Return ONLY JSON:
   ]
 }}
 Rules:
-- suggestion is the decision itself (short, decisive)
-- justification is ONE line, personal, no hedging, no "you could also"
+- suggestion is the decision itself (short, decisive), fully in {lang}
+- justification is ONE line in {lang}, personal, no hedging, no "you could also"
+- never mix English into Swedish output (or vice versa)
 - avoid anything in the recent/rejected lists when possible
 """
     resp = requests.post(
@@ -407,52 +414,97 @@ def _local_candidates(
     recent: list[str],
     context: dict[str, Any],
 ) -> list[dict[str, str]]:
-    sv = language == "sv"
-    packs: dict[str, list[dict[str, str]]] = {
+    packs_sv: dict[str, list[dict[str, str]]] = {
         "food": [
-            {"suggestion": "Pad thai", "justification": "Snabb, mättande och du har inte ätit asiatiskt på ett tag." if sv else "Fast, filling — you haven’t had Asian food in a while."},
-            {"suggestion": "Salmon poke bowl", "justification": "Lätt men rikt — perfekt till lunch." if sv else "Light but rich — perfect for lunch."},
-            {"suggestion": "Classic burger", "justification": "Komfort utan krångel. Beställ och ät." if sv else "Comfort without friction. Order it."},
-            {"suggestion": "Creamy tomato pasta", "justification": "Varmt, enkelt och klart på 20 minuter." if sv else "Warm, simple, done in 20 minutes."},
-            {"suggestion": "Mezze plate", "justification": "Varierat utan att du behöver välja tre saker." if sv else "Variety without making three choices."},
+            {"suggestion": "Pad thai", "justification": "Snabb, mättande och du har inte ätit asiatiskt på ett tag."},
+            {"suggestion": "Poke bowl med lax", "justification": "Lätt men rikt — perfekt till lunch."},
+            {"suggestion": "Klassisk burgare", "justification": "Komfort utan krångel. Beställ och ät."},
+            {"suggestion": "Krämig tomatsås-pasta", "justification": "Varmt, enkelt och klart på 20 minuter."},
+            {"suggestion": "Mezze-tallrik", "justification": "Varierat utan att du behöver välja tre saker."},
         ],
         "clothes": [
-            {"suggestion": "Dark jeans + white tee + sneakers", "justification": "Rent, säkert och funkar hela dagen." if sv else "Clean, safe, works all day."},
-            {"suggestion": "Neutrals: beige trousers + knit", "justification": "Mjukt och premium — noll stylingångest." if sv else "Soft and premium — zero styling stress."},
-            {"suggestion": "Black trousers + crisp shirt", "justification": "Smart casual som ser medvetet ut." if sv else "Smart casual that looks intentional."},
-            {"suggestion": "Hoodie + cargo pants", "justification": "Bekvämt när dagen ska flyta." if sv else "Comfort when the day should flow."},
-            {"suggestion": "All-black capsule", "justification": "Ett beslut. Ser alltid skärpt ut." if sv else "One decision. Always sharp."},
+            {"suggestion": "Mörka jeans + vit t-shirt + sneakers", "justification": "Rent, säkert och funkar hela dagen."},
+            {"suggestion": "Beiga byxor + stickad tröja", "justification": "Mjukt och premium — noll stylingångest."},
+            {"suggestion": "Svarta byxor + skarp skjorta", "justification": "Smart casual som ser medvetet ut."},
+            {"suggestion": "Hoodie + cargobyxor", "justification": "Bekvämt när dagen ska flyta."},
+            {"suggestion": "Helsvart outfit", "justification": "Ett beslut. Ser alltid skärpt ut."},
         ],
         "movie": [
-            {"suggestion": "Watch a tight thriller tonight", "justification": "Hög tempo, noll beslutströtthet." if sv else "High pace, zero decision fatigue."},
-            {"suggestion": "A warm comedy series episode", "justification": "Lätt efter en lång dag." if sv else "Easy after a long day."},
-            {"suggestion": "A visually rich sci-fi film", "justification": "Något nytt utan att kräva research." if sv else "Something fresh without research."},
-            {"suggestion": "A short documentary (under 90 min)", "justification": "Känns produktivt men är fortfarande avkoppling." if sv else "Feels productive, still rest."},
-            {"suggestion": "Rewatch a comfort favorite", "justification": "Du vet redan att det funkar." if sv else "You already know it works."},
+            {"suggestion": "Titta på en tajt thriller ikväll", "justification": "Högt tempo, noll beslutströtthet."},
+            {"suggestion": "Ett avsnitt av en varm komediserie", "justification": "Lätt efter en lång dag."},
+            {"suggestion": "En visuellt stark sci-fi-film", "justification": "Något nytt utan research."},
+            {"suggestion": "En kort dokumentär under 90 minuter", "justification": "Känns produktivt men är fortfarande vila."},
+            {"suggestion": "Omtitta en trygg favorit", "justification": "Du vet redan att det funkar."},
         ],
         "workout": [
-            {"suggestion": "30-min full-body strength", "justification": "Effektivt och klart innan motivationen sviktar." if sv else "Efficient — done before motivation dips."},
-            {"suggestion": "Zone-2 walk for 40 minutes", "justification": "Låg tröskel, hög utdelning idag." if sv else "Low barrier, high payoff today."},
-            {"suggestion": "20-min HIIT", "justification": "Kort, hårt, sedan vidare med dagen." if sv else "Short, hard, then move on."},
-            {"suggestion": "Yoga flow (25 min)", "justification": "Mobilitet och lugn i ett pass." if sv else "Mobility and calm in one session."},
-            {"suggestion": "Push-ups + squats ladder", "justification": "Ingen utrustning. Inga ursäkter." if sv else "No equipment. No excuses."},
+            {"suggestion": "30 minuters helkroppsstyrka", "justification": "Effektivt och klart innan motivationen sviktar."},
+            {"suggestion": "Zon-2-promenad i 40 minuter", "justification": "Låg tröskel, hög utdelning idag."},
+            {"suggestion": "20 minuters HIIT", "justification": "Kort, hårt, sedan vidare med dagen."},
+            {"suggestion": "Yogaflöde i 25 minuter", "justification": "Mobilitet och lugn i ett pass."},
+            {"suggestion": "Armhävningar + knäböj-stege", "justification": "Ingen utrustning. Inga ursäkter."},
         ],
         "weekend": [
-            {"suggestion": "Coffee walk + one bookstore", "justification": "Enkelt, socialt nog, noll planeringskaos." if sv else "Simple, social enough, zero planning chaos."},
-            {"suggestion": "Cook a longer weekend lunch", "justification": "Helgkänsla utan biljetter eller köer." if sv else "Weekend energy without tickets or queues."},
-            {"suggestion": "Museum or gallery for 90 minutes", "justification": "Lagom stort äventyr." if sv else "A right-sized adventure."},
-            {"suggestion": "Park picnic with one friend", "justification": "Ute, enkelt, minnesvärt." if sv else "Outside, easy, memorable."},
-            {"suggestion": "Deep-clean one room, then reward café", "justification": "Framåtanda plus belöning." if sv else "Progress plus a reward."},
+            {"suggestion": "Kaffepromenad + en bokhandel", "justification": "Enkelt, lagom socialt, noll planeringskaos."},
+            {"suggestion": "Laga en längre helglunch", "justification": "Helgkänsla utan biljetter eller köer."},
+            {"suggestion": "Museum eller galleri i 90 minuter", "justification": "Lagom stort äventyr."},
+            {"suggestion": "Picknick i parken med en vän", "justification": "Ute, enkelt, minnesvärt."},
+            {"suggestion": "Städa ett rum, sen belöning på café", "justification": "Framåtanda plus belöning."},
         ],
     }
+    packs_en: dict[str, list[dict[str, str]]] = {
+        "food": [
+            {"suggestion": "Pad thai", "justification": "Fast, filling — you haven’t had Asian food in a while."},
+            {"suggestion": "Salmon poke bowl", "justification": "Light but rich — perfect for lunch."},
+            {"suggestion": "Classic burger", "justification": "Comfort without friction. Order it."},
+            {"suggestion": "Creamy tomato pasta", "justification": "Warm, simple, done in 20 minutes."},
+            {"suggestion": "Mezze plate", "justification": "Variety without making three choices."},
+        ],
+        "clothes": [
+            {"suggestion": "Dark jeans + white tee + sneakers", "justification": "Clean, safe, works all day."},
+            {"suggestion": "Beige trousers + knit sweater", "justification": "Soft and premium — zero styling stress."},
+            {"suggestion": "Black trousers + crisp shirt", "justification": "Smart casual that looks intentional."},
+            {"suggestion": "Hoodie + cargo pants", "justification": "Comfort when the day should flow."},
+            {"suggestion": "All-black outfit", "justification": "One decision. Always sharp."},
+        ],
+        "movie": [
+            {"suggestion": "Watch a tight thriller tonight", "justification": "High pace, zero decision fatigue."},
+            {"suggestion": "One episode of a warm comedy series", "justification": "Easy after a long day."},
+            {"suggestion": "A visually rich sci-fi film", "justification": "Something fresh without research."},
+            {"suggestion": "A short documentary under 90 minutes", "justification": "Feels productive, still rest."},
+            {"suggestion": "Rewatch a comfort favorite", "justification": "You already know it works."},
+        ],
+        "workout": [
+            {"suggestion": "30-minute full-body strength", "justification": "Efficient — done before motivation dips."},
+            {"suggestion": "Zone-2 walk for 40 minutes", "justification": "Low barrier, high payoff today."},
+            {"suggestion": "20-minute HIIT", "justification": "Short, hard, then move on."},
+            {"suggestion": "25-minute yoga flow", "justification": "Mobility and calm in one session."},
+            {"suggestion": "Push-ups + squats ladder", "justification": "No equipment. No excuses."},
+        ],
+        "weekend": [
+            {"suggestion": "Coffee walk + one bookstore", "justification": "Simple, social enough, zero planning chaos."},
+            {"suggestion": "Cook a longer weekend lunch", "justification": "Weekend energy without tickets or queues."},
+            {"suggestion": "Museum or gallery for 90 minutes", "justification": "A right-sized adventure."},
+            {"suggestion": "Park picnic with one friend", "justification": "Outside, easy, memorable."},
+            {"suggestion": "Deep-clean one room, then a café reward", "justification": "Progress plus a reward."},
+        ],
+    }
+    packs = packs_sv if language == "sv" else packs_en
     items = list(packs.get(domain, packs["food"]))
     recent_l = {r.strip().lower() for r in recent}
     filtered = [c for c in items if c["suggestion"].strip().lower() not in recent_l]
     pool = filtered or items
     random.shuffle(pool)
-    # Light context nudge for food time-of-day
-    if domain == "food" and context.get("time_of_day") == "morning" and sv:
-        pool.insert(0, {"suggestion": "Protein omelette + fruit", "justification": "Snabb frukost som håller dig till lunch."})
+    if domain == "food" and context.get("time_of_day") == "morning":
+        if language == "sv":
+            pool.insert(0, {
+                "suggestion": "Proteinomelett med frukt",
+                "justification": "Snabb frukost som håller dig till lunch.",
+            })
+        else:
+            pool.insert(0, {
+                "suggestion": "Protein omelette with fruit",
+                "justification": "A quick breakfast that carries you to lunch.",
+            })
     return pool[:5]
 
 
