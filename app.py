@@ -535,17 +535,9 @@ div[data-testid="stCheckbox"] label {{
 .oc-nav a.active {{ background: {PRIMARY_SOFT}; color: {PRIMARY}; font-weight: 700; }}
 .oc-nav .oc-ico {{ width: 1.15rem; height: 1.15rem; display: block; }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
-/* Meal pills + profile fields need visible labels */
-div[data-testid="stButtonGroup"] [data-testid="stWidgetLabel"],
-div[data-testid="stButtonGroup"] ~ div [data-testid="stWidgetLabel"],
-.stButtonGroup [data-testid="stWidgetLabel"],
+/* Profile fields need visible labels */
 div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
 div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] {{
-    display: flex !important;
-}}
-/* Streamlit wraps pills label above the group */
-.stElementContainer:has([data-testid="stButtonGroup"]) [data-testid="stWidgetLabel"],
-[data-testid="stVerticalBlock"] [data-testid="stWidgetLabel"]:has(+ * [data-testid="stButtonGroup"]) {{
     display: flex !important;
 }}
 div[data-testid="stHorizontalBlock"] {{
