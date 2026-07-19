@@ -629,6 +629,8 @@ def init_state() -> None:
         "occasion_by_hour": {},  # remembered most-common occasion per hour bucket
         "food_meal_type": None,  # frukost|lunch|middag|kvallsmal — inferred, confirmable
         "pending_db_accept": False,
+        "pending_open_execute": False,
+        "_last_ui_error": None,
         # Workout player (execute view)
         "workout_phase": "overview",  # overview|play|rest|done
         "workout_block_i": 0,
@@ -693,6 +695,22 @@ def _app_base_url() -> str:
     return (get_secret("APP_URL") or "").rstrip("/")
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    """Coerce session/DB context to a dict (Cloud may leave JSON strings)."""
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            import json as _json
+
+            parsed = _json.loads(value)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+    return {}
+
+
 def build_share_bundle(cur: dict[str, Any]) -> dict[str, str]:
     """Ensure public snapshot exists; return text + url for the native share sheet."""
     import share_domain as sd
@@ -703,6 +721,10 @@ def build_share_bundle(cur: dict[str, Any]) -> dict[str, str]:
     if cur.get("decision_id") is None and st.session_state.get("decision_id") is not None:
         cur = dict(cur)
         cur["decision_id"] = st.session_state.get("decision_id")
+    # Never let nested JSON-string context break snapshot creation
+    if "context" in cur:
+        cur = dict(cur)
+        cur["context"] = _as_dict(cur.get("context"))
     share = db.ensure_public_share(cur, language=language)
     token = str(share.get("token") or "")
     did = share.get("decision_id")
@@ -739,134 +761,111 @@ def _session_pop(key: str, default: Any = None) -> Any:
     return val
 
 
-def render_native_share(
-    *,
-    text: str,
-    url: str,
-    label: str,
-    key: str,
-    icon: bool = False,
-) -> None:
-    """Web Share API sheet (Messenger/SMS/WhatsApp). Clipboard fallback + toast."""
-    import base64
-    import json as _json
-
-    payload_obj = {"title": "OneChoice", "text": text, "url": url}
-    # Base64 avoids </script> / brace breakage inside the iframe HTML
-    payload_b64 = base64.b64encode(
-        _json.dumps(payload_obj, ensure_ascii=False).encode("utf-8")
-    ).decode("ascii")
-    copied = t("share_copied")
-    btn_css = (
-        "width:40px;height:40px;border-radius:50%;border:1px solid rgba(62,91,132,0.12);"
-        "background:#fff;color:#3a3a42;font-size:1.05rem;font-weight:700;cursor:pointer;"
-        "box-shadow:0 4px 14px rgba(62,91,132,0.1);display:inline-flex;align-items:center;"
-        "justify-content:center;"
-        if icon
-        else (
-            "width:100%;height:48px;border-radius:14px;border:1px solid rgba(62,91,132,0.12);"
-            "background:#fff;color:#3a3a42;font-size:1rem;font-weight:700;cursor:pointer;"
-            "font-family:Manrope,Helvetica Neue,sans-serif;"
-            "box-shadow:0 4px 14px rgba(62,91,132,0.08);"
-        )
-    )
-    wrap = "display:flex;justify-content:flex-end;" if icon else "width:100%;"
-    height = 48 if icon else 72
-    safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
-    safe_label = html.escape(label)
-    html_doc = f"""<!DOCTYPE html><html><body style="margin:0;background:transparent;">
-        <div style="font-family:Manrope,Helvetica Neue,sans-serif;{wrap}">
-          <button id="oc-share-{safe_key}" type="button" style="{btn_css}">{safe_label}</button>
-          <div id="oc-share-status-{safe_key}"
-               style="text-align:center;color:#5a8bff;font-size:0.85rem;font-weight:700;
-                      margin-top:0.35rem;min-height:1.1em;"></div>
-        </div>
-        <script>
-        (function() {{
-          var payload = JSON.parse(atob("{payload_b64}"));
-          var btn = document.getElementById("oc-share-{safe_key}");
-          var status = document.getElementById("oc-share-status-{safe_key}");
-          var copiedMsg = {_json.dumps(copied, ensure_ascii=False)};
-          if (!btn) return;
-          btn.addEventListener("click", async function() {{
-            var shareUrl = payload.url || "";
-            if (shareUrl.indexOf("?") === 0) {{
-              shareUrl = window.location.origin + "/" + shareUrl;
-            }} else if (shareUrl.indexOf("/") === 0) {{
-              shareUrl = window.location.origin + shareUrl;
-            }}
-            var full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
-            if (navigator.share) {{
-              try {{
-                await navigator.share({{
-                  title: payload.title || "OneChoice",
-                  text: payload.text || "",
-                  url: shareUrl || undefined
-                }});
-                return;
-              }} catch (e) {{
-                if (e && e.name === "AbortError") return;
-              }}
-            }}
-            try {{
-              await navigator.clipboard.writeText(full);
-              status.textContent = copiedMsg;
-            }} catch (e) {{
-              var ta = document.createElement("textarea");
-              ta.value = full;
-              document.body.appendChild(ta);
-              ta.select();
-              try {{ document.execCommand("copy"); }} catch (_) {{}}
-              document.body.removeChild(ta);
-              status.textContent = copiedMsg;
-            }}
-          }});
-        }})();
-        </script></body></html>
-        """
-    # Prefer st.iframe (components.html soft-deprecated); never raise into page render
-    try:
-        iframe = getattr(st, "iframe", None)
-        if callable(iframe):
-            iframe(html_doc, height=height)
-            return
-    except Exception:
-        pass
-    try:
-        import streamlit.components.v1 as components
-
-        components.html(html_doc, height=height)
-        return
-    except Exception:
-        pass
-    # Last resort — Streamlit-only copy path (no native sheet)
-    box_key = f"share_fallback_{safe_key}"
-    if st.button(label, key=box_key, use_container_width=not icon):
-        st.session_state[f"_share_fallback_text_{safe_key}"] = f"{text}\n{url}".strip()
-    fb = st.session_state.get(f"_share_fallback_text_{safe_key}")
-    if fb:
-        st.caption(t("share_copied"))
-        st.code(fb, language=None)
-
-
 def render_share_for_decision(
     cur: dict[str, Any], *, key: str, icon: bool = False
 ) -> None:
-    """Share must never take down Handla & laga / execute — swallow all errors."""
+    """
+    Share control that cannot take down Handla & laga / execute.
+
+    Uses a normal Streamlit button first (Cloud-safe). Native share sheet is
+    attempted only after the user taps Dela — never on initial page paint.
+    """
+    safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
+    label = "↗" if icon else t("share")
+    btn_key = f"share_btn_{safe_key}"
+    armed_key = f"_share_armed_{safe_key}"
+
     try:
-        bundle = build_share_bundle(cur if isinstance(cur, dict) else {})
-        label = "↗" if icon else t("share")
-        render_native_share(
-            text=bundle["text"],
-            url=bundle["url"],
-            label=label,
-            key=key,
-            icon=icon,
+        clicked = st.button(
+            label,
+            key=btn_key,
+            use_container_width=not icon,
+            type="secondary",
         )
+        if clicked:
+            bundle = build_share_bundle(cur if isinstance(cur, dict) else {})
+            st.session_state[armed_key] = bundle
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
-        log.exception("share render failed: %s", exc)
+        log.exception("share button failed: %s", exc)
+        return
+
+    bundle = st.session_state.get(armed_key)
+    if not isinstance(bundle, dict):
+        return
+
+    text = str(bundle.get("text") or "")
+    url = str(bundle.get("url") or "")
+    full = f"{text}\n{url}".strip()
+
+    # Try native share sheet once (lazy) — failures fall back to copy text
+    try:
+        import base64
+        import json as _json
+
+        payload_b64 = base64.b64encode(
+            _json.dumps(
+                {"title": "OneChoice", "text": text, "url": url},
+                ensure_ascii=False,
+            ).encode("utf-8")
+        ).decode("ascii")
+        html_doc = f"""<!DOCTYPE html><html><body style="margin:0">
+        <script>
+        (async function() {{
+          var payload = JSON.parse(atob("{payload_b64}"));
+          var shareUrl = payload.url || "";
+          if (shareUrl.indexOf("?") === 0) shareUrl = window.location.origin + "/" + shareUrl;
+          else if (shareUrl.indexOf("/") === 0) shareUrl = window.location.origin + shareUrl;
+          var full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
+          if (navigator.share) {{
+            try {{
+              await navigator.share({{
+                title: payload.title || "OneChoice",
+                text: payload.text || "",
+                url: shareUrl || undefined
+              }});
+              return;
+            }} catch (e) {{
+              if (e && e.name === "AbortError") return;
+            }}
+          }}
+          try {{ await navigator.clipboard.writeText(full); }} catch (e) {{}}
+        }})();
+        </script>
+        <div style="font-family:Manrope,sans-serif;font-size:0.85rem;color:#5a8bff;font-weight:700;">
+          {html.escape(t("share_copied"))}
+        </div>
+        </body></html>"""
+        injected = False
+        iframe = getattr(st, "iframe", None)
+        if callable(iframe):
+            try:
+                iframe(html_doc, height=36)
+                injected = True
+            except Exception:
+                injected = False
+        if not injected:
+            try:
+                import streamlit.components.v1 as components
+
+                components.html(html_doc, height=36)
+                injected = True
+            except Exception:
+                injected = False
+        if not injected:
+            st.caption(t("share_copied"))
+            st.code(full, language=None)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("share sheet failed: %s", exc)
+        try:
+            st.caption(t("share_copied"))
+            st.code(full, language=None)
+        except Exception:
+            pass
+
 
 
 def require_auth_context() -> None:
@@ -1232,12 +1231,27 @@ def _is_streamlit_control_flow(exc: BaseException) -> bool:
     name = type(exc).__name__
     if name in ("RerunException", "StopException") or name.startswith("Rerun"):
         return True
+    mod = getattr(type(exc), "__module__", "") or ""
+    if "scriptrunner" in mod and ("Rerun" in name or "Stop" in name):
+        return True
     try:
         from streamlit.runtime.scriptrunner import RerunException, StopException
 
-        return isinstance(exc, (RerunException, StopException))
+        if isinstance(exc, (RerunException, StopException)):
+            return True
     except Exception:
-        return False
+        pass
+    try:
+        from streamlit.runtime.scriptrunner_utils.exceptions import (
+            RerunException as RE2,
+            StopException as SE2,
+        )
+
+        if isinstance(exc, (RE2, SE2)):
+            return True
+    except Exception:
+        pass
+    return False
 
 
 def safe_toast(message: str) -> None:
@@ -1383,13 +1397,23 @@ def _prepare_execute_local(cur: dict[str, Any] | None = None) -> None:
 
 
 def _cb_open_execute() -> None:
-    """Button on_click — queued before script body (reliable on Streamlit Cloud)."""
+    """Button on_click — only set a flag (no rerun, no DB). Drained in main()."""
+    st.session_state["pending_open_execute"] = True
+
+
+def _drain_pending_open_execute() -> None:
+    """Apply Starta / Handla navigation queued via on_click — before page render."""
+    if not _session_pop("pending_open_execute", None):
+        return
     try:
         _prepare_execute_local(st.session_state.get("current"))
-    except Exception as exc:
-        log.exception("on_click prepare execute failed: %s", exc)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("drain pending open execute failed: %s", exc)
         st.session_state.accepted = True
         st.session_state.page = "execute"
+        st.session_state.ui_error = None
         st.session_state["pending_db_accept"] = True
 
 
@@ -1397,16 +1421,10 @@ def open_execute_now(cur: dict[str, Any] | None = None) -> None:
     """
     Open execute IMMEDIATELY — never wait for DB/Supabase first.
 
-    Cloud hang on accept was the root cause of "Starta passet does nothing":
-    accept blocked before page=execute, so the UI never changed.
+    Fallback when on_click is ignored. st.rerun() must always propagate.
     """
     _prepare_execute_local(cur)
-    try:
-        st.rerun()
-    except BaseException as exc:
-        if _is_streamlit_control_flow(exc):
-            raise
-        log.exception("open_execute_now rerun failed: %s", exc)
+    st.rerun()
 
 
 def _flush_db_accept() -> None:
@@ -1563,8 +1581,12 @@ def render_error_boundary() -> None:
         f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
         unsafe_allow_html=True,
     )
+    detail = st.session_state.get("_last_ui_error")
+    if detail:
+        st.caption(html.escape(str(detail)[:180]))
     if st.button(t("retry"), type="primary", use_container_width=True, key="ui_error_retry"):
         st.session_state.ui_error = None
+        st.session_state._last_ui_error = None
         # Stay on a safe page
         if st.session_state.get("page") not in (
             "home",
@@ -1834,7 +1856,7 @@ def page_result() -> None:
             unsafe_allow_html=True,
         )
         if food_cook:
-            ctx_l = cur.get("context") or {}
+            ctx_l = _as_dict(cur.get("context"))
             mt = ctx_l.get("meal_type") or st.session_state.get("food_meal_type")
             show_shop = True
             try:
@@ -1897,7 +1919,7 @@ def page_result() -> None:
     render_reroll_dots(reroll_index)
 
     # Preview shopping on result (read-only) for dinner only
-    ctx = cur.get("context") or {}
+    ctx = _as_dict(cur.get("context"))
     shop = ctx.get("shopping")
     meal_type = ctx.get("meal_type") or st.session_state.get("food_meal_type")
     show_shop = True
@@ -2275,16 +2297,7 @@ def page_execute() -> None:
 
     language = st.session_state.get("language", "sv")
     domain = cur.get("domain") or ""
-    ctx = cur.get("context") or {}
-    if isinstance(ctx, str):
-        try:
-            import json as _json
-
-            ctx = _json.loads(ctx)
-        except Exception:
-            ctx = {}
-    if not isinstance(ctx, dict):
-        ctx = {}
+    ctx = _as_dict(cur.get("context"))
 
     # ----- Workout player -----
     if domain == "workout" or cur.get("execution_type") == "workout":
@@ -2340,8 +2353,6 @@ def page_execute() -> None:
 
     # ----- Food shopping + recipe -----
     try:
-        if not isinstance(ctx, dict):
-            ctx = {}
         suggestion = str(cur.get("suggestion") or "")
         st.markdown(
             f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
@@ -2414,7 +2425,7 @@ def page_execute() -> None:
             ings_fallback,
         )
 
-        # Share after cooking plan — isolated; never takes down Handla & laga
+        # Share is lazy (button only) — never runs iframe/DB on first paint
         render_share_for_decision(cur, key="share_food_execute", icon=False)
 
         if st.button(
@@ -2430,6 +2441,7 @@ def page_execute() -> None:
         if _is_streamlit_control_flow(exc):
             raise
         log.exception("food execute failed: %s", exc)
+        st.session_state._last_ui_error = f"{type(exc).__name__}: {exc}"
         st.markdown(
             f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
             unsafe_allow_html=True,
@@ -2853,6 +2865,17 @@ def main() -> None:
     inject_css()
     require_auth_context()
 
+    # Handla & laga / Starta — on_click queue (must run before page render)
+    try:
+        _drain_pending_open_execute()
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("drain pending open execute failed: %s", exc)
+        st.session_state.page = "execute"
+        st.session_state.accepted = True
+        st.session_state.ui_error = None
+
     # Friendly error REPLACES the content area — never stacks under a decision card
     if st.session_state.get("ui_error"):
         render_error_boundary()
@@ -2864,6 +2887,7 @@ def main() -> None:
         if _is_streamlit_control_flow(exc):
             raise
         log.error("query-param handler failed:\n%s", traceback.format_exc())
+        st.session_state._last_ui_error = f"{type(exc).__name__}: {exc}"
         st.session_state.ui_error = True
         st.rerun()
         return
@@ -2893,6 +2917,7 @@ def main() -> None:
             raise
         # Never blank the screen — show friendly error
         log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
+        st.session_state._last_ui_error = f"{type(exc).__name__}: {exc}"
         st.session_state.ui_error = True
         st.rerun()
 
