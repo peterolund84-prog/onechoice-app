@@ -12,15 +12,19 @@ AI that makes **one** everyday decision for you — never a list.
 ## Files
 
 ```
-app.py           # Streamlit UI — one decision loop
-pipeline.py      # decide() pipeline
-db.py            # SQLite users / decisions / preferences
-test_pipeline.py # Unit tests
+app.py                # Streamlit UI — one decision loop
+pipeline.py           # decide() shared pipeline
+feasibility.py        # Domain validators (never show broken decisions)
+mocks.py              # V1 Zalando stock + JustWatch streaming catalogs
+db.py                 # SQLite users / decisions / preferences (+ profile_json)
+DOMAIN_SPEC.md        # Canonical domain specification
+test_pipeline.py      # Pipeline unit tests
+test_feasibility.py   # Feasibility unit tests
 ```
 
 ## Data model
 
-- **users** — language, pro, budget, dietary, location, wardrobe
+- **users** — language, pro, budget, dietary, location, wardrobe, `profile_json` (food/clothes/movie/workout/weekend onboarding)
 - **decisions** — domain, suggestion, justification, accepted/rejected/locked, reroll index, context snapshot, execution link
 - **preferences** — scored signals from accepts/rejects (the moat)
 
@@ -29,13 +33,16 @@ test_pipeline.py # Unit tests
 `pipeline.decide(user_id, question, ...)`
 
 1. Classify domain (or refuse high-stakes)
-2. Collect context (time, weekday, weather, location, budget, dietary)
-3. Load history + preferences
+2. Collect context + parse domain profile
+3. Load history + preferences (7-day repetition guard)
 4. Generate ~5 internal candidates (Grok or local)
-5. Rank with bandit (80% safe / 20% explore) + repetition guard
-6. Return **only the top one** + execution step
+5. **Feasibility gate** — discard anything that fails the domain validator
+6. Rank survivors (80% close to history / 20% wildcard)
+7. Return **only the top one** + one-line justification + execution step
 
-Max 3 rerolls → lock: “It’s X. Go.”
+Max 3 rerolls → lock.
+
+See `DOMAIN_SPEC.md` for per-domain rules. Clothing stock and streaming availability are **mocked in V1** (`mocks.py`); swap in Zalando affiliate + JustWatch later.
 
 ## Domains
 
