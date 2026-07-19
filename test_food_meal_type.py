@@ -138,6 +138,12 @@ class MealTypeInferTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
+        # Home must NOT leak build / kvällsmål debug text
+        home_body = " ".join(str(m.value or "") for m in at.markdown).lower()
+        home_caps = " ".join(str(c.value or "") for c in at.caption).lower()
+        self.assertNotIn("build ", home_caps)
+        self.assertNotIn("kvallsmal-recipe", home_body + home_caps)
+
         at.session_state["food_meal_type"] = "kvallsmal"
         for b in at.button:
             if b.label == "Mat":
@@ -155,7 +161,8 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertFalse(bool(at.session_state["ui_error"]))
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
         self.assertIn("recept", body)
-        self.assertTrue("bröd" in body or "ost" in body, body[:500])
+        self.assertTrue("bröd" in body and "ost" in body, body[:800])
+        self.assertIn("gör så här", body)
         # Opt-in control lives on recipe page (off by default → no kcal yet)
         toggle_labels = [t.label or "" for t in at.toggle]
         self.assertTrue(
@@ -164,15 +171,48 @@ class MealTypeInferTests(unittest.TestCase):
             toggle_labels,
         )
         self.assertNotIn("kcal", body)
-        # Turn on → ca-värden appear
+        # Turn on → ca-värden appear (must not blank the recipe)
         for tgl in at.toggle:
             lab = (tgl.label or "").lower()
             if "ca-värden" in lab or "närings" in lab or "nutrition" in lab:
                 tgl.set_value(True).run()
                 break
         body2 = " ".join(str(m.value or "") for m in at.markdown).lower()
+        self.assertIn("recept", body2)
+        self.assertIn("bröd", body2)
         self.assertIn("ca-värden", body2)
         self.assertIn("kcal", body2)
+
+    def test_execute_heals_json_string_recipe(self) -> None:
+        """Cloud may store context.recipe as a JSON string — execute must still paint."""
+        import json
+
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=90)
+        at.run()
+        at.session_state["food_meal_type"] = "kvallsmal"
+        for b in at.button:
+            if b.label == "Mat":
+                b.click().run()
+                break
+        cur = dict(at.session_state["current"] or {})
+        ctx = cur.get("context") or {}
+        if isinstance(ctx, str):
+            ctx = json.loads(ctx)
+        ctx = dict(ctx)
+        # Simulate Cloud stringifying nested recipe
+        ctx["recipe"] = json.dumps(ctx.get("recipe") or {}, ensure_ascii=False)
+        ctx["shopping"] = None
+        cur["context"] = ctx
+        at.session_state["current"] = cur
+        at.session_state["accepted"] = True
+        at.session_state["page"] = "execute"
+        at.run()
+        self.assertEqual(at.session_state["page"], "execute")
+        body = " ".join(str(m.value or "") for m in at.markdown).lower()
+        self.assertIn("recept", body)
+        self.assertTrue("bröd" in body or "ost" in body, body[:800])
 
 
 if __name__ == "__main__":
