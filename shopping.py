@@ -250,7 +250,7 @@ def build_recipe(
     """Swedish metric recipe: full ingredient list + ordered steps.
 
     active_minutes is the single source of truth for cook time when provided.
-    Always attaches rounded per-portion nutrition estimates (ca-värden).
+    Always attaches per-portion nutrition estimates (top-level + nested).
     """
     ings = list(ingredients or _infer_full_ingredients(suggestion) or [])
     if not ings:
@@ -268,11 +268,12 @@ def build_recipe(
         "steps": steps,
         "unit_system": "metric",
         "language": "sv",
-        "nutrition": estimate_nutrition(ings, suggestion=suggestion, servings=portions),
+        "portioner": portions,
     }
     if active_minutes is not None:
         out["active_minutes"] = int(active_minutes)
-    return out
+    # Static estimator (recipes are not LLM-authored) — always fill numeric fields
+    return ensure_recipe_nutrition(out, suggestion=suggestion, allow_estimate=True)
 
 
 # Per 100 g (or per unit where noted): kcal, protein_g, fat_g, carbs_g
@@ -460,30 +461,157 @@ def estimate_nutrition(
         **rounded,
         "per": "portion",
         "servings": portions,
+        "kcal_per_portion": rounded["kcal"],
+        "protein_g_per_portion": rounded["protein_g"],
+        "portioner": portions,
         "label": "ca-värden",
         "suggestion": suggestion or "",
     }
 
 
-def format_nutrition_line(nutrition: dict[str, Any] | None, *, language: str = "sv") -> str:
-    """Muted single-line reference — never a tracker UI."""
-    if not nutrition or not isinstance(nutrition, dict):
-        return ""
-    kcal = nutrition.get("kcal")
-    p = nutrition.get("protein_g")
-    f = nutrition.get("fat_g")
-    c = nutrition.get("carbs_g")
-    if kcal is None:
-        return ""
-    if language == "en":
-        return (
-            f"approx. per serving: ~{kcal} kcal · {p} g protein · "
-            f"{f} g fat · {c} g carbs"
-        )
-    return (
-        f"ca-värden per portion: ~{kcal} kcal · {p} g protein · "
-        f"{f} g fett · {c} g kolhydrater"
+def _as_nutrition_int(value: Any) -> int | None:
+    """Coerce to int; reject bool/None/non-numeric."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def nutrition_fields_valid(
+    kcal: Any,
+    protein: Any,
+    portions: Any,
+) -> bool:
+    """True when portion nutrition fields are usable integers."""
+    k = _as_nutrition_int(kcal)
+    p = _as_nutrition_int(protein)
+    n = _as_nutrition_int(portions)
+    return k is not None and p is not None and n is not None and k > 0 and p >= 0 and n >= 1
+
+
+def read_recipe_nutrition(
+    recipe: dict[str, Any] | None,
+) -> tuple[int | None, int | None, int | None]:
+    """Read kcal/protein/portioner from top-level or nested nutrition (legacy)."""
+    if not isinstance(recipe, dict):
+        return None, None, None
+    nut = recipe.get("nutrition") if isinstance(recipe.get("nutrition"), dict) else {}
+    kcal = _as_nutrition_int(
+        recipe.get("kcal_per_portion", nut.get("kcal_per_portion", nut.get("kcal")))
     )
+    protein = _as_nutrition_int(
+        recipe.get(
+            "protein_g_per_portion",
+            nut.get("protein_g_per_portion", nut.get("protein_g")),
+        )
+    )
+    portions = _as_nutrition_int(
+        recipe.get("portioner", nut.get("portioner", nut.get("servings")))
+    )
+    return kcal, protein, portions
+
+
+def ensure_recipe_nutrition(
+    recipe: dict[str, Any] | None,
+    *,
+    suggestion: str = "",
+    allow_estimate: bool = True,
+) -> dict[str, Any]:
+    """Attach kcal_per_portion / protein_g_per_portion / portioner.
+
+    Recipes are built by the static estimator (not LLM JSON). If fields are
+    missing or non-numeric we re-estimate once from ingredients; old history
+    payloads without nutrition stay safe (no raise).
+    """
+    out = dict(recipe or {})
+    title = str(out.get("title") or suggestion or "")
+    ings = [str(x) for x in (out.get("ingredients") or [])]
+    kcal, protein, portions = read_recipe_nutrition(out)
+
+    if not nutrition_fields_valid(kcal, protein, portions) and allow_estimate:
+        # One re-estimate pass (mirrors the LLM "retry once" contract)
+        seed_portions = portions if _as_nutrition_int(portions) and int(portions) >= 1 else None
+        if seed_portions is None:
+            seed_portions = _default_servings(title, ings)
+        estimated = estimate_nutrition(
+            ings,
+            suggestion=title,
+            servings=int(seed_portions),
+        )
+        kcal = estimated["kcal"]
+        protein = estimated["protein_g"]
+        portions = estimated["servings"]
+        # Second pass only if still invalid (should not happen)
+        if not nutrition_fields_valid(kcal, protein, portions):
+            estimated = estimate_nutrition(
+                ings or ["ägg", "bröd"],
+                suggestion=title or "Måltid",
+                servings=1,
+            )
+            kcal = estimated["kcal"]
+            protein = estimated["protein_g"]
+            portions = estimated["servings"]
+
+    if nutrition_fields_valid(kcal, protein, portions):
+        k_i, p_i, n_i = int(kcal), int(protein), int(portions)
+        out["kcal_per_portion"] = k_i
+        out["protein_g_per_portion"] = p_i
+        out["portioner"] = n_i
+        nested = dict(out.get("nutrition") or {}) if isinstance(out.get("nutrition"), dict) else {}
+        nested.update(
+            {
+                "kcal": k_i,
+                "protein_g": p_i,
+                "servings": n_i,
+                "kcal_per_portion": k_i,
+                "protein_g_per_portion": p_i,
+                "portioner": n_i,
+                "per": "portion",
+                "label": nested.get("label") or "ca-värden",
+                "suggestion": nested.get("suggestion") or title,
+            }
+        )
+        # Keep fat/carbs if already estimated
+        if "fat_g" not in nested or "carbs_g" not in nested:
+            est = estimate_nutrition(ings, suggestion=title, servings=n_i)
+            nested.setdefault("fat_g", est.get("fat_g"))
+            nested.setdefault("carbs_g", est.get("carbs_g"))
+        out["nutrition"] = nested
+    return out
+
+
+def format_nutrition_line(
+    nutrition: dict[str, Any] | None,
+    *,
+    language: str = "sv",
+    recipe: dict[str, Any] | None = None,
+) -> str:
+    """UI line for the nutrition control — never empty, never None/null text.
+
+    Prefer: \"≈ 520 kcal · 32 g protein / portion\"
+    Missing: \"Näringsvärden saknas\" (secondary grey in UI).
+    """
+    kcal = protein = portions = None
+    if isinstance(recipe, dict):
+        kcal, protein, portions = read_recipe_nutrition(recipe)
+    if not nutrition_fields_valid(kcal, protein, portions) and isinstance(nutrition, dict):
+        kcal = _as_nutrition_int(
+            nutrition.get("kcal_per_portion", nutrition.get("kcal"))
+        )
+        protein = _as_nutrition_int(
+            nutrition.get("protein_g_per_portion", nutrition.get("protein_g"))
+        )
+        portions = _as_nutrition_int(
+            nutrition.get("portioner", nutrition.get("servings", 1))
+        )
+    if not nutrition_fields_valid(kcal, protein, portions):
+        return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
+    # portions validated but display is always per one portion
+    if language == "en":
+        return f"≈ {kcal} kcal · {protein} g protein / serving"
+    return f"≈ {kcal} kcal · {protein} g protein / portion"
 
 
 def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:

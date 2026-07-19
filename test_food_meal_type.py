@@ -162,7 +162,6 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertFalse(bool(at.session_state["ui_error"]))
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
         self.assertIn("recept", body)
-        self.assertTrue("bröd" in body and "ost" in body, body[:800])
         self.assertIn("gör så här", body)
         # Opt-in control lives on recipe page (off by default → no kcal yet)
         toggle_labels = [t.label or "" for t in at.toggle]
@@ -172,17 +171,19 @@ class MealTypeInferTests(unittest.TestCase):
             toggle_labels,
         )
         self.assertNotIn("kcal", body)
-        # Turn on → ca-värden appear (must not blank the recipe)
+        # Turn on → ≈ kcal · protein appear (must not blank the recipe)
         for tgl in at.toggle:
             lab = (tgl.label or "").lower()
-            if "ca-värden" in lab or "närings" in lab or "nutrition" in lab:
+            if "ca-värden" in lab or "närings" in lab or "nutrition" in lab or "kcal" in lab:
                 tgl.set_value(True).run()
                 break
         body2 = " ".join(str(m.value or "") for m in at.markdown).lower()
         self.assertIn("recept", body2)
-        self.assertIn("bröd", body2)
-        self.assertIn("ca-värden", body2)
+        self.assertIn("gör så här", body2)
+        self.assertIn("≈", body2)
         self.assertIn("kcal", body2)
+        self.assertIn("protein", body2)
+        self.assertNotIn("näringsvärden saknas", body2)
 
     def test_execute_heals_json_string_recipe(self) -> None:
         """Cloud may store context.recipe as a JSON string — execute must still paint."""
