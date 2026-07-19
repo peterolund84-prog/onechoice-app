@@ -107,7 +107,7 @@ ICON_USER = (
 )
 
 # Visible on home — confirms Cloud has this build (not a cached old deploy)
-BUILD_ID = "fridge-vision-v4-20260719"
+BUILD_ID = "fridge-vision-v5-20260719"
 
 I18N = {
     "sv": {
@@ -205,6 +205,7 @@ I18N = {
         "fridge_vision_error": "Kunde inte läsa fotot",
         "fridge_api_ok": "Grok API: kopplad",
         "fridge_api_missing": "Grok API: saknas — vision körs inte. Secrets → GROK_API_KEY = \"xai-...\"",
+        "fridge_api_diag": "Secrets-diagnos: {detail}",
         "fridge_scan_took": "Klart på {secs}s · {n} varor",
         "fridge_manual": "Fortsätt och lägg till själv",
         "fridge_cook": "Laga nu",
@@ -306,6 +307,7 @@ I18N = {
         "fridge_vision_error": "Couldn’t read the photo",
         "fridge_api_ok": "Grok API: connected",
         "fridge_api_missing": "Grok API: missing — vision won’t run. Secrets → GROK_API_KEY = \"xai-...\"",
+        "fridge_api_diag": "Secrets diagnosis: {detail}",
         "fridge_scan_took": "Done in {secs}s · {n} items",
         "fridge_manual": "Continue and add manually",
         "fridge_cook": "Cook now",
@@ -727,16 +729,38 @@ def init_state() -> None:
 
 
 def get_secret(name: str, default: str = "") -> str:
+    """Read a Streamlit secret; also searches one level of nested TOML tables."""
     try:
-        return str(st.secrets.get(name, default) or default)
+        raw = st.secrets.get(name, None)
+        if raw is not None and not isinstance(raw, dict):
+            return str(raw)
     except Exception:
-        return default
+        pass
+    try:
+        # Nested: [api] GROK_API_KEY = "..." → st.secrets["api"]["GROK_API_KEY"]
+        for section in st.secrets.keys():  # type: ignore[attr-defined]
+            try:
+                block = st.secrets[section]
+            except Exception:
+                continue
+            if isinstance(block, dict) and name in block:
+                val = block.get(name)
+                if val is not None and not isinstance(val, dict):
+                    return str(val)
+    except Exception:
+        pass
+    return default
 
 
 def _normalize_secret_value(value: str) -> str:
     k = (value or "").strip()
-    if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'“”‘’":
-        k = k[1:-1].strip()
+    # Strip wrapping quotes (including curly phone-keyboard quotes)
+    for _ in range(2):
+        if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'“”‘’":
+            k = k[1:-1].strip()
+    # Common paste: Bearer xai-...
+    if k.lower().startswith("bearer "):
+        k = k[7:].strip()
     return k
 
 
@@ -749,11 +773,70 @@ def _usable_grok_secret(key: str) -> bool:
         return False
     if "placeholder" in low or "your_project" in low:
         return False
-    if low.endswith(("_här", "_har")) or low == "din_grok_api_nyckel_här":
+    if low.endswith(("_här", "_har")) or "nyckel_här" in low:
         return False
     if low.startswith("xai-") and len(k) >= 16:
         return True
     return len(k) >= 32 and "nyckel" not in low
+
+
+def _secret_leaf_map() -> dict[str, str]:
+    """Flatten top-level + one-level nested secrets to {KEY: value} (strings only)."""
+    out: dict[str, str] = {}
+    try:
+        for key in st.secrets.keys():  # type: ignore[attr-defined]
+            try:
+                val = st.secrets[key]
+            except Exception:
+                continue
+            if isinstance(val, dict):
+                for k2, v2 in val.items():
+                    if v2 is not None and not isinstance(v2, dict):
+                        out[str(k2)] = str(v2)
+            elif val is not None:
+                out[str(key)] = str(val)
+    except Exception:
+        pass
+    return out
+
+
+def diagnose_grok_secret() -> dict[str, Any]:
+    """Safe diagnostics for fridge UI — never includes the full secret."""
+    import os
+
+    leaves = _secret_leaf_map()
+    # Case-insensitive name match
+    found_name = None
+    found_raw = ""
+    for want in ("GROK_API_KEY", "XAI_API_KEY"):
+        for name, val in leaves.items():
+            if name.upper() == want:
+                found_name = name
+                found_raw = val
+                break
+        if found_name:
+            break
+    if not found_raw:
+        found_raw = (
+            os.environ.get("GROK_API_KEY", "")
+            or os.environ.get("XAI_API_KEY", "")
+            or ""
+        )
+        if found_raw:
+            found_name = "env"
+    norm = _normalize_secret_value(found_raw)
+    names = sorted(leaves.keys())
+    return {
+        "secret_names": names,
+        "has_grok_name": any(n.upper() == "GROK_API_KEY" for n in names),
+        "has_xai_name": any(n.upper() == "XAI_API_KEY" for n in names),
+        "found_name": found_name,
+        "len": len(norm),
+        "prefix": norm[:4] if norm else "",
+        "startswith_xai": norm.lower().startswith("xai-"),
+        "usable": _usable_grok_secret(norm),
+        "value": norm,
+    }
 
 
 def resolve_grok_api_key() -> str:
@@ -763,6 +846,10 @@ def resolve_grok_api_key() -> str:
     Resolution lives in app.py (not only fridge_domain) so a stale Cloud
     module cache cannot AttributeError on resolve_vision_api_key.
     """
+    diag = diagnose_grok_secret()
+    if diag.get("usable"):
+        return str(diag.get("value") or "")
+    # Fall through fridge_domain helper if present
     import os
 
     candidates = (
@@ -770,8 +857,8 @@ def resolve_grok_api_key() -> str:
         get_secret("XAI_API_KEY"),
         os.environ.get("GROK_API_KEY", ""),
         os.environ.get("XAI_API_KEY", ""),
+        str(diag.get("value") or ""),
     )
-    # Prefer fridge_domain helper when present (same logic)
     try:
         import fridge_domain as fr
         import importlib
@@ -779,17 +866,15 @@ def resolve_grok_api_key() -> str:
         if not hasattr(fr, "resolve_vision_api_key"):
             fr = importlib.reload(fr)
         if hasattr(fr, "resolve_vision_api_key"):
-            return fr.resolve_vision_api_key(*candidates)
+            got = fr.resolve_vision_api_key(*candidates)
+            if _usable_grok_secret(got):
+                return got
     except Exception as exc:
         log.warning("fridge_domain key resolve unavailable: %s", exc)
 
     for raw in candidates:
         k = _normalize_secret_value(str(raw or ""))
         if _usable_grok_secret(k):
-            return k
-    for raw in candidates:
-        k = _normalize_secret_value(str(raw or ""))
-        if k:
             return k
     return ""
 
@@ -1801,15 +1886,25 @@ def page_fridge() -> None:
     st.caption(f"build {BUILD_ID}")
 
     api_key = resolve_grok_api_key()
-    key_ok = False
-    try:
-        key_ok = fr.usable_vision_key(api_key)
-    except Exception:
-        key_ok = _usable_grok_secret(api_key)
+    diag = diagnose_grok_secret()
+    key_ok = bool(diag.get("usable")) or _usable_grok_secret(api_key)
     if key_ok:
         st.caption(f"{t('fridge_api_ok')} · {len(api_key)} tecken · {api_key[:4]}…")
     else:
         st.warning(t("fridge_api_missing"))
+        names = diag.get("secret_names") or []
+        detail = (
+            f"nycklar={names or '[]'} · "
+            f"GROK_API_KEY={'ja' if diag.get('has_grok_name') else 'nej'} · "
+            f"träff={diag.get('found_name') or 'ingen'} · "
+            f"len={diag.get('len')} · "
+            f"xai-prefix={'ja' if diag.get('startswith_xai') else 'nej'}"
+        )
+        st.caption(t("fridge_api_diag").format(detail=detail))
+        st.caption(
+            "Exakt format i Streamlit Secrets (inga [sektioner] runt nyckeln):\n"
+            'GROK_API_KEY = "xai-din-nyckel-här"'
+        )
 
     step = st.session_state.get("fridge_step") or "capture"
 
