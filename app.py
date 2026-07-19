@@ -607,7 +607,7 @@ def init_state() -> None:
         "pending_clothes_question": "",
         "occasion_by_hour": {},  # remembered most-common occasion per hour bucket
         "food_meal_type": None,  # frukost|lunch|middag|kvallsmal — inferred, confirmable
-        "pending_open_execute": False,
+        "pending_db_accept": False,
         # Workout player (execute view)
         "workout_phase": "overview",  # overview|play|rest|done
         "workout_block_i": 0,
@@ -1086,96 +1086,176 @@ def accept_current_decision(cur: dict[str, Any] | None = None) -> bool:
         return True
 
 
-def _cb_open_execute() -> None:
-    """Button on_click — queued before script body (reliable on Streamlit Cloud)."""
-    st.session_state["pending_open_execute"] = True
-
-
-def _drain_pending_execute() -> None:
-    """Process Starta passet / Handla & laga navigation queued via on_click."""
-    if not st.session_state.pop("pending_open_execute", None):
-        return
-    cur = st.session_state.get("current")
+def _lock_current_locally(cur: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Immediate UI lock — never waits on network/DB."""
+    cur = cur if isinstance(cur, dict) else (st.session_state.get("current") or {})
     if not isinstance(cur, dict):
         cur = {}
+    updated = dict(cur)
+    updated["locked"] = True
+    updated["accepted"] = True
+    st.session_state.accepted = True
+    if updated.get("decision_id") is not None:
+        st.session_state.decision_id = updated.get("decision_id")
+    st.session_state.current = updated
+    return updated
+
+
+def _ensure_workout_in_session(cur: dict[str, Any]) -> dict[str, Any]:
+    """Make sure context.workout exists before opening the player."""
     try:
-        accept_current_decision(cur)
+        import workout_domain as wd
+
+        language = st.session_state.get("language", "sv")
+        w = wd.get_workout_from_decision(cur)
+        if not w:
+            w = wd.finalize_workout(
+                wd._match_template(str(cur.get("suggestion") or ""), language),
+                language=language,
+            )
+        updated = dict(cur)
+        ctx = dict(updated.get("context") or {})
+        if not isinstance(ctx, dict):
+            ctx = {}
+        ctx["workout"] = w
+        ctx["execution_detail"] = wd.detail_from_workout(w, language)
+        updated["context"] = ctx
+        updated["domain"] = updated.get("domain") or "workout"
+        updated["execution_type"] = "workout"
+        updated["execution_label"] = updated.get("execution_label") or (
+            "Starta passet" if language == "sv" else "Start workout"
+        )
+        st.session_state.current = updated
+        return updated
+    except Exception as exc:
+        log.exception("ensure workout structure failed: %s", exc)
+        return cur if isinstance(cur, dict) else {}
+
+
+def _reset_workout_player() -> None:
+    st.session_state.workout_phase = "overview"
+    st.session_state.workout_block_i = 0
+    st.session_state.workout_set_i = 0
+    st.session_state.workout_timer_end = None
+    st.session_state.workout_timer_total = 0
+
+
+def _prepare_execute_local(cur: dict[str, Any] | None = None) -> None:
+    """
+    Fast local prep for execute — NO network, NO st.rerun().
+
+    Safe for Streamlit on_click (runs before script body on Cloud).
+    DB accept is deferred via pending_db_accept.
+    """
+    cur = cur if isinstance(cur, dict) else (st.session_state.get("current") or {})
+    if not isinstance(cur, dict):
+        cur = {}
+    domain = (cur.get("domain") or "").strip()
+    is_workout = domain == "workout" or cur.get("execution_type") == "workout"
+
+    updated = _lock_current_locally(cur)
+    if is_workout:
+        _reset_workout_player()
+        _ensure_workout_in_session(updated)
+
+    st.session_state.page = "execute"
+    st.session_state.ui_error = None
+    st.session_state["pending_db_accept"] = True
+
+
+def _cb_open_execute() -> None:
+    """Button on_click — queued before script body (reliable on Streamlit Cloud)."""
+    try:
+        _prepare_execute_local(st.session_state.get("current"))
+    except Exception as exc:
+        log.exception("on_click prepare execute failed: %s", exc)
+        st.session_state.accepted = True
+        st.session_state.page = "execute"
+        st.session_state["pending_db_accept"] = True
+
+
+def open_execute_now(cur: dict[str, Any] | None = None) -> None:
+    """
+    Open execute IMMEDIATELY — never wait for DB/Supabase first.
+
+    Cloud hang on accept was the root cause of "Starta passet does nothing":
+    accept blocked before page=execute, so the UI never changed.
+    """
+    _prepare_execute_local(cur)
+    try:
+        st.rerun()
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
-        log.exception("pending execute accept failed: %s", exc)
-        st.session_state.accepted = True
-        updated = dict(cur)
-        updated["locked"] = True
-        updated["accepted"] = True
-        st.session_state.current = updated
-    domain = (cur.get("domain") or "").strip()
-    if domain == "workout" or cur.get("execution_type") == "workout":
-        _reset_workout_player()
-        # Guarantee structured workout in session before opening player
-        try:
-            import workout_domain as wd
+        log.exception("open_execute_now rerun failed: %s", exc)
 
-            w = wd.get_workout_from_decision(cur)
-            if not w:
-                w = wd.finalize_workout(
-                    wd._match_template(str(cur.get("suggestion") or ""), "sv"),
-                    language=st.session_state.get("language", "sv"),
-                )
-                updated = dict(st.session_state.get("current") or cur)
-                ctx = dict(updated.get("context") or {})
-                ctx["workout"] = w
-                ctx["execution_detail"] = wd.detail_from_workout(
-                    w, st.session_state.get("language", "sv")
-                )
-                updated["context"] = ctx
-                st.session_state.current = updated
+
+def _flush_db_accept() -> None:
+    """Best-effort persist accept — sync via pipeline (UI already visible)."""
+    if not st.session_state.pop("pending_db_accept", None):
+        return
+    cur = st.session_state.get("current")
+    cur = cur if isinstance(cur, dict) else {}
+    did = cur.get("decision_id") or st.session_state.get("decision_id")
+    rid = cur.get("route_log_id") or st.session_state.get("route_log_id")
+    try:
+        if st.session_state.get("guest_mode"):
+            db.clear_auth()
+        # Call pipeline directly — accept_current_decision early-returns when
+        # session already has accepted=True from the local lock.
+        pipeline.try_accept_decision(did, route_log_id=rid)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("deferred DB accept failed (UI already open): %s", exc)
+
+
+def _flush_db_accept_bg() -> None:
+    """Non-blocking DB accept — must not delay execute first paint on Cloud."""
+    if not st.session_state.pop("pending_db_accept", None):
+        return
+    cur = st.session_state.get("current")
+    cur = cur if isinstance(cur, dict) else {}
+    did = cur.get("decision_id") or st.session_state.get("decision_id")
+    rid = cur.get("route_log_id") or st.session_state.get("route_log_id")
+    guest = bool(st.session_state.get("guest_mode"))
+
+    def work() -> None:
+        try:
+            if guest:
+                db.clear_auth()
+            pipeline.try_accept_decision(did, route_log_id=rid)
         except Exception as exc:
-            log.exception("ensure workout structure failed: %s", exc)
-    st.session_state.page = "execute"
-    st.session_state.ui_error = None
+            log.exception("bg accept failed: %s", exc)
+
+    import threading
+
+    threading.Thread(target=work, daemon=True).start()
 
 
 def on_accept_primary(cur: dict[str, Any]) -> None:
-    """Primary accept for any non-execute domain — never raises into Streamlit."""
+    """Primary accept for non-execute domains — lock locally first."""
+    _lock_current_locally(cur)
     try:
+        # Force DB write even though we already locked locally
+        st.session_state.accepted = False
         accept_current_decision(cur)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
         log.exception("on_accept_primary failed: %s", exc)
         st.session_state.accepted = True
-        updated = dict(cur) if isinstance(cur, dict) else {}
-        updated["locked"] = True
-        updated["accepted"] = True
-        st.session_state.current = updated
     try:
         safe_toast(t("accepted"))
     except Exception:
         pass
-    # Mark so a misclassified RerunException cannot become the error boundary
     st.session_state.ui_error = None
     st.rerun()
 
 
 def accept_and_open_execute(cur: dict[str, Any]) -> None:
-    """Handla & laga / Starta passet: accept then open execute view."""
-    try:
-        accept_current_decision(cur)
-    except BaseException as exc:
-        if _is_streamlit_control_flow(exc):
-            raise
-        log.exception("accept_and_open_execute failed: %s", exc)
-        st.session_state.accepted = True
-        updated = dict(cur) if isinstance(cur, dict) else {}
-        updated["locked"] = True
-        updated["accepted"] = True
-        st.session_state.current = updated
-    if (cur.get("domain") or "") == "workout" or cur.get("execution_type") == "workout":
-        _reset_workout_player()
-    st.session_state.page = "execute"
-    st.session_state.ui_error = None
-    st.rerun()
+    """Handla & laga / Starta passet → execute view (navigate first)."""
+    open_execute_now(cur)
 
 
 def raise_ui_error(where: str, exc: BaseException | None = None) -> None:
@@ -1538,7 +1618,8 @@ def page_result() -> None:
                     key="handla_reopen",
                     on_click=_cb_open_execute,
                 ):
-                    accept_and_open_execute(cur)
+                    # Fallback when host ignores on_click
+                    open_execute_now(cur)
             else:
                 label = cur.get("execution_label") or (
                     "Ät nu" if language == "sv" else "Eat now"
@@ -1558,7 +1639,7 @@ def page_result() -> None:
                     key="do_it_locked",
                     on_click=_cb_open_execute,
                 ):
-                    accept_and_open_execute(cur)
+                    open_execute_now(cur)
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
                 on_accept_primary(cur)
         if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
@@ -1621,8 +1702,7 @@ def page_result() -> None:
             key="handla_accept",
             on_click=_cb_open_execute,
         ):
-            # Fallback when on_click is ignored by the host
-            accept_and_open_execute(cur)
+            open_execute_now(cur)
     elif food_cook and not show_shop:
         # Frukost / lunch / kvällsmål — accept without shopping execute
         label = cur.get("execution_label") or ("Ät nu" if language == "sv" else "Eat now")
@@ -1639,7 +1719,7 @@ def page_result() -> None:
                 key="do_it_primary",
                 on_click=_cb_open_execute,
             ):
-                accept_and_open_execute(cur)
+                open_execute_now(cur)
         elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
             on_accept_primary(cur)
 
@@ -1658,14 +1738,6 @@ def page_result() -> None:
         st.session_state.page = "home"
         st.rerun()
     nav()
-
-
-def _reset_workout_player() -> None:
-    st.session_state.workout_phase = "overview"
-    st.session_state.workout_block_i = 0
-    st.session_state.workout_set_i = 0
-    st.session_state.workout_timer_end = None
-    st.session_state.workout_timer_total = 0
 
 
 def _inject_wake_lock() -> None:
@@ -1787,6 +1859,8 @@ def render_workout_overview(workout: dict[str, Any], language: str) -> None:
     )
     st.caption(t("workout_awake_note"))
     if st.button(t("workout_go"), type="primary", use_container_width=True, key="wo_go"):
+        # Persist accept here (after overview is already visible) so Starta never blocks
+        _flush_db_accept()
         st.session_state.workout_phase = "play"
         st.session_state.workout_block_i = 0
         st.session_state.workout_set_i = 0
@@ -1942,6 +2016,9 @@ def _record_workout_feel(
 
 def page_execute() -> None:
     """Execution view: food shopping/recipe OR workout player."""
+    # Persist accept in background so first paint never waits on Supabase
+    _flush_db_accept_bg()
+
     lang_bar()
     st.markdown('<div class="oc-logo"><em>One</em>Choice</div>', unsafe_allow_html=True)
     cur = st.session_state.get("current") or {}
@@ -2343,16 +2420,6 @@ def main() -> None:
         render_error_boundary()
         return
 
-    # Starta passet / Handla & laga — on_click queue (must run before page render)
-    try:
-        _drain_pending_execute()
-    except BaseException as exc:
-        if _is_streamlit_control_flow(exc):
-            raise
-        log.exception("drain pending execute failed: %s", exc)
-        st.session_state.page = "execute"
-        st.session_state.accepted = True
-
     try:
         handle_query_params()
     except BaseException as exc:
@@ -2385,7 +2452,7 @@ def main() -> None:
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
-        # Never blank the screen after accept — show friendly error (was: silent return)
+        # Never blank the screen — show friendly error
         log.error("page render failed (%s):\n%s", page_name, traceback.format_exc())
         st.session_state.ui_error = True
         st.rerun()

@@ -88,6 +88,100 @@ class WorkoutPlayerUiTests(unittest.TestCase):
         err = any("Något gick fel" in (m.value or "") for m in at.markdown)
         self.assertFalse(err)
 
+    def test_starta_navigates_even_if_accept_hangs(self) -> None:
+        """Regression: slow/hanging Supabase accept must not freeze on result."""
+        import app as app_mod
+        from streamlit.testing.v1 import AppTest
+
+        calls: list[str] = []
+
+        def _hanging_accept(cur=None):  # noqa: ANN001
+            calls.append("accept")
+            # Simulate Cloud hang — must never run before page=execute
+            raise TimeoutError("simulated supabase hang")
+
+        orig = app_mod.accept_current_decision
+        app_mod.accept_current_decision = _hanging_accept  # type: ignore[assignment]
+        try:
+            at = AppTest.from_file("app.py", default_timeout=30)
+            at.run()
+            for b in at.button:
+                if b.label == "Träning":
+                    b.click().run()
+                    break
+            self.assertEqual(at.session_state["page"], "result")
+            for b in at.button:
+                if "Starta" in (b.label or ""):
+                    b.click().run()
+                    break
+            self.assertFalse(at.exception)
+            self.assertEqual(at.session_state["page"], "execute")
+            self.assertTrue(at.session_state["accepted"])
+            self.assertEqual(at.session_state["workout_phase"], "overview")
+            labels = [b.label or "" for b in at.button]
+            self.assertTrue(any(lab == "Kör" for lab in labels), labels)
+            # accept_current_decision must NOT be required for navigation
+            # (deferred path uses pipeline.try_accept_decision in bg)
+        finally:
+            app_mod.accept_current_decision = orig  # type: ignore[assignment]
+
+    def test_prepare_execute_local_sets_page_without_db(self) -> None:
+        """Unit: local prep never calls accept — only session navigation."""
+        import app as app_mod
+
+        class _SS(dict):
+            def __getattr__(self, k):  # noqa: ANN001
+                try:
+                    return self[k]
+                except KeyError as e:
+                    raise AttributeError(k) from e
+
+            def __setattr__(self, k, v):  # noqa: ANN001
+                self[k] = v
+
+        fake = _SS(
+            current={
+                "domain": "workout",
+                "suggestion": "25 min kroppsvikt",
+                "execution_type": "workout",
+                "execution_label": "Starta passet",
+                "decision_id": 42,
+                "context": {},
+            },
+            language="sv",
+            accepted=False,
+            page="result",
+            ui_error=None,
+            workout_phase="overview",
+            workout_block_i=0,
+            workout_set_i=0,
+            workout_timer_end=None,
+            workout_timer_total=0,
+            guest_mode=True,
+        )
+        called: list[str] = []
+
+        def boom(*_a, **_k):  # noqa: ANN001
+            called.append("db")
+            raise RuntimeError("db must not be called")
+
+        orig_ss = app_mod.st.session_state
+        orig_accept = app_mod.accept_current_decision
+        orig_try = app_mod.pipeline.try_accept_decision
+        try:
+            app_mod.st.session_state = fake  # type: ignore[assignment]
+            app_mod.accept_current_decision = boom  # type: ignore[assignment]
+            app_mod.pipeline.try_accept_decision = boom  # type: ignore[assignment]
+            app_mod._prepare_execute_local(fake["current"])
+            self.assertEqual(fake["page"], "execute")
+            self.assertTrue(fake["accepted"])
+            self.assertTrue(fake["pending_db_accept"])
+            self.assertEqual(called, [])
+        finally:
+            app_mod.st.session_state = orig_ss
+            app_mod.accept_current_decision = orig_accept  # type: ignore[assignment]
+            app_mod.pipeline.try_accept_decision = orig_try  # type: ignore[assignment]
+
 
 if __name__ == "__main__":
     unittest.main()
