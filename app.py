@@ -623,8 +623,27 @@ div[data-testid="stHorizontalBlock"] > div {{
     width: auto !important;
     max-width: 100% !important;
 }}
+.oc-nav {{
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    grid-auto-flow: column !important;
+    align-items: stretch !important;
+}}
+.oc-lang {{
+    display: grid !important;
+    grid-template-columns: auto auto !important;
+    grid-auto-flow: column !important;
+    align-items: center !important;
+    gap: 0.4rem !important;
+}}
+.oc-card-actions {{
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    grid-auto-flow: column !important;
+    align-items: stretch !important;
+    gap: 0.55rem !important;
+}}
 .oc-nav, .oc-lang, .oc-card-actions {{
-    display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
 }}
@@ -640,10 +659,17 @@ div[data-testid="stHorizontalBlock"] > div {{
         flex: 1 1 0 !important;
         width: auto !important;
     }}
-    .oc-nav, .oc-lang, .oc-card-actions {{
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
+    .oc-nav {{
+        display: grid !important;
+        grid-template-columns: 1fr 1fr 1fr !important;
+    }}
+    .oc-lang {{
+        display: grid !important;
+        grid-template-columns: auto auto !important;
+    }}
+    .oc-card-actions {{
+        display: grid !important;
+        grid-template-columns: 1fr 1fr !important;
     }}
 }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
@@ -667,11 +693,17 @@ div[data-testid="stVerticalBlockBorderWrapper"] {{
             font-size: 15px;
         }
         /* Bottom nav: keep Hem / Historik / Profil in one row */
-        div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]),
         .oc-nav {
-            display: flex !important;
-            flex-direction: row !important;
-            flex-wrap: nowrap !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr 1fr !important;
+        }
+        .oc-lang {
+            display: grid !important;
+            grid-template-columns: auto auto !important;
+        }
+        .oc-card-actions {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
         }
         div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) > div[data-testid="stColumn"],
         div[data-testid="stHorizontalBlock"]:has(div[class*="st-key-nav_home"]) > div {
