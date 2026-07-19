@@ -232,3 +232,62 @@ begin
 end;
 $$;
 
+
+-- ---------------------------------------------------------------------------
+-- Public shares (viral landing — readable without login)
+-- ---------------------------------------------------------------------------
+create table if not exists public.public_shares (
+  token text primary key,
+  decision_id bigint,
+  domain text not null,
+  suggestion text not null,
+  payload jsonb not null default '{}'::jsonb,
+  language text not null default 'sv',
+  open_count int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_public_shares_decision
+  on public.public_shares (decision_id);
+
+create table if not exists public.share_opens (
+  id bigint generated always as identity primary key,
+  token text not null,
+  decision_id bigint,
+  ref text,
+  opened_at timestamptz not null default now()
+);
+
+create index if not exists idx_share_opens_token
+  on public.share_opens (token, opened_at desc);
+
+alter table public.public_shares enable row level security;
+alter table public.share_opens enable row level security;
+
+-- Anyone can read a share by token (landing page)
+drop policy if exists "Public read shares" on public.public_shares;
+create policy "Public read shares"
+  on public.public_shares for select
+  using (true);
+
+-- Authenticated users can create shares (app writes via user session / service)
+drop policy if exists "Users insert shares" on public.public_shares;
+create policy "Users insert shares"
+  on public.public_shares for insert
+  with check (true);
+
+drop policy if exists "Users update share counts" on public.public_shares;
+create policy "Users update share counts"
+  on public.public_shares for update
+  using (true);
+
+-- Open events: insertable by anyone (attribution), readable by authenticated
+drop policy if exists "Anyone log share opens" on public.share_opens;
+create policy "Anyone log share opens"
+  on public.share_opens for insert
+  with check (true);
+
+drop policy if exists "Users read share opens" on public.share_opens;
+create policy "Users read share opens"
+  on public.share_opens for select
+  using (auth.role() = 'authenticated');

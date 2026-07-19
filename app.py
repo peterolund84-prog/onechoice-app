@@ -178,6 +178,12 @@ I18N = {
         "ambiguous": "Välj vad det handlar om — så tar jag beslutet.",
         "other": "Annat",
         "not_a_decision": "Jag tar beslut, inte frågor. Vad behöver du bestämma?",
+        "share": "Dela",
+        "share_copied": "Kopierat!",
+        "share_cta": "Låt OneChoice bestämma åt dig",
+        "share_landing_sub": "Ett beslut. Klart.",
+        "share_open_recipe": "Recept & lista",
+        "share_open_workout": "Passet",
     },
     "en": {
         "tagline": "One decision. Done.",
@@ -251,6 +257,12 @@ I18N = {
         "ambiguous": "Pick what this is about — then I’ll decide.",
         "other": "Other",
         "not_a_decision": "I make decisions, not answer questions. What do you need decided?",
+        "share": "Share",
+        "share_copied": "Copied!",
+        "share_cta": "Let OneChoice decide for you",
+        "share_landing_sub": "One decision. Done.",
+        "share_open_recipe": "Recipe & list",
+        "share_open_workout": "The workout",
     },
 }
 
@@ -435,6 +447,15 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
     color: {PRIMARY}; font-weight: 700; font-size: 0.8rem;
     padding: 0.35rem 0.8rem; border-radius: 999px;
 }}
+.oc-share-row {{
+    display: flex; justify-content: flex-end; margin: 0 0 0.15rem;
+    min-height: 2rem;
+}}
+.oc-share-landing .oc-decision h1 {{ font-size: 1.65rem; }}
+.oc-share-cta-note {{
+    text-align: center; color: {MUTED}; font-size: 0.92rem;
+    margin: 0.2rem 0 0.9rem;
+}}
 .oc-refuse {{
     background: #fff; border-radius: 24px; padding: 1.6rem 1.3rem;
     text-align: center; box-shadow: {SHADOW}; color: #3a3a42; font-size: 1.05rem;
@@ -614,6 +635,9 @@ def init_state() -> None:
         "workout_set_i": 0,
         "workout_timer_end": None,  # epoch seconds
         "workout_timer_total": 0,
+        "shared_token": None,
+        "shared_payload": None,
+        "shared_ref": None,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -625,6 +649,10 @@ def init_state() -> None:
         db.clear_auth()
 
     import supabase_client as sb
+
+    # Public share landing is the distribution channel — no login wall
+    if _peek_share_token() and not st.session_state.user_id:
+        st.session_state.guest_mode = True
 
     if sb.is_configured() and not st.session_state.user_id and not st.session_state.guest_mode:
         st.session_state.page = "auth"
@@ -648,6 +676,154 @@ def get_secret(name: str, default: str = "") -> str:
         return str(st.secrets.get(name, default) or default)
     except Exception:
         return default
+
+
+def _peek_share_token() -> str | None:
+    try:
+        raw = st.query_params.get("share")
+        if isinstance(raw, (list, tuple)):
+            raw = raw[0] if raw else None
+        tok = str(raw or "").strip()
+        return tok or None
+    except Exception:
+        return None
+
+
+def _app_base_url() -> str:
+    return (get_secret("APP_URL") or "").rstrip("/")
+
+
+def build_share_bundle(cur: dict[str, Any]) -> dict[str, str]:
+    """Ensure public snapshot exists; return text + url for the native share sheet."""
+    import share_domain as sd
+
+    language = st.session_state.get("language", "sv")
+    cur = cur if isinstance(cur, dict) else {}
+    # Mirror decision_id onto payload for attribution in URL
+    if cur.get("decision_id") is None and st.session_state.get("decision_id") is not None:
+        cur = dict(cur)
+        cur["decision_id"] = st.session_state.get("decision_id")
+    share = db.ensure_public_share(cur, language=language)
+    token = str(share.get("token") or "")
+    did = share.get("decision_id")
+    text = sd.share_message(
+        domain=str(cur.get("domain") or share.get("domain") or ""),
+        suggestion=str(cur.get("suggestion") or share.get("suggestion") or ""),
+        language=language,
+    )
+    base = _app_base_url()
+    if base:
+        url = sd.absolute_share_url(base, token=token, decision_id=did)
+    else:
+        # Relative — JS resolves against window.location.origin
+        url = sd.share_path(token=token, decision_id=did)
+    return {"text": text, "url": url, "token": token}
+
+
+def render_native_share(
+    *,
+    text: str,
+    url: str,
+    label: str,
+    key: str,
+    icon: bool = False,
+) -> None:
+    """Web Share API sheet (Messenger/SMS/WhatsApp). Clipboard fallback + toast."""
+    import json as _json
+
+    import streamlit.components.v1 as components
+
+    payload = _json.dumps(
+        {"title": "OneChoice", "text": text, "url": url},
+        ensure_ascii=False,
+    )
+    copied = t("share_copied")
+    btn_css = (
+        "width:40px;height:40px;border-radius:50%;border:1px solid rgba(62,91,132,0.12);"
+        "background:#fff;color:#3a3a42;font-size:1.05rem;font-weight:700;cursor:pointer;"
+        "box-shadow:0 4px 14px rgba(62,91,132,0.1);display:inline-flex;align-items:center;"
+        "justify-content:center;"
+        if icon
+        else (
+            "width:100%;height:48px;border-radius:14px;border:1px solid rgba(62,91,132,0.12);"
+            "background:#fff;color:#3a3a42;font-size:1rem;font-weight:700;cursor:pointer;"
+            "font-family:Manrope,Helvetica Neue,sans-serif;"
+            "box-shadow:0 4px 14px rgba(62,91,132,0.08);"
+        )
+    )
+    wrap = "display:flex;justify-content:flex-end;" if icon else "width:100%;"
+    height = 48 if icon else 72
+    safe_label = html.escape(label)
+    components.html(
+        f"""
+        <div style="font-family:Manrope,Helvetica Neue,sans-serif;{wrap}">
+          <button id="oc-share-{html.escape(key)}" style="{btn_css}">{safe_label}</button>
+          <div id="oc-share-status-{html.escape(key)}"
+               style="text-align:center;color:#5a8bff;font-size:0.85rem;font-weight:700;
+                      margin-top:0.35rem;min-height:1.1em;"></div>
+        </div>
+        <script>
+        (function() {{
+          const payload = {payload};
+          const btn = document.getElementById("oc-share-{key}");
+          const status = document.getElementById("oc-share-status-{key}");
+          const copiedMsg = {_json.dumps(copied, ensure_ascii=False)};
+          if (!btn) return;
+          btn.addEventListener("click", async () => {{
+            let shareUrl = payload.url || "";
+            if (shareUrl.startsWith("?")) {{
+              shareUrl = window.location.origin + "/" + shareUrl;
+            }} else if (shareUrl.startsWith("/")) {{
+              shareUrl = window.location.origin + shareUrl;
+            }}
+            const full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
+            if (navigator.share) {{
+              try {{
+                await navigator.share({{
+                  title: payload.title || "OneChoice",
+                  text: payload.text || "",
+                  url: shareUrl || undefined
+                }});
+                return;
+              }} catch (e) {{
+                if (e && e.name === "AbortError") return;
+              }}
+            }}
+            try {{
+              await navigator.clipboard.writeText(full);
+              status.textContent = copiedMsg;
+            }} catch (e) {{
+              const ta = document.createElement("textarea");
+              ta.value = full;
+              document.body.appendChild(ta);
+              ta.select();
+              try {{ document.execCommand("copy"); }} catch (_) {{}}
+              document.body.removeChild(ta);
+              status.textContent = copiedMsg;
+            }}
+          }});
+        }})();
+        </script>
+        """,
+        height=height,
+    )
+
+
+def render_share_for_decision(
+    cur: dict[str, Any], *, key: str, icon: bool = False
+) -> None:
+    try:
+        bundle = build_share_bundle(cur if isinstance(cur, dict) else {})
+        label = "↗" if icon else t("share")
+        render_native_share(
+            text=bundle["text"],
+            url=bundle["url"],
+            label=label,
+            key=key,
+            icon=icon,
+        )
+    except Exception as exc:
+        log.exception("share render failed: %s", exc)
 
 
 def require_auth_context() -> None:
@@ -1581,7 +1757,10 @@ def page_result() -> None:
     food_cook = _is_food_cook(cur)
 
     if show_lock_card:
-        # Lock card — only Handla & laga to open/reopen execute (no rerolls)
+        # Lock card — share is the distribution channel (icon top-right)
+        if accepted or reroll_locked:
+            st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
+            render_share_for_decision(cur, key="share_lock_icon", icon=True)
         title = (
             t("locked_title").format(suggestion=suggestion)
             if accepted
@@ -1987,6 +2166,8 @@ def render_workout_done(workout: dict[str, Any], cur: dict[str, Any], language: 
             _record_workout_feel(did, positive=False, cur=cur)
             st.session_state.page = "home"
             st.rerun()
+    # Share — done screen is high-intent distribution moment
+    render_share_for_decision(cur, key="share_workout_done", icon=False)
 
 
 def _record_workout_feel(
@@ -2150,6 +2331,9 @@ def page_execute() -> None:
         list((shop or {}).get("ingredients") or []) if isinstance(shop, dict) else None,
     )
 
+    # Share after cooking plan is visible — recipient gets recipe via link
+    render_share_for_decision(cur, key="share_food_execute", icon=False)
+
     if st.button(
         t("back_to_decision"),
         type="secondary",
@@ -2281,10 +2465,43 @@ def page_profile() -> None:
 
 
 def handle_query_params() -> None:
+    qp = st.query_params
+
+    # Public share landing — distribution channel; works without login
+    share_tok = _qp_one(qp.get("share"))
+    ref = _qp_one(qp.get("ref")) or "share"
+    did_q = _qp_one(qp.get("decision_id"))
+    if share_tok:
+        row = db.get_public_share(share_tok)
+        if row:
+            st.session_state.shared_token = share_tok
+            st.session_state.shared_payload = row.get("payload") or {}
+            st.session_state.shared_ref = ref
+            log_key = f"_share_logged_{share_tok}"
+            if not st.session_state.get(log_key):
+                try:
+                    did_int = None
+                    if did_q is not None:
+                        try:
+                            did_int = int(did_q)
+                        except (TypeError, ValueError):
+                            did_int = row.get("decision_id")
+                    else:
+                        did_int = row.get("decision_id")
+                    db.log_share_open(share_tok, decision_id=did_int, ref=ref)
+                    st.session_state[log_key] = True
+                except Exception as exc:
+                    log.exception("share open log failed: %s", exc)
+            st.session_state.page = "shared"
+            return
+        try:
+            del st.query_params["share"]
+        except Exception:
+            pass
+
     if st.session_state.page == "auth" and not st.session_state.user_id:
         # still allow language toggle on auth
         pass
-    qp = st.query_params
     lang = _qp_one(qp.get("lang"))
     if lang in ("sv", "en"):
         st.session_state.language = lang
@@ -2410,6 +2627,130 @@ def handle_query_params() -> None:
         )
 
 
+def page_shared() -> None:
+    """Public read-only decision landing — what recipients see from every share."""
+    lang_bar()
+    st.markdown(
+        '<div class="oc-logo oc-share-landing"><em>One</em>Choice</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<p class="oc-tagline">{html.escape(t("share_landing_sub"))}</p>',
+        unsafe_allow_html=True,
+    )
+
+    payload = st.session_state.get("shared_payload") or {}
+    token = st.session_state.get("shared_token")
+    if not payload and token:
+        row = db.get_public_share(str(token))
+        payload = (row or {}).get("payload") or {}
+        st.session_state.shared_payload = payload
+
+    if not isinstance(payload, dict) or not payload.get("suggestion"):
+        st.markdown(
+            f'<div class="oc-refuse"><p>{html.escape(t("history_empty"))}</p></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button(t("share_cta"), type="primary", use_container_width=True, key="share_cta_empty"):
+            st.session_state.page = "home"
+            st.session_state.shared_token = None
+            st.session_state.shared_payload = None
+            st.rerun()
+        return
+
+    language = payload.get("language") or st.session_state.get("language", "sv")
+    domain = str(payload.get("domain") or "")
+    suggestion = str(payload.get("suggestion") or "")
+    justification = str(payload.get("justification") or "")
+    ctx = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+
+    st.markdown(
+        f'<div class="oc-decision">'
+        f'<div class="label">{html.escape(domain_label(domain))}</div>'
+        f"<h1>{html.escape(suggestion)}</h1>"
+        f"{('<p>' + html.escape(justification) + '</p>') if justification else ''}"
+        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    if domain == "food":
+        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+        recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
+        if not recipe and shop:
+            recipe = shop.get("recipe") if isinstance(shop.get("recipe"), dict) else None
+        if shop:
+            render_shopping_card(shop, language)
+        if isinstance(recipe, dict):
+            if recipe.get("active_minutes") is not None:
+                st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
+            render_recipe_block(
+                recipe, list(shop.get("ingredients") or []) if shop else None
+            )
+    elif domain == "workout" or payload.get("execution_type") == "workout":
+        workout = ctx.get("workout") if isinstance(ctx.get("workout"), dict) else None
+        if workout:
+            try:
+                import workout_domain as wd
+
+                w = wd.finalize_workout(workout, language=language)
+                blocks = w.get("blocks") or []
+                lines = []
+                for b in blocks:
+                    name = html.escape(str(b.get("name") or ""))
+                    if b.get("type") == "time":
+                        detail = f"{int(b.get('seconds') or 0)}s"
+                    else:
+                        detail = f"{int(b.get('sets') or 1)}×{int(b.get('reps') or 0)}"
+                    lines.append(
+                        f"<li><strong>{name}</strong> · {html.escape(detail)}</li>"
+                    )
+                st.markdown(
+                    f'<div class="oc-recipe"><div class="oc-shop-title">'
+                    f'{html.escape(t("share_open_workout"))}</div>'
+                    f'<ul>{"".join(lines)}</ul></div>',
+                    unsafe_allow_html=True,
+                )
+            except Exception as exc:
+                log.exception("shared workout render failed: %s", exc)
+        detail = ctx.get("execution_detail")
+        if detail:
+            st.markdown(
+                f'<p class="oc-meta">{html.escape(str(detail))}</p>',
+                unsafe_allow_html=True,
+            )
+    else:
+        detail = ctx.get("execution_detail")
+        if detail:
+            st.markdown(
+                f'<p class="oc-meta">{html.escape(str(detail))}</p>',
+                unsafe_allow_html=True,
+            )
+        exec_url = payload.get("execution_url")
+        if exec_url:
+            label = payload.get("execution_label") or t("do_it")
+            st.link_button(
+                str(label), str(exec_url), use_container_width=True, type="secondary"
+            )
+
+    st.markdown(
+        f'<p class="oc-share-cta-note">{html.escape(t("share_landing_sub"))}</p>',
+        unsafe_allow_html=True,
+    )
+    if st.button(
+        t("share_cta"), type="primary", use_container_width=True, key="share_cta_main"
+    ):
+        st.session_state.page = "home"
+        st.session_state.shared_token = None
+        st.session_state.shared_payload = None
+        for k in ("share", "ref", "decision_id"):
+            try:
+                del st.query_params[k]
+            except Exception:
+                pass
+        st.rerun()
+
+
 def main() -> None:
     init_state()
     inject_css()
@@ -2439,6 +2780,7 @@ def main() -> None:
         "ambiguous": page_ambiguous,
         "not_a_decision": page_not_a_decision,
         "clothes_occasion": page_clothes_occasion,
+        "shared": page_shared,
         "home": page_home,
     }
     page_name = st.session_state.get("page") or "home"
