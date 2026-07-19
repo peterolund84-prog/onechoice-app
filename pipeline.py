@@ -359,6 +359,7 @@ def handle_free_text(
     import router as rt
 
     db.init_db(db_path)
+    db.ensure_user(str(user_id), path=db_path)
     q = (question or "").strip()[: rt.MAX_INPUT_CHARS]
     language = language if language in ("sv", "en") else "sv"
 

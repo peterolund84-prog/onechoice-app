@@ -102,8 +102,23 @@ def create_decision(
         "context": context or {},
     }
     res = client.table("decisions").insert(payload).execute()
-    row = (res.data or [payload])[0]
-    return _decision_row(row)
+    rows = res.data or []
+    if rows and rows[0].get("id") is not None:
+        return _decision_row(rows[0])
+    # Some RLS configs return no rows — fetch latest for this user
+    fetched = (
+        client.table("decisions")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("suggestion", suggestion)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    frows = fetched.data or []
+    if not frows or frows[0].get("id") is None:
+        raise RuntimeError("Supabase insert returned no decision id")
+    return _decision_row(frows[0])
 
 
 def set_decision_status(
