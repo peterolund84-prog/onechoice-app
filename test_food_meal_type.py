@@ -101,6 +101,37 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertTrue(cands)
         self.assertTrue(all((c.get("meta") or {}).get("no_cook") or (c.get("meta") or {}).get("active_minutes", 99) <= 5 for c in cands))
 
+    def test_kvallsmal_sandwich_has_recipe_no_shopping(self) -> None:
+        """Ät nu must open a recipe view — ingredients + steps (+ nutrition JSON)."""
+        tmp = tempfile.TemporaryDirectory()
+        path = str(Path(tmp.name) / "t.db")
+        db.init_db(path)
+        user = db.ensure_user(language="sv", path=path)
+        r = pipeline.decide(
+            user["id"],
+            "Vad ska jag äta?",
+            domain_hint="food",
+            language="sv",
+            db_path=path,
+            context_extra={"meal_type": "kvallsmal"},
+        )
+        self.assertTrue(r.ok)
+        self.assertEqual((r.context or {}).get("meal_type"), "kvallsmal")
+        self.assertFalse((r.context or {}).get("shopping"))
+        recipe = (r.context or {}).get("recipe") or {}
+        self.assertTrue(isinstance(recipe, dict) and recipe.get("ingredients"), recipe)
+        self.assertTrue(recipe.get("steps"), recipe)
+        self.assertIn("nutrition", recipe)
+        # Prefer the canned sandwich when ranking allows — if not, still require recipe
+        title = (r.suggestion or "").lower()
+        if "smörgås" in title or "ost" in title:
+            ings = " ".join(str(x).lower() for x in recipe.get("ingredients") or [])
+            self.assertTrue("bröd" in ings or "ost" in ings, recipe)
+            steps = " ".join(str(s).lower() for s in recipe.get("steps") or [])
+            self.assertTrue("bröd" in steps or "ost" in steps, recipe["steps"])
+        self.assertEqual(r.execution_label, "Ät nu")
+        tmp.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

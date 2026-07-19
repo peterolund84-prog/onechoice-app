@@ -548,19 +548,22 @@ def decide(
     elif domain == "food" and meal_type:
         import food_domain as fd
 
+        meta_top = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+        active = meta_top.get("active_minutes")
         execution = fd.apply_meal_execution(
             meal_type,
             suggestion,
             execution,
             language=language,
             location=str(ctx.get("location") or user.get("location") or "Sverige"),
+            ingredients=list(meta_top.get("ingredients") or []),
+            active_minutes=int(active) if active is not None else None,
         )
         # Strip shopping from context for non-dinner meals
         if not fd.show_shopping(meal_type):
             execution["shopping"] = None
             execution["shopping_list"] = None
         # One source of truth for cook time on recipe
-        active = (top.get("meta") or {}).get("active_minutes")
         if active is not None and isinstance(execution.get("recipe"), dict):
             execution["recipe"] = dict(execution["recipe"])
             execution["recipe"]["active_minutes"] = int(active)
@@ -1637,6 +1640,17 @@ def _ensure_food_shopping(
             out["label"] = out.get("label") or (
                 "Ät nu" if language == "sv" else "Eat now"
             )
+            # Still need a recipe view (ingredients / steps / ca-värden)
+            if not isinstance(out.get("recipe"), dict):
+                meta = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+                ings = list(meta.get("ingredients") or [])
+                active = meta.get("active_minutes")
+                out["recipe"] = shopping.build_recipe(
+                    suggestion,
+                    ings or None,
+                    active_minutes=int(active) if active is not None else None,
+                    servings=1 if meal_type in ("frukost", "kvallsmal") else None,
+                )
             return out
     except Exception:
         pass
