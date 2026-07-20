@@ -30,17 +30,44 @@ class AcceptAllDomainsTests(unittest.TestCase):
         self.assertEqual(out["status"], "accepted")
 
     def test_accept_all_five_domains(self) -> None:
+        movie_pack = [
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Lugn bekant sitcom — perfekt måndagssoffa.",
+                "meta": {"title": "seinfeld", "kind": "series"},
+                "wildcard": False,
+            }
+        ] * 5
         for domain in ("food", "clothes", "movie", "workout", "weekend"):
-            extra = {"occasion": "fest", "intent": "wear"} if domain == "clothes" else None
-            r = pipeline.decide(
-                self.user["id"],
-                "",
-                domain_hint=domain,
-                language="sv",
-                db_path=self.db_path,
-                context_extra=extra,
-            )
-            self.assertTrue(r.ok, domain)
+            if domain == "clothes":
+                extra = {"occasion": "fest", "intent": "wear"}
+            elif domain == "movie":
+                extra = {"format": "avsnitt", "mood": "avkopplat"}
+            else:
+                extra = None
+            if domain == "movie":
+                with mock.patch.object(
+                    pipeline, "_generate_candidates", return_value=movie_pack
+                ):
+                    r = pipeline.decide(
+                        self.user["id"],
+                        "",
+                        domain_hint=domain,
+                        language="sv",
+                        db_path=self.db_path,
+                        grok_api_key="xai-test-key-long",
+                        context_extra=extra,
+                    )
+            else:
+                r = pipeline.decide(
+                    self.user["id"],
+                    "",
+                    domain_hint=domain,
+                    language="sv",
+                    db_path=self.db_path,
+                    context_extra=extra,
+                )
+            self.assertTrue(r.ok, (domain, r.refusal_message, r.context))
             self.assertIsNotNone(r.decision_id, domain)
             self.assertTrue(r.execution_label, domain)
             out = pipeline.try_accept_decision(r.decision_id, db_path=self.db_path)

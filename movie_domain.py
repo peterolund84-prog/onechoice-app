@@ -552,87 +552,65 @@ def local_candidates(
     language: str = "sv",
     in_progress_series: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Mood-biased local pack filtered to format kind when possible."""
-    lang = "sv" if language == "sv" else "en"
-    mood_n = normalize_mood(mood)
-    fmt_n = normalize_format(fmt)
-    want_kind = format_kind(fmt_n)
-    pack = list((_MOOD_LOCAL.get(mood_n) or _MOOD_LOCAL["avkopplat"]).get(lang) or [])
+    """
+    Movie local packs are NOT used as offline decisions.
+    Returns [] — film requires LLM (real title + service deep link).
+    In-progress series is evidence for the Avsnitt chip label only.
+    """
+    del fmt, mood, language, in_progress_series
+    return []
 
-    # Grounded next-episode suggestion when format is avsnitt + series in progress
-    if fmt_n == "avsnitt" and in_progress_series:
-        name = str(in_progress_series).strip()
-        if lang == "sv":
-            pack.insert(
-                0,
-                {
-                    "suggestion": name,
-                    "justification": f"Nästa avsnitt av {name} — du är mitt i det.",
-                    "meta": {
-                        "title": name.lower(),
-                        "kind": "series",
-                        "series_title": name,
-                        "in_progress": True,
-                    },
-                },
-            )
-        else:
-            pack.insert(
-                0,
-                {
-                    "suggestion": name,
-                    "justification": f"Next episode of {name} — you're in the middle of it.",
-                    "meta": {
-                        "title": name.lower(),
-                        "kind": "series",
-                        "series_title": name,
-                        "in_progress": True,
-                    },
-                },
-            )
 
-    out: list[dict[str, Any]] = []
-    for c in pack:
-        meta = dict(c.get("meta") or {})
-        kind = str(meta.get("kind") or "")
-        if kind and kind != want_kind:
-            # For film format, skip series-only comfort packs unless mood is learn/kids vague
-            if want_kind == "film" and kind == "series":
-                continue
-            if want_kind == "series" and kind == "film":
-                continue
-        meta.setdefault("kind", want_kind)
-        meta["format"] = fmt_n
-        meta["mood"] = mood_n
-        out.append({**c, "meta": meta})
+# Category descriptions that must never surface as "the decision"
+_FAKE_TITLE_MARKERS = (
+    "en film under",
+    "a film under",
+    "ett avsnitt av en",
+    "one episode of a",
+    "en familjevänlig",
+    "a family-friendly",
+    "ett kort dokumentär",
+    "a short documentar",
+    "en naturdokumentär",
+    "a nature documentar",
+    "ett kort familje",
+    "a short family",
+)
 
-    if not out:
-        # Guarantee at least one vague candidate for the format
-        if lang == "sv":
-            out = [
-                {
-                    "suggestion": (
-                        "Ett avsnitt av en varm komediserie"
-                        if want_kind == "series"
-                        else "En film under två timmar"
-                    ),
-                    "justification": mood_guidance(mood_n, "sv").split("Ton: ")[-1][:80],
-                    "meta": {"kind": want_kind, "format": fmt_n, "mood": mood_n},
-                }
-            ]
-        else:
-            out = [
-                {
-                    "suggestion": (
-                        "One episode of a warm comedy series"
-                        if want_kind == "series"
-                        else "A film under two hours"
-                    ),
-                    "justification": "Right mood for tonight.",
-                    "meta": {"kind": want_kind, "format": fmt_n, "mood": mood_n},
-                }
-            ]
-    return out[:5]
+
+def is_named_title(suggestion: str, meta: dict[str, Any] | None = None) -> bool:
+    """True when suggestion is a real named title, not a category card."""
+    s = str(suggestion or "").strip()
+    if len(s) < 2:
+        return False
+    low = s.lower()
+    if any(m in low for m in _FAKE_TITLE_MARKERS):
+        return False
+    meta = meta if isinstance(meta, dict) else {}
+    title = str(meta.get("title") or "").strip()
+    if title and any(m in title.lower() for m in _FAKE_TITLE_MARKERS):
+        return False
+    # Vague generics without a concrete proper name
+    vague_starts = (
+        "ett avsnitt",
+        "one episode",
+        "en film",
+        "a film",
+        "a movie",
+        "något",
+        "something",
+        "en serie",
+        "a series",
+    )
+    if any(low.startswith(v) for v in vague_starts) and not title:
+        return False
+    return True
+
+
+def offline_message(language: str = "sv") -> str:
+    if language == "sv":
+        return "Kan inte välja film just nu — försök igen om en stund"
+    return "Can't pick a movie right now — try again in a moment"
 
 
 def apply_context(

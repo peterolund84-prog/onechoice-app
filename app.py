@@ -128,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "movie-format-mood-chips-v26-20260720"
+BUILD_ID = "movie-validate-output-gate-v27-20260720"
 
 I18N = {
     "sv": {
@@ -277,6 +277,8 @@ I18N = {
         "fridge_cook": "Laga nu",
         "fridge_shop_alt": "Föreslå med inköpslista",
         "fridge_remove": "Ta bort",
+        "movie_offline": "Kan inte välja film just nu — försök igen om en stund",
+        "movie_retry": "Försök igen",
     },
     "en": {
         "tagline": "One decision. Done.",
@@ -424,6 +426,8 @@ I18N = {
         "fridge_cook": "Cook now",
         "fridge_shop_alt": "Suggest with shopping list",
         "fridge_remove": "Remove",
+        "movie_offline": "Can't pick a movie right now — try again in a moment",
+        "movie_retry": "Try again",
     },
 }
 
@@ -3971,6 +3975,40 @@ def page_result() -> None:
         st.session_state.decision_id = cur.get("decision_id")
 
     if cur.get("refused"):
+        domain_r = cur.get("domain") or ""
+        ctx_r = _as_dict(cur.get("context"))
+        movie_offline = domain_r == "movie" and bool(ctx_r.get("llm_offline"))
+        if movie_offline:
+            # Keep format/mood pills — retry regenerates with same constraints
+            render_movie_format_mood_chips(cur)
+            msg = cur.get("refusal_message") or t("movie_offline")
+            st.markdown(
+                f'<div class="oc-refuse">{html.escape(msg)}</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                t("movie_retry"),
+                type="primary",
+                use_container_width=True,
+                key="movie_offline_retry",
+            ):
+                st.session_state.accepted = False
+                pending = (
+                    st.session_state.get("last_question")
+                    or pipeline._default_question("movie", language)
+                )
+                st.session_state.last_domain_hint = "movie"
+                run_decision(
+                    question=pending,
+                    domain_hint="movie",
+                    reroll=False,
+                    via_router=False,
+                )
+            if st.button(t("home"), use_container_width=True, key="movie_offline_home"):
+                st.session_state.page = "home"
+                st.rerun()
+            nav()
+            return
         msg = cur.get("refusal_message") or t("refuse")
         st.markdown(f'<div class="oc-refuse">{html.escape(msg)}</div>', unsafe_allow_html=True)
         if st.button(t("home"), use_container_width=True):

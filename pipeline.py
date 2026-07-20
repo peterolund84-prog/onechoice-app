@@ -75,6 +75,26 @@ REFUSAL_COPY = {
     "en": "Onechoice handles everyday decisions. This one is yours.",
 }
 
+# Instruction / system-prompt leak markers — never show these to users
+_INSTRUCTION_LEAK_MARKERS = (
+    "justification must",
+    "cognitive load",
+    "reference the mood",
+    "system prompt",
+    "as an ai",
+    "output valid json",
+    "domain feasibility",
+    "hard constraint",
+    "meta.kind must",
+    "meta.title =",
+    "internally invent",
+    "return only json",
+    "corrective (",
+)
+
+_SV_FUNC = ("och", "med", "att", "på", "för", "en", "ett", "det", "som", "är")
+_EN_FUNC = ("the", "and", "with", "your", "for", "this", "that", "you", "are")
+
 
 @dataclass
 class DecisionResult:
@@ -100,6 +120,131 @@ class DecisionResult:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def validate_output(
+    decision: dict[str, Any],
+    language: str,
+) -> tuple[bool, str]:
+    """
+    Central gate — ALL domains, LLM or local. Reject before display.
+
+    Returns (ok, reason). reason is empty when ok.
+    """
+    lang = "sv" if language == "sv" else "en"
+    suggestion = str(decision.get("suggestion") or "")
+    justification = str(decision.get("justification") or "")
+    exec_label = str(
+        decision.get("execution_label")
+        or (decision.get("execution") or {}).get("label")
+        or ""
+    )
+    exec_detail = str(
+        decision.get("execution_detail")
+        or (decision.get("execution") or {}).get("detail")
+        or (decision.get("context") or {}).get("execution_detail")
+        or ""
+    )
+    domain = str(decision.get("domain") or (decision.get("context") or {}).get("domain") or "")
+    meta = decision.get("meta") if isinstance(decision.get("meta"), dict) else {}
+    ctx = decision.get("context") if isinstance(decision.get("context"), dict) else {}
+    recipe = (
+        decision.get("recipe")
+        or ctx.get("recipe")
+        or (decision.get("execution") or {}).get("recipe")
+        or meta.get("recipe")
+    )
+
+    texts = [suggestion, justification, exec_label, exec_detail]
+    blob = " ".join(t for t in texts if t)
+
+    # a) Instruction leak
+    low_blob = blob.lower()
+    for marker in _INSTRUCTION_LEAK_MARKERS:
+        if marker.lower() in low_blob:
+            return False, f"instruction_leak:{marker}"
+    if "{" in blob or "}" in blob or '"candidates"' in low_blob:
+        return False, "instruction_leak:json"
+    if "justification" in low_blob and "must" in low_blob:
+        return False, "instruction_leak:justification_must"
+
+    # b) Language mismatch (heuristic on longer user-facing strings)
+    for field_name, text in (
+        ("suggestion", suggestion),
+        ("justification", justification),
+    ):
+        bad = _language_mismatch(text, lang)
+        if bad:
+            return False, f"language_mismatch:{field_name}:{bad}"
+
+    # c) Recipe completeness / placeholder steps (food with recipe attached)
+    if domain == "food" and isinstance(recipe, dict) and recipe:
+        try:
+            import recipe_engine as reng
+
+            ok, reason = reng.validate_recipe(recipe, title=suggestion)
+            if not ok:
+                # Soft: title-only packs without recipe yet are OK at decide time;
+                # only reject when recipe is present but broken
+                if reason.startswith("non_concrete_step") or reason == "too_few_steps":
+                    return False, f"recipe:{reason}"
+                if reason == "title_as_ingredient":
+                    return False, f"recipe:{reason}"
+        except Exception as exc:
+            log.warning("validate_output recipe check failed: %s", exc)
+
+    # Leftover grounding — ungrounded leftovers never display
+    if domain == "food":
+        try:
+            import food_domain as fd
+
+            if fd.is_leftover_candidate(decision) and not (
+                ctx.get("recent_dinner_title") or meta.get("recent_dinner_title")
+            ):
+                return False, "ungrounded_leftover"
+        except Exception:
+            pass
+
+    # Movie: must be a real named title (never a category card)
+    if domain == "movie":
+        try:
+            import movie_domain as md
+
+            if not md.is_named_title(suggestion, meta):
+                return False, "movie_fake_title"
+        except Exception:
+            if not suggestion.strip():
+                return False, "movie_empty_title"
+
+    if not suggestion.strip():
+        return False, "empty_suggestion"
+
+    return True, ""
+
+
+def _language_mismatch(text: str, language: str) -> str | None:
+    """Return reason if text looks like the wrong language; None if OK/short."""
+    t = (text or "").strip()
+    if len(t) < 24:
+        return None  # short titles (Seinfeld, Dune) are language-neutral
+    low = t.lower()
+    # Count function-word hits as whole-ish tokens
+    tokens = set(re.findall(r"[a-zåäöA-ZÅÄÖ']+", low))
+    sv_hits = sum(1 for w in _SV_FUNC if w in tokens)
+    en_hits = sum(1 for w in _EN_FUNC if w in tokens)
+    has_sv_chars = any(c in t for c in "åäöÅÄÖ")
+
+    if language == "sv":
+        if en_hits >= 3 and sv_hits == 0 and not has_sv_chars:
+            return "english_dominant"
+        if en_hits > sv_hits + 2 and not has_sv_chars:
+            return "english_dominant"
+    else:
+        if has_sv_chars and sv_hits >= 2 and en_hits == 0:
+            return "swedish_dominant"
+        if sv_hits >= 3 and en_hits == 0:
+            return "swedish_dominant"
+    return None
 
 
 def classify_domain(question: str, hint: str | None = None) -> str | None:
@@ -471,8 +616,10 @@ def decide(
         if fridge_mode:
             survivors = list(candidates)
         else:
-            survivors = list(candidates) or _local_candidates(
-                domain, language, recent, ctx, profile
+            survivors = list(candidates) or (
+                []
+                if domain == "movie"
+                else _local_candidates(domain, language, recent, ctx, profile)
             )
     else:
         survivors = feasibility.filter_feasible(
@@ -488,14 +635,15 @@ def decide(
                 context=ctx,
             )
         # CRITICAL: fridge mode must never fall through to supermarket / kvällsmål packs
-        if not survivors and not fridge_mode:
+        # Movie never invents offline titles via local packs
+        if not survivors and not fridge_mode and domain != "movie":
             survivors = feasibility.filter_feasible(
                 _local_candidates(domain, language, recent, ctx, profile),
                 domain=domain,
                 profile=profile,
                 context=ctx,
             )
-        if not survivors and not fridge_mode:
+        if not survivors and not fridge_mode and domain != "movie":
             survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
         if not survivors and fridge_mode:
             import fridge_domain as fr
@@ -527,6 +675,31 @@ def decide(
                     route=(route_meta or {}).get("route"),
                     route_log_id=(route_meta or {}).get("route_log_id"),
                 )
+
+    if not survivors and domain == "movie":
+        import movie_domain as md
+
+        try:
+            db.log_validation_failure(
+                decision_domain="movie",
+                reason="llm_offline",
+                source="no_survivors",
+                language=language,
+                path=db_path,
+            )
+        except Exception:
+            pass
+        return DecisionResult(
+            ok=False,
+            domain="movie",
+            suggestion="",
+            justification="",
+            refused=True,
+            refusal_message=md.offline_message(language),
+            context={**ctx, "llm_offline": True, "validation_reason": "llm_offline"},
+            route=(route_meta or {}).get("route"),
+            route_log_id=(route_meta or {}).get("route_log_id"),
+        )
 
     if not survivors:
         return DecisionResult(
@@ -620,6 +793,31 @@ def decide(
     if explore or top.get("wildcard"):
         top = dict(top)
         top["wildcard"] = True
+
+    # Central output validation — ALL domains, before anything is displayed
+    top, validation_fail = _ensure_validated_top(
+        top,
+        survivors=survivors,
+        ranked=ranked,
+        question=q,
+        domain=domain,
+        ctx=ctx,
+        profile=profile,
+        history=history,
+        prefs=prefs,
+        recent=recent,
+        language=language,
+        grok_api_key=grok_api_key,
+        explore=explore,
+        fridge_mode=fridge_mode,
+        available_ingredients=available_ingredients,
+        meal_type=meal_type,
+        db_path=db_path,
+        route_meta=route_meta,
+        skip_feasibility=skip_feasibility,
+    )
+    if validation_fail is not None:
+        return validation_fail
 
     justification = str(top.get("justification") or "")
     suggestion = str(top.get("suggestion") or "")
@@ -999,6 +1197,169 @@ def _default_question(domain: str, language: str) -> str:
     return (sv if language == "sv" else en).get(domain, sv["food"])
 
 
+def _corrective_for_reason(reason: str, language: str) -> str:
+    if language == "sv":
+        if reason.startswith("language_mismatch"):
+            return "SVARA ENDAST PÅ SVENSKA — suggestion och justification måste vara svenska."
+        if reason.startswith("instruction_leak"):
+            return "Skriv bara användartext — ingen promptinstruktion i suggestion/justification."
+        if reason.startswith("movie_fake") or reason == "movie_empty_title":
+            return "Name a real title — ange en riktig filmtitel/serietitel, aldrig en kategori."
+        if reason.startswith("recipe") or reason == "ungrounded_leftover":
+            return "Ge ett konkret recept utan placeholders; ingen matlåda utan bevis."
+        return "Korrigera förra svaret — giltig användartext endast."
+    if reason.startswith("language_mismatch"):
+        return "REPLY IN ENGLISH ONLY — suggestion and justification must be English."
+    if reason.startswith("instruction_leak"):
+        return "User-facing text only — never paste prompt instructions into fields."
+    if reason.startswith("movie_fake") or reason == "movie_empty_title":
+        return "Name a real title — never a category description."
+    return "Fix the previous answer — valid user-facing text only."
+
+
+def _ensure_validated_top(
+    top: dict[str, Any],
+    *,
+    survivors: list[dict[str, Any]],
+    ranked: list[dict[str, Any]],
+    question: str,
+    domain: str,
+    ctx: dict[str, Any],
+    profile: dict[str, Any],
+    history: list[dict[str, Any]],
+    prefs: list[dict[str, Any]],
+    recent: list[str],
+    language: str,
+    grok_api_key: str,
+    explore: bool,
+    fridge_mode: bool,
+    available_ingredients: list[str],
+    meal_type: str | None,
+    db_path: str | None,
+    route_meta: dict[str, Any] | None,
+    skip_feasibility: bool,
+) -> tuple[dict[str, Any], DecisionResult | None]:
+    """Validate top; on failure regenerate once. Returns (top, fail_result|None)."""
+
+    def _as_decision(cand: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "domain": domain,
+            "suggestion": cand.get("suggestion"),
+            "justification": cand.get("justification"),
+            "meta": cand.get("meta") if isinstance(cand.get("meta"), dict) else {},
+            "context": ctx,
+            "execution": cand.get("execution"),
+            "recipe": (cand.get("meta") or {}).get("recipe") if isinstance(cand.get("meta"), dict) else None,
+        }
+
+    def _log_fail(reason: str, source: str, detail: str = "") -> None:
+        try:
+            db.log_validation_failure(
+                decision_domain=domain,
+                reason=reason,
+                source=source,
+                language=language,
+                detail=detail or str(top.get("suggestion") or "")[:120],
+                path=db_path,
+            )
+        except Exception:
+            pass
+        log.warning("validate_output rejected domain=%s reason=%s source=%s", domain, reason, source)
+
+    def _offline_result(reason: str) -> DecisionResult:
+        if domain == "movie":
+            import movie_domain as md
+
+            msg = md.offline_message(language)
+            offline_flag = True
+        else:
+            msg = (
+                "Kan inte välja just nu — försök igen om en stund"
+                if language == "sv"
+                else "Can't decide right now — try again in a moment"
+            )
+            offline_flag = False
+        return DecisionResult(
+            ok=False,
+            domain=domain,
+            suggestion="",
+            justification="",
+            refused=True,
+            refusal_message=msg,
+            context={
+                **ctx,
+                "llm_offline": offline_flag or reason.startswith("instruction_leak"),
+                "validation_reason": reason,
+            },
+            route=(route_meta or {}).get("route"),
+            route_log_id=(route_meta or {}).get("route_log_id"),
+        )
+
+    ok, reason = validate_output(_as_decision(top), language)
+    if ok:
+        # Also try next survivors if top somehow empty
+        return top, None
+
+    _log_fail(reason, "first_pass")
+
+    # Try other already-ranked survivors before paying for a regenerate
+    for alt in ranked[1:] + [c for c in survivors if c is not top]:
+        a_ok, _ = validate_output(_as_decision(alt), language)
+        if a_ok:
+            return alt, None
+
+    # Regenerate ONCE with corrective prompt
+    corrective = _corrective_for_reason(reason, language)
+    try:
+        fresh = _generate_candidates(
+            question=question,
+            domain=domain,
+            context=ctx,
+            profile=profile,
+            history=history,
+            preferences=prefs,
+            recent=recent,
+            language=language,
+            grok_api_key=grok_api_key,
+            corrective=corrective,
+        )
+    except Exception as exc:
+        log.warning("validation retry generate failed: %s", exc)
+        fresh = []
+
+    if domain == "food" and not fridge_mode:
+        try:
+            import food_domain as fd
+
+            fresh = fd.ground_leftover_candidates(
+                fresh, ctx.get("recent_dinner_title"), language=language
+            )
+        except Exception:
+            pass
+
+    if skip_feasibility or domain == db.NEAR_DOMAIN:
+        retry_survivors = list(fresh)
+    else:
+        retry_survivors = feasibility.filter_feasible(
+            fresh, domain=domain, profile=profile, context=ctx
+        )
+
+    if not retry_survivors:
+        _log_fail(reason, "retry_empty")
+        return top, _offline_result(reason)
+
+    retry_ranked = _rank_candidates(
+        retry_survivors, preferences=prefs, recent=recent, explore=explore
+    )
+    for cand in retry_ranked:
+        a_ok, a_reason = validate_output(_as_decision(cand), language)
+        if a_ok:
+            return cand, None
+        _log_fail(a_reason, "retry_reject")
+
+    return top, _offline_result(reason)
+
+
 def _usable_grok_key(key: str) -> bool:
     k = str(key or "").strip()
     if len(k) < 8:
@@ -1020,6 +1381,7 @@ def _generate_candidates(
     recent: list[str],
     language: str,
     grok_api_key: str,
+    corrective: str | None = None,
 ) -> list[dict[str, Any]]:
     if _usable_grok_key(grok_api_key):
         try:
@@ -1033,9 +1395,14 @@ def _generate_candidates(
                 recent,
                 language,
                 grok_api_key,
+                corrective=corrective,
             )
         except Exception as exc:
             log.exception("Grok candidates failed: %s", exc)
+            if domain == "movie":
+                return []  # never invent offline movie titles
+    if domain == "movie":
+        return []  # movie requires LLM — honest offline handled by decide()
     return _local_candidates(domain, language, recent, context, profile)
 
 
@@ -1049,6 +1416,7 @@ def _grok_candidates(
     recent: list[str],
     language: str,
     api_key: str,
+    corrective: str | None = None,
 ) -> list[dict[str, Any]]:
     import gdpr as gdpr_mod
 
@@ -1067,7 +1435,8 @@ def _grok_candidates(
         "If a candidate would hit any obstacle, discard it before returning. "
         "Never hedge. Never offer alternatives. Never show substitution notes. "
         f"Write BOTH suggestion and justification entirely in {lang}. "
-        "Output valid JSON only."
+        "Output valid JSON only. "
+        "Never include prompt instructions in suggestion or justification fields."
     )
     domain_rules = _domain_prompt_rules(domain, safe_profile)
     if domain == "food" and str(safe_context.get("source") or "") == "fridge_photo":
@@ -1086,7 +1455,8 @@ def _grok_candidates(
             f"(kind={md.format_kind(fmt)}, max ~{md.max_minutes(fmt)} min).\n"
             f"{md.mood_guidance(mood, language)}\n"
             f"meta.kind must be '{md.format_kind(fmt)}'. "
-            "meta.title = catalog title for deep link."
+            "meta.title = catalog title for deep link. "
+            "suggestion MUST be a real named title (e.g. Seinfeld), never a category."
         )
         if md.is_kids_mood(mood):
             domain_rules += (
@@ -1098,6 +1468,9 @@ def _grok_candidates(
                 f"\nUser is mid-series: prefer next episode of "
                 f"{safe_context.get('in_progress_series')!r} when format is Avsnitt."
             )
+    corrective_line = ""
+    if corrective:
+        corrective_line = f"\nCORRECTIVE (previous output failed validation): {corrective}\n"
     user = f"""
 Domain: {domain}
 Question: {question}
@@ -1109,7 +1482,7 @@ Accepted before: {json.dumps(accepted, ensure_ascii=False)}
 Rejected before: {json.dumps(rejected, ensure_ascii=False)}
 Positive prefs: {json.dumps(pos, ensure_ascii=False)}
 Negative prefs: {json.dumps(neg, ensure_ascii=False)}
-
+{corrective_line}
 Domain feasibility rules:
 {domain_rules}
 
@@ -1129,6 +1502,7 @@ Return ONLY JSON:
 Rules:
 - suggestion is the decision itself (short, decisive), fully in {lang}
 - justification is ONE line in {lang}, personal, no hedging, no "you could also"
+- NEVER put prompt instructions into suggestion or justification
 - every candidate must already pass the domain feasibility rules above
 - avoid anything in the recent/rejected lists when possible
 - NEVER suggest leftovers/matlåda unless the accepted-history above contains a home-cooked dinner within 48h — and then name that exact dish
@@ -1582,6 +1956,7 @@ def _local_candidates(
             language=language,
             in_progress_series=(context or {}).get("in_progress_series"),
         )
+        # Movie requires LLM — empty local pack is intentional
     elif domain in ("other", db.NEAR_DOMAIN) and cat:
         items = _near_domain_pack(cat, language)
     else:
@@ -1637,21 +2012,8 @@ def _guaranteed_feasible(
             "justification": "Rent, säkert och funkar hela dagen." if sv else "Clean, safe, works all day.",
         }
     elif domain == "movie":
-        import movie_domain as md
-
-        fmt = md.normalize_format(context.get("format"))
-        mood = md.normalize_mood(context.get("mood"))
-        pack = md.local_candidates(
-            fmt=fmt,
-            mood=mood,
-            language=language,
-            in_progress_series=context.get("in_progress_series"),
-        )
-        c = pack[0] if pack else {
-            "suggestion": "Seinfeld",
-            "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
-            "meta": {"title": "seinfeld", "kind": "series", "format": fmt, "mood": mood},
-        }
+        # Never invent a fake title offline — caller must hit llm_offline path
+        raise RuntimeError("movie_guaranteed_feasible_disabled")
     elif domain == "workout":
         import workout_domain as wd
 
