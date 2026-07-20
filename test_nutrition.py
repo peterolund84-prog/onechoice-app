@@ -88,16 +88,16 @@ class NutritionEstimateTests(unittest.TestCase):
         self.assertIsInstance(healed["protein_g_per_portion"], int)
         self.assertIsInstance(healed["portioner"], int)
 
-    def test_profile_nutrition_off_by_default(self) -> None:
+    def test_profile_nutrition_on_by_default(self) -> None:
         profile = feasibility.parse_profile({"id": "u", "profile_json": {}}, {})
-        self.assertFalse(profile["food"]["show_nutrition"])
+        self.assertTrue(profile["food"]["show_nutrition"])
 
-    def test_profile_nutrition_opt_in_persists(self) -> None:
+    def test_profile_nutrition_opt_out_persists(self) -> None:
         profile = feasibility.parse_profile(
-            {"id": "u", "profile_json": {"food": {"show_nutrition": True}}},
+            {"id": "u", "profile_json": {"food": {"show_nutrition": False}}},
             {},
         )
-        self.assertTrue(profile["food"]["show_nutrition"])
+        self.assertFalse(profile["food"]["show_nutrition"])
 
 
 class NutritionUiPlacementTests(unittest.TestCase):
@@ -224,7 +224,7 @@ class NutritionExecuteFlowTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        self._enable_profile_nutrition(at)
+        # Nutrition is ON by default — profile opt-out remains available
         at.session_state["food_meal_type"] = "kvallsmal"
         at.query_params["domain"] = "food"
         at.run()
@@ -240,6 +240,7 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         self.assertIn("Ca ", body)
         self.assertIn("kcal", body.lower())
         self.assertIn("protein", body.lower())
+        self.assertIn("oc-nutrition", body)
         self.assertNotIn("oc-nut-banner", body)
         self.assertNotIn("None", body)
         self.assertRegex(body, r"Ca\s+\d+\s*kcal")
@@ -250,7 +251,6 @@ class NutritionExecuteFlowTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        self._enable_profile_nutrition(at)
         at.session_state["food_meal_type"] = "kvallsmal"
         at.query_params["domain"] = "food"
         at.run()
@@ -278,6 +278,17 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         self.assertIn("kcal", body.lower())
         self.assertNotIn("Näringsvärden saknas", body)
         self.assertNotIn("None", body)
+
+    def test_all_food_recipe_paths_use_render_food_recipe(self) -> None:
+        """Execute leftover, main recipe, and shared landing share one kcal path."""
+        import inspect
+        import app as app_mod
+
+        src = inspect.getsource(app_mod.page_execute)
+        self.assertIn("render_food_recipe", src)
+        self.assertNotIn("show_nutrition=False", src)
+        share_src = inspect.getsource(app_mod.page_shared)
+        self.assertIn("render_food_recipe", share_src)
 
 
 if __name__ == "__main__":
