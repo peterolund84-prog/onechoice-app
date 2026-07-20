@@ -150,13 +150,12 @@ class NutritionUiPlacementTests(unittest.TestCase):
         self.assertIn("Ca ", blob)
         self.assertIn("kcal", blob)
         self.assertIn("protein", blob)
-        # Under ingredients, before steps
-        ings_i = blob.find("Ingredienser") if "Ingredienser" in blob else blob.lower().find("ingredients")
+        # Directly under RECEPT title, before ingredients
+        title_i = blob.lower().find("recept")
         nut_i = blob.find("Ca ")
-        steps_i = blob.find("Gör så här") if "Gör så här" in blob else blob.lower().find("steps")
-        self.assertGreater(nut_i, ings_i)
-        if steps_i > 0:
-            self.assertLess(nut_i, steps_i)
+        ings_i = blob.find("Ingredienser") if "Ingredienser" in blob else blob.lower().find("ingredients")
+        self.assertGreater(nut_i, title_i)
+        self.assertLess(nut_i, ings_i)
 
     def test_recipe_block_legacy_empty_shows_missing_not_blank(self) -> None:
         import app as app_mod
@@ -289,6 +288,20 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         self.assertNotIn("show_nutrition=False", src)
         share_src = inspect.getsource(app_mod.page_shared)
         self.assertIn("render_food_recipe", share_src)
+        food_src = inspect.getsource(app_mod.render_food_recipe)
+        self.assertIn("show_nutrition = True", food_src)
+
+    def test_css_uses_st_key_for_lang_and_nav(self) -> None:
+        import inspect
+        import app as app_mod
+
+        css_src = inspect.getsource(app_mod.inject_css)
+        self.assertIn("st-key-oc_lang_bar", css_src)
+        self.assertIn("st-key-oc_nav_bar", css_src)
+        lang_src = inspect.getsource(app_mod.lang_bar)
+        self.assertIn('key="oc_lang_bar"', lang_src)
+        nav_src = inspect.getsource(app_mod.nav)
+        self.assertIn('key="oc_nav_bar"', nav_src)
 
 
 if __name__ == "__main__":

@@ -128,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "food-kcal-chrome-v27-20260720"
+BUILD_ID = "food-ui-hard-fix-v28-20260720"
 
 I18N = {
     "sv": {
@@ -646,39 +646,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     border-color: var(--oc-ink) !important;
     box-shadow: none !important;
 }}
-div[data-testid="stButtonGroup"] button,
-[data-testid="stButtonGroup"] button {{
-    background: transparent !important;
-    color: var(--oc-ink) !important;
-    border: 1px solid var(--oc-border) !important;
-    border-radius: 999px !important;
-    box-shadow: none !important;
-    font-weight: 500 !important;
-    font-size: 0.88rem !important;
-    min-height: 2.5rem !important;
-    text-decoration: none !important;
-    font-family: "Inter", sans-serif !important;
-}}
-div[data-testid="stButtonGroup"] button[aria-checked="true"],
-[data-testid="stButtonGroup"] button[aria-pressed="true"] {{
-    background: transparent !important;
-    color: var(--oc-ink) !important;
-    font-weight: 600 !important;
-    border-color: var(--oc-ink) !important;
-}}
-/* Lang + bottom nav are NOT domain chips — strip oval chrome (st.pills = ButtonGroup) */
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) ~ div[data-testid="element-container"] [data-testid="stPills"] [data-testid="stButtonGroup"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) ~ div[data-testid="element-container"] [data-testid="stPills"] [data-testid="stButtonGroup"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-lang-pills) ~ div [data-testid="stButtonGroup"] button {{
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    min-height: 1.6rem !important;
-}}
+/* Domain/meal chips keep oval chrome via scoped rules below — NOT global ButtonGroup */
 /* Sticky top chrome — brand stays visible while scrolling (premium app pattern) */
 .oc-topbar {{
     position: sticky !important;
@@ -690,6 +658,99 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-lang-pills) ~ div [data-
 }}
 .oc-topbar .oc-logo {{
     margin: 0.15rem 0 0 !important;
+}}
+/* Language — keyed container, fixed top-right SV · EN (no oval pills) */
+.st-key-oc_lang_bar {{
+    position: fixed !important;
+    top: max(0.45rem, env(safe-area-inset-top)) !important;
+    right: 0.65rem !important;
+    left: auto !important;
+    z-index: 1200 !important;
+    width: auto !important;
+    max-width: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}}
+.st-key-oc_lang_bar [data-testid="stButtonGroup"],
+.st-key-oc_lang_pills [data-testid="stButtonGroup"],
+.st-key-oc_lang_bar [data-testid="stPills"],
+.st-key-oc_lang_pills {{
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 0.1rem !important;
+    background: transparent !important;
+}}
+.st-key-oc_lang_bar button,
+.st-key-oc_lang_pills button,
+.st-key-oc_lang_bar [data-testid="stButtonGroup"] button,
+.st-key-oc_lang_pills [data-testid="stButtonGroup"] button {{
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 0.82rem !important;
+    font-weight: 500 !important;
+    min-height: 1.5rem !important;
+    height: auto !important;
+    padding: 0.2rem 0.35rem !important;
+    width: auto !important;
+}}
+.st-key-oc_lang_bar button[aria-checked="true"],
+.st-key-oc_lang_pills button[aria-checked="true"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
+/* Bottom nav — keyed fixed bar, text only, no oval chrome */
+.st-key-oc_nav_bar,
+.st-key-oc_nav_pills {{
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 1200 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0.35rem 0.25rem max(0.45rem, env(safe-area-inset-bottom)) !important;
+    background: #fff !important;
+    border-top: 1px solid var(--oc-border) !important;
+    box-sizing: border-box !important;
+}}
+.st-key-oc_nav_bar [data-testid="stPills"],
+.st-key-oc_nav_pills [data-testid="stPills"],
+.st-key-oc_nav_bar [data-testid="stButtonGroup"],
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] {{
+    display: flex !important;
+    justify-content: space-around !important;
+    width: 100% !important;
+    gap: 0 !important;
+    background: transparent !important;
+}}
+.st-key-oc_nav_bar button,
+.st-key-oc_nav_pills button,
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button {{
+    flex: 1 1 0 !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    min-height: 2.6rem !important;
+    padding: 0.35rem 0.15rem !important;
+}}
+.st-key-oc_nav_bar button[aria-checked="true"],
+.st-key-oc_nav_pills button[aria-checked="true"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+    border: none !important;
+    background: transparent !important;
 }}
 .oc-decision {{
     background: #fff; border-radius: 24px;
@@ -946,8 +1007,10 @@ div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="eleme
 }}
 .oc-chip-row + div[data-testid="stPills"] button,
 div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
 .oc-sec-label + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button {{
     background: transparent !important;
     color: var(--oc-ink) !important;
     border: 1px solid var(--oc-border) !important;
@@ -1063,96 +1126,7 @@ div[data-testid="stHorizontalBlock"] div.stButton {{
     color: var(--oc-ink) !important;
     background: transparent !important;
 }}
-/* Bottom nav — st.pills fixed bar (session-safe, always visible) */
-.oc-nav-pills + div[data-testid="stPills"],
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"],
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] {{
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    z-index: 1100 !important;
-    display: flex !important;
-    justify-content: space-around !important;
-    flex-wrap: nowrap !important;
-    gap: 0 !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 0.45rem 0.35rem max(0.45rem, env(safe-area-inset-bottom)) !important;
-    background: #fff !important;
-    border-top: 1px solid var(--oc-border) !important;
-    box-sizing: border-box !important;
-}}
-.oc-nav-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button {{
-    flex: 1 1 0 !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    font-size: 0.72rem !important;
-    font-weight: 500 !important;
-    min-height: 2.6rem !important;
-    padding: 0.35rem 0.2rem !important;
-}}
-.oc-nav-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"],
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button[aria-checked="true"] {{
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-    border: none !important;
-    background: transparent !important;
-}}
-.oc-lang-pills + div[data-testid="stPills"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] {{
-    position: fixed !important;
-    top: max(0.55rem, env(safe-area-inset-top)) !important;
-    right: 0.75rem !important;
-    left: auto !important;
-    z-index: 1200 !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
-    gap: 0.15rem !important;
-    margin: 0 !important;
-    width: auto !important;
-    max-width: none !important;
-    background: transparent !important;
-}}
-div[data-testid="element-container"]:has(.oc-lang-pills) {{
-    height: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: visible !important;
-}}
-.oc-lang-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button {{
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    font-size: 0.78rem !important;
-    font-weight: 500 !important;
-    min-height: 1.6rem !important;
-    height: auto !important;
-    padding: 0.15rem 0.4rem !important;
-    width: auto !important;
-}}
-.oc-lang-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"] {{
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-}}
+/* Legacy oc-nav-pills / oc-lang-pills marker CSS removed — use .st-key-oc_nav_bar / .st-key-oc_lang_bar above */
 /* Bottom nav — fixed bar, text only, accent on active (no pill borders) */
 .oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] {{
     position: fixed !important;
@@ -1437,50 +1411,32 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     font-size: 0.82rem;
     font-weight: 600;
 }}
-/* Nav / lang pills must win over global domain-chip pill chrome */
-.oc-nav-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button {{
+/* Final win: keyed lang/nav over any leftover chip chrome */
+.st-key-oc_lang_bar button,
+.st-key-oc_lang_pills button {{
     background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
-    font-size: 0.72rem !important;
-    font-weight: 500 !important;
-    min-height: 2.6rem !important;
-    padding: 0.35rem 0.2rem !important;
 }}
-.oc-nav-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"],
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button[aria-checked="true"] {{
+.st-key-oc_lang_bar button[aria-checked="true"],
+.st-key-oc_lang_pills button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
-    border: none !important;
-    background: transparent !important;
 }}
-.oc-lang-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button {{
+.st-key-oc_nav_bar button,
+.st-key-oc_nav_pills button {{
     background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
-    font-size: 0.78rem !important;
-    min-height: 1.6rem !important;
-    padding: 0.15rem 0.4rem !important;
 }}
-.oc-lang-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"] {{
+.st-key-oc_nav_bar button[aria-checked="true"],
+.st-key-oc_nav_pills button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
-    border: none !important;
 }}
 </style>
         """,
@@ -2054,7 +2010,7 @@ def _clear_action_query_params() -> None:
 
 
 def lang_bar() -> None:
-    """Compact SV · EN via session-safe pills (HTML links wipe auth on mobile)."""
+    """Compact SV · EN — session-safe pills in keyed fixed top-right container."""
     lang = st.session_state.language
     if lang not in ("sv", "en"):
         lang = "sv"
@@ -2079,19 +2035,20 @@ def lang_bar() -> None:
         st.rerun()
         return
 
-    st.markdown('<div class="oc-lang-pills"></div>', unsafe_allow_html=True)
-    st.pills(
-        "lang",
-        options=["sv", "en"],
-        format_func=lambda x: "SV" if x == "sv" else "EN",
-        selection_mode="single",
-        key="oc_lang_pills",
-        label_visibility="collapsed",
-    )
+    with st.container(key="oc_lang_bar", horizontal=True, horizontal_alignment="right"):
+        st.pills(
+            "lang",
+            options=["sv", "en"],
+            format_func=lambda x: "SV" if x == "sv" else "EN",
+            selection_mode="single",
+            key="oc_lang_pills",
+            label_visibility="collapsed",
+            width="content",
+        )
 
 
 def nav() -> None:
-    """Bottom nav via st.pills — session-safe (no HTML href logout) and visible."""
+    """Fixed bottom nav — session-safe pills in keyed container (no oval chrome)."""
     page = st.session_state.page
     current = "home" if page in ("home", "result", "execute", "fridge", "ambiguous") else page
     options = ("home", "lista", "history", "profile")
@@ -2107,29 +2064,27 @@ def nav() -> None:
     mirrored = st.session_state.get("_oc_nav_mirror")
     pending = st.session_state.get("oc_nav_pills")
     if mirrored is None:
-        # First paint — align pill to page
         st.session_state.oc_nav_pills = current
         st.session_state._oc_nav_mirror = current
     elif mirrored != current:
-        # Page changed elsewhere (Handla→Lista, historik Öppna, …)
         st.session_state.oc_nav_pills = current
         st.session_state._oc_nav_mirror = current
     elif pending in options and pending != current:
-        # User tapped a nav pill
         st.session_state.page = pending
         st.session_state._oc_nav_mirror = pending
         st.rerun()
         return
 
-    st.markdown('<div class="oc-nav-pills" aria-label="Navigation"></div>', unsafe_allow_html=True)
-    st.pills(
-        "nav",
-        options=list(options),
-        format_func=lambda k: labels.get(k, k),
-        selection_mode="single",
-        key="oc_nav_pills",
-        label_visibility="collapsed",
-    )
+    with st.container(key="oc_nav_bar"):
+        st.pills(
+            "nav",
+            options=list(options),
+            format_func=lambda k: labels.get(k, k),
+            selection_mode="single",
+            key="oc_nav_pills",
+            label_visibility="collapsed",
+            width="stretch",
+        )
 
 
 def _start_domain_decision(domain: str) -> None:
@@ -3296,11 +3251,13 @@ def render_food_recipe(
     *,
     show_nutrition: bool | None = None,
 ) -> None:
-    """Single entry for food recipe cards — same kcal line on every matsida."""
+    """Single entry for food recipe cards — always show the same kcal line."""
     import shopping as shopping_mod
 
+    # Always show on food pages (profile opt-out is ignored here — user asked for
+    # kcal on every matsida; existing profiles often still have show_nutrition=False).
     if show_nutrition is None:
-        show_nutrition = _profile_show_nutrition()
+        show_nutrition = True
     healed = recipe
     if isinstance(recipe, dict):
         try:
@@ -3331,17 +3288,18 @@ def render_recipe_block(
     steps = recipe.get("steps") or []
     nutrition_html = ""
     if show_nutrition is None:
-        show_nutrition = _profile_show_nutrition()
+        show_nutrition = True
     if show_nutrition:
         line, has_vals = _nutrition_display_line(recipe)
         cls = "oc-nutrition" if has_vals else "oc-nutrition missing"
         nutrition_html = f'<p class="{cls}">{html.escape(line)}</p>'
+    # Nutrition directly under RECEPT title — visible without scrolling past steps
     st.markdown(
         f'<div class="oc-recipe">'
         f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
+        f"{nutrition_html}"
         f'<div class="oc-sec">{html.escape(t("ingredients_title"))}</div>'
         f'<ul>{"".join(f"<li>{html.escape(str(i))}</li>" for i in ings)}</ul>'
-        f"{nutrition_html}"
         f'<div class="oc-sec">{html.escape(t("steps_title"))}</div>'
         f'<ol>{"".join(f"<li>{html.escape(str(s))}</li>" for s in steps)}</ol>'
         f"</div>",
