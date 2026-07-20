@@ -848,9 +848,25 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
 div[data-testid="stHorizontalBlock"] div.stButton {{
     width: 100% !important; min-height: 2.5rem !important;
 }}
-/* Domain chips + bottom nav — Streamlit buttons (no full-page reload) */
+/* Domain chips — auto-width ghost pills (match pre-auth-fix look) */
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] {{
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 0 1.25rem !important;
+}}
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: fit-content !important;
+}}
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton {{
+    width: auto !important;
+}}
 .oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button {{
-    width: 100% !important;
+    width: auto !important;
     background: transparent !important;
     color: var(--oc-ink) !important;
     border: 1px solid var(--oc-border) !important;
@@ -859,27 +875,41 @@ div[data-testid="stHorizontalBlock"] div.stButton {{
     font-family: "Inter", sans-serif !important;
     font-weight: 500 !important;
     font-size: 14px !important;
-    min-height: 2.35rem !important;
-    padding: 8px 12px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 8px 20px !important;
 }}
 .oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button:hover {{
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
+    background: transparent !important;
 }}
+/* Bottom nav — fixed bar, text only, accent on active (no pill borders) */
 .oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] {{
     position: fixed !important;
     left: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100% !important;
     z-index: 1100 !important;
     background: #fff !important;
     border-top: 1px solid var(--oc-border) !important;
     padding: 0.55rem 0.5rem max(0.55rem, env(safe-area-inset-bottom)) !important;
     margin: 0 !important;
+    gap: 0 !important;
 }}
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button {{
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
+    padding: 0 !important;
+}}
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     background: transparent !important;
     color: var(--oc-muted) !important;
     border: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
     font-size: 0.68rem !important;
     font-weight: 500 !important;
     min-height: 2.6rem !important;
@@ -888,22 +918,43 @@ div[data-testid="stHorizontalBlock"] div.stButton {{
 .oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
-    background: transparent !important;
 }}
-.oc-lang-btns div.stButton > button {{
+/* Language — compact SV · EN text, not oval buttons */
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] {{
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 0.15rem !important;
+    margin: 0 0 0.35rem !important;
+}}
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: fit-content !important;
+}}
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton {{
+    width: auto !important;
+}}
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     background: transparent !important;
     border: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
     font-size: 0.78rem !important;
-    min-height: 1.8rem !important;
-    padding: 0.1rem 0.35rem !important;
+    font-weight: 500 !important;
+    min-height: 1.6rem !important;
+    height: auto !important;
+    padding: 0.15rem 0.35rem !important;
+    width: auto !important;
 }}
-.oc-lang-btns div.stButton > button[kind="primary"] {{
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
 }}
-/* Home domain chips — HTML flex row (legacy; prefer .oc-chip-btns) */
+/* Home domain chips — HTML flex row (kept for tests / fallback) */
 .oc-chip-row {{
     display: flex !important;
     flex-wrap: wrap !important;
@@ -1563,14 +1614,15 @@ def _clear_action_query_params() -> None:
 
 def lang_bar() -> None:
     lang = st.session_state.language
-    _, c1, c2 = st.columns([6, 1, 1])
+    st.markdown('<div class="oc-lang-btns-marker"></div>', unsafe_allow_html=True)
+    # Spacer + SV + EN — keep session-safe buttons, compact text look via CSS
+    _, c1, c2 = st.columns([8, 1, 1])
     with c1:
-        st.markdown('<div class="oc-lang-btns">', unsafe_allow_html=True)
         if st.button(
             "SV",
             key="lang_sv_btn",
             type="primary" if lang == "sv" else "secondary",
-            use_container_width=True,
+            use_container_width=False,
         ):
             if lang != "sv":
                 st.session_state.language = "sv"
@@ -1585,7 +1637,7 @@ def lang_bar() -> None:
             "EN",
             key="lang_en_btn",
             type="primary" if lang == "en" else "secondary",
-            use_container_width=True,
+            use_container_width=False,
         ):
             if lang != "en":
                 st.session_state.language = "en"
@@ -1636,16 +1688,20 @@ def _pick_ambiguous_domain(pick: str) -> None:
 
 
 def render_domain_chips(*, key_prefix: str = "home") -> None:
-    """Domain shortcuts as Streamlit buttons — survives mobile without losing login."""
+    """Ghost domain chips — Streamlit buttons styled like the original HTML chips."""
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    st.markdown('<div class="oc-chip-btns-marker"></div>', unsafe_allow_html=True)
+    # Marker + class for CSS + design tests that look for oc-chip-row
+    st.markdown(
+        '<div class="oc-chip-btns-marker"></div><div class="oc-chip-row" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     cols = st.columns(len(domains))
     for col, d in zip(cols, domains):
         with col:
             if st.button(
                 domain_label(d),
                 key=f"{key_prefix}_domain_{d}",
-                use_container_width=True,
+                use_container_width=False,
             ):
                 _start_domain_decision(d)
 
@@ -3028,14 +3084,21 @@ def page_ambiguous() -> None:
         unsafe_allow_html=True,
     )
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    st.markdown('<div class="oc-chip-btns-marker"></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="oc-chip-btns-marker"></div><div class="oc-chip-row" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     cols = st.columns(len(domains) + 1)
     for i, d in enumerate(domains):
         with cols[i]:
-            if st.button(domain_label(d), key=f"ambig_{d}", use_container_width=True):
+            if st.button(
+                domain_label(d),
+                key=f"ambig_{d}",
+                use_container_width=False,
+            ):
                 _pick_ambiguous_domain(d)
     with cols[-1]:
-        if st.button(t("other"), key="ambig_other", use_container_width=True):
+        if st.button(t("other"), key="ambig_other", use_container_width=False):
             _pick_ambiguous_domain("other")
     if st.button(t("home"), use_container_width=True):
         st.session_state.page = "home"
