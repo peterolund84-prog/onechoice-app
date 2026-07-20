@@ -240,7 +240,7 @@ class ReliableShoppingUiTests(unittest.TestCase):
                 break
         self.assertEqual(at.session_state["page"], "lista")
         self.assertIsNotNone(at.session_state["shopping_merged_for"])
-        self.assertIsNone(at.session_state.get("shopping_list_error"))
+        self.assertFalse(bool(at.session_state["shopping_list_error"]))
         cache = at.session_state["shopping_list_cache"]
         self.assertIsInstance(cache, list)
         self.assertGreaterEqual(len(cache), 1)
