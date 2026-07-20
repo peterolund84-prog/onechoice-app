@@ -755,10 +755,9 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 div[data-testid="stVerticalBlock"]:has([data-testid="stCheckbox"] input[aria-label*="kcal"]) {{
     margin-top: -0.35rem !important;
 }}
-/* Nutrition toggle label must stay visible (global widget-label hide below) */
+/* Nutrition toggle — scoped to checkbox only (never leak textarea/pills labels) */
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] label,
-label[data-testid="stWidgetLabel"],
 [data-testid="stCheckbox"] p,
 div[data-baseweb="checkbox"] + div,
 [data-testid="stMarkdownContainer"] .oc-nutrition,
@@ -767,6 +766,18 @@ div[data-baseweb="checkbox"] + div,
     visibility: visible !important;
     opacity: 1 !important;
     color: var(--oc-ink) !important;
+}}
+/* Collapsed labels must stay hidden (home textarea, meal pills, nutrition switch) */
+div[data-testid="stTextArea"] [data-testid="stWidgetLabel"],
+div[data-testid="stPills"] [data-testid="stWidgetLabel"],
+div[data-testid="stTextArea"] label[data-testid="stWidgetLabel"],
+div[data-testid="stPills"] label[data-testid="stWidgetLabel"] {{
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
 }}
 /* Streamlit toggle uses the same label testid — force readable */
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
@@ -2072,22 +2083,54 @@ def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
     if not isinstance(recipe, dict):
         return missing, False
     try:
-        healed = shopping_mod.ensure_recipe_nutrition(
-            recipe,
-            suggestion=str(recipe.get("title") or ""),
-            allow_estimate=True,
-        )
+        ensure = getattr(shopping_mod, "ensure_recipe_nutrition", None)
+        if callable(ensure):
+            healed = ensure(
+                recipe,
+                suggestion=str(recipe.get("title") or ""),
+                allow_estimate=True,
+            )
+        else:
+            healed = recipe
     except Exception:
         healed = recipe
-    line = shopping_mod.format_nutrition_line(
-        healed.get("nutrition") if isinstance(healed.get("nutrition"), dict) else None,
-        language=lang,
-        recipe=healed if isinstance(healed, dict) else None,
-    )
+    try:
+        fmt = getattr(shopping_mod, "format_nutrition_line", None)
+        if callable(fmt):
+            line = fmt(
+                healed.get("nutrition") if isinstance(healed.get("nutrition"), dict) else None,
+                language=lang,
+                recipe=healed if isinstance(healed, dict) else None,
+            )
+        else:
+            line = _format_nutrition_fallback(healed, language=lang)
+    except Exception:
+        line = _format_nutrition_fallback(healed, language=lang)
     if not line or line.strip().lower() in ("none", "null"):
         return missing, False
     has_vals = "kcal" in line.lower() and "≈" in line
     return line, has_vals
+
+
+def _format_nutrition_fallback(
+    recipe: dict[str, Any] | None,
+    *,
+    language: str = "sv",
+) -> str:
+    """Last-resort formatter if shopping.py is stale on Cloud hot-reload."""
+    if not isinstance(recipe, dict):
+        return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
+    nut = recipe.get("nutrition") if isinstance(recipe.get("nutrition"), dict) else {}
+    kcal = recipe.get("kcal_per_portion", nut.get("kcal"))
+    protein = recipe.get("protein_g_per_portion", nut.get("protein_g"))
+    try:
+        k_i = int(kcal)
+        p_i = int(protein)
+    except (TypeError, ValueError):
+        return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
+    if language == "en":
+        return f"≈ {k_i} kcal · {p_i} g protein / serving"
+    return f"≈ {k_i} kcal · {p_i} g protein / portion"
 
 
 def _render_execute_nutrition_control(recipe: dict[str, Any] | None) -> bool:
@@ -2240,7 +2283,7 @@ def page_home() -> None:
         st.rerun()
 
     q = st.text_area(
-        "q",
+        t("ask"),
         height=110,
         label_visibility="collapsed",
         key="home_input",
@@ -2686,9 +2729,12 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
     if st.session_state.get("meal_pills") not in fd.MEAL_TYPES:
         st.session_state.meal_pills = current
 
-    st.caption("Måltid" if language == "sv" else "Meal")
+    st.markdown(
+        f'<p class="oc-sec-label">{html.escape("Måltid" if language == "sv" else "Meal")}</p>',
+        unsafe_allow_html=True,
+    )
     choice = st.pills(
-        "Måltid" if language == "sv" else "Meal",
+        "meal_pills",
         options=list(fd.MEAL_ORDER),
         format_func=lambda k: fd.meal_label(k, language),
         selection_mode="single",
@@ -3428,9 +3474,13 @@ def page_execute() -> None:
             pass
 
     # Nutrition opt-in — BEFORE shopping list so values are never buried
-    want_nut = _render_execute_nutrition_control(
-        recipe if isinstance(recipe, dict) else None
-    )
+    try:
+        want_nut = _render_execute_nutrition_control(
+            recipe if isinstance(recipe, dict) else None
+        )
+    except Exception as exc:
+        log.warning("nutrition control failed: %s", exc)
+        want_nut = bool(st.session_state.get("exec_show_nutrition"))
 
     did = _active_decision_id(cur)
     try:
