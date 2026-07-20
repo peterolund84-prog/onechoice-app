@@ -128,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "premium-shop-pick-reliable-list-v25-20260720"
+BUILD_ID = "movie-format-mood-chips-v26-20260720"
 
 I18N = {
     "sv": {
@@ -1452,6 +1452,9 @@ def init_state() -> None:
         "pending_clothes_question": "",
         "occasion_by_hour": {},  # remembered most-common occasion per hour bucket
         "food_meal_type": None,  # frukost|lunch|middag|kvallsmal — inferred, confirmable
+        "movie_format": None,  # avsnitt|film|ny_serie
+        "movie_mood": None,  # avkopplat|spanning|skratta|lar_mig|med_barnen
+        "movie_in_progress_series": None,  # grounded series name for Nästa avsnitt
         "pending_db_accept": False,
         "pending_open_execute": False,
         "_last_ui_error": None,
@@ -2081,6 +2084,8 @@ def _start_domain_decision(domain: str) -> None:
 
         if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
             st.session_state.food_meal_type = fd.default_meal_type()
+    if domain == "movie":
+        _ensure_movie_chips_defaults()
     run_decision(question="", domain_hint=domain, reroll=False, via_router=False)
 
 
@@ -2270,6 +2275,17 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         st.session_state.food_meal_type = fd.default_meal_type()
     # Pass inferred/override meal type into food decisions (confirmable chips on result)
     context_extra["meal_type"] = st.session_state.food_meal_type
+    if hint == "movie" or st.session_state.get("force_route_domain") == "movie" or (
+        isinstance(st.session_state.get("last_domain_hint"), str)
+        and st.session_state.last_domain_hint == "movie"
+    ):
+        _ensure_movie_chips_defaults()
+        import movie_domain as md
+
+        context_extra["format"] = md.normalize_format(st.session_state.get("movie_format"))
+        context_extra["mood"] = md.normalize_mood(st.session_state.get("movie_mood"))
+        if st.session_state.get("movie_in_progress_series"):
+            context_extra["in_progress_series"] = st.session_state.movie_in_progress_series
     if st.session_state.get("fridge_mode"):
         import fridge_domain as fr
 
@@ -3777,6 +3793,25 @@ def page_ambiguous() -> None:
     nav()
 
 
+def _ensure_movie_chips_defaults() -> None:
+    """Infer format + mood once — confirmable on the result card."""
+    import movie_domain as md
+
+    history: list[dict[str, Any]] = []
+    uid = st.session_state.get("user_id")
+    if uid:
+        try:
+            history = db.list_decisions(str(uid), domain="movie", limit=40)
+        except Exception:
+            history = []
+    in_prog = md.find_in_progress_series(history)
+    st.session_state.movie_in_progress_series = in_prog
+    if st.session_state.get("movie_format") not in md.FORMATS:
+        st.session_state.movie_format = md.default_format(in_progress_series=in_prog)
+    if st.session_state.get("movie_mood") not in md.MOODS:
+        st.session_state.movie_mood = md.default_mood(history=history)
+
+
 def render_meal_type_chips(cur: dict[str, Any]) -> None:
     """Meal type chooser above the food decision — st.pills (visible on Cloud)."""
     import food_domain as fd
@@ -3822,6 +3857,82 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
         run_decision(
             question=pending,
             domain_hint="food",
+            reroll=False,
+            via_router=False,
+        )
+
+
+def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
+    """Two pill rows above the movie decision: Format + Läge (mood)."""
+    import movie_domain as md
+
+    language = st.session_state.get("language", "sv")
+    ctx = _as_dict(cur.get("context"))
+    in_prog = (
+        ctx.get("in_progress_series")
+        or st.session_state.get("movie_in_progress_series")
+        or None
+    )
+    if in_prog:
+        st.session_state.movie_in_progress_series = in_prog
+
+    current_fmt = md.normalize_format(
+        ctx.get("format") or st.session_state.get("movie_format")
+    )
+    current_mood = md.normalize_mood(
+        ctx.get("mood") or st.session_state.get("movie_mood")
+    )
+    st.session_state.movie_format = current_fmt
+    st.session_state.movie_mood = current_mood
+
+    if st.session_state.get("movie_format_pills") not in md.FORMATS:
+        st.session_state.movie_format_pills = current_fmt
+    if st.session_state.get("movie_mood_pills") not in md.MOODS:
+        st.session_state.movie_mood_pills = current_mood
+
+    st.markdown(
+        f'<p class="oc-sec-label">{html.escape("Format" if language == "sv" else "Format")}</p>',
+        unsafe_allow_html=True,
+    )
+    fmt_choice = st.pills(
+        "movie_format_pills",
+        options=list(md.FORMAT_ORDER),
+        format_func=lambda k: md.format_label(
+            k, language, in_progress_series=in_prog if k == "avsnitt" else None
+        ),
+        selection_mode="single",
+        key="movie_format_pills",
+        label_visibility="collapsed",
+    )
+    st.markdown(
+        f'<p class="oc-sec-label">{html.escape("Läge" if language == "sv" else "Mood")}</p>',
+        unsafe_allow_html=True,
+    )
+    mood_choice = st.pills(
+        "movie_mood_pills",
+        options=list(md.MOOD_ORDER),
+        format_func=lambda k: md.mood_label(k, language),
+        selection_mode="single",
+        key="movie_mood_pills",
+        label_visibility="collapsed",
+    )
+
+    fmt_choice = current_fmt if fmt_choice is None else fmt_choice
+    mood_choice = current_mood if mood_choice is None else mood_choice
+    if fmt_choice != current_fmt or mood_choice != current_mood:
+        st.session_state.movie_format = md.normalize_format(fmt_choice)
+        st.session_state.movie_mood = md.normalize_mood(mood_choice)
+        st.session_state.accepted = False
+        pending = (
+            st.session_state.get("last_question")
+            or pipeline._default_question(
+                "movie", st.session_state.get("language", "sv")
+            )
+        )
+        st.session_state.last_domain_hint = "movie"
+        run_decision(
+            question=pending,
+            domain_hint="movie",
             reroll=False,
             via_router=False,
         )
@@ -3972,6 +4083,9 @@ def page_result() -> None:
     # Food: meal-type chips ABOVE the decision (not for fridge — inventory is the constraint)
     if domain == "food" and not accepted and not fridge_mode:
         render_meal_type_chips(cur)
+    # Movie: format + mood chips ABOVE the decision (two rows max — never a third)
+    if domain == "movie" and not accepted:
+        render_movie_format_mood_chips(cur)
 
     st.markdown(
         f'<div class="oc-decision">'

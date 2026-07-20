@@ -192,11 +192,16 @@ class AppAcceptUiTests(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "result")
         self.assertFalse(at.exception)
         self.assertTrue(at.pills, "meal pills missing")
-        # AppTest exposes formatted labels when format_func is used
-        opts = list(at.pills[0].options)
+        # pills[0]=lang (SV/EN); meal row is the one with Frukost/Lunch/…
+        meal_pills = next(
+            (p for p in at.pills if "Frukost" in list(p.options)),
+            None,
+        )
+        self.assertIsNotNone(meal_pills, [list(p.options) for p in at.pills])
+        opts = list(meal_pills.options)
         for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
             self.assertIn(needle, opts)
-        at.pills[0].select("Lunch").run()
+        meal_pills.select("Lunch").run()
         self.assertFalse(at.exception)
         self.assertFalse(bool(at.session_state["ui_error"]))
         self.assertEqual(at.session_state["food_meal_type"], "lunch")

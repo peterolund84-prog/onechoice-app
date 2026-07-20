@@ -26,7 +26,7 @@ question → classify domain → profile + context + history
 |--------|------------------------|
 | **food** | Swedish supermarket basics only; ≤30 min weekday / 60 min weekend; shopping list by store layout; wildcard = flavor not sourcing |
 | **clothes** | Section (herr/dam/båda) + sizes; wear from wardrobe or category; buy = in-stock at SE retailers; weather hard constraint |
-| **movie** | On subscribed services only; fit time window; deep link; no rentals unless opted in |
+| **movie** | Format (Avsnitt/Film/Ny serie) + mood (not genre); subscribed services only; deep link; Med barnen = hard age gate; log format+mood every decision |
 | **workout** | Only available equipment/context; time window; weather/dark for outdoor; limitations absolute; written plan in Swedish |
 | **weekend** | Travel distance / car; open & in season; age-appropriate; budget; map + “ta med” |
 
@@ -39,6 +39,7 @@ question → classify domain → profile + context + history
 
 ## Code map
 
+- `food_domain.py` / `clothes_domain.py` / `movie_domain.py` / `workout_domain.py` — domain inputs
 - `feasibility.py` — validators + profile parsing
 - `mocks.py` — stock + streaming catalogs
 - `pipeline.py` — shared decide() flow
