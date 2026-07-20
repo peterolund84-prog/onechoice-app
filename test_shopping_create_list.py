@@ -151,6 +151,8 @@ class CreateListUiTests(unittest.TestCase):
                 break
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(bool(at.session_state["ui_error"]))
+        # Handla must NOT auto-fill the list — only Skapa lista does
+        self.assertIsNone(at.session_state["shopping_merged_for"])
         labels = [b.label or "" for b in at.button]
         self.assertTrue(
             any("Skapa lista" in lab for lab in labels),
@@ -199,14 +201,11 @@ class CreateListUiTests(unittest.TestCase):
                 break
         self.assertTrue(created)
         self.assertIsNotNone(at.session_state["shopping_merged_for"])
-        # Open list tab
-        at.session_state["page"] = "lista"
-        at.run()
+        # Skapa lista should navigate straight to Lista
         self.assertEqual(at.session_state["page"], "lista")
         cache = at.session_state["shopping_list_cache"]
-        # Cache may be list of items or reloaded on page
-        if isinstance(cache, list):
-            self.assertGreaterEqual(len(cache), 1)
+        self.assertIsInstance(cache, list)
+        self.assertGreaterEqual(len(cache), 1)
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertNotIn("Listan är tom", body)
 

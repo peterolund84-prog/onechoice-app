@@ -50,8 +50,8 @@ Button → transition:
         → run_decision(reroll=True)
 
   [execute] food: checkboxes + "Skapa lista" → merge checked items into Lista
-        → badge when merged; "Öppna listan" → page=lista
-        → deferred accept also merges shopping from context (after shop is stored)
+        → opens Lista after create; "Öppna listan" also → page=lista
+        → deferred accept only locks decision (shopping merge is explicit)
 
   [execute] "Tillbaka"
         → page=result  (shows Låst: <suggestion> + only Handla & laga)
@@ -126,7 +126,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "session-safe-nav-fast-food-v21-20260720"
+BUILD_ID = "list-create-only-nav-safe-v22-20260720"
 
 I18N = {
     "sv": {
@@ -2390,6 +2390,11 @@ def _merge_to_buy_into_list(
         st.session_state.shopping_list_cache = None
         if decision_id is not None:
             st.session_state.shopping_merged_for = decision_id
+        # Warm cache so Lista / Öppna listan shows items immediately
+        try:
+            _load_shopping_items(force=True)
+        except Exception:
+            pass
         return len(rows or [])
     except Exception as exc:
         log.warning("merge shopping to_buy failed: %s", exc)
@@ -2503,7 +2508,11 @@ def _restore_decision_from_row(row: dict[str, Any]) -> None:
 
 
 def _flush_db_accept() -> None:
-    """Best-effort persist accept — sync, only after UI is already visible."""
+    """Best-effort persist accept — sync, only after UI is already visible.
+
+    Shopping is NOT merged here — user must press Skapa lista after bocka-ing
+    ingredients. Auto-merge made toggles look broken (list already full).
+    """
     if not _session_pop("pending_db_accept", None):
         return
     cur = st.session_state.get("current")
@@ -2514,18 +2523,6 @@ def _flush_db_accept() -> None:
         if st.session_state.get("guest_mode"):
             db.clear_auth()
         pipeline.try_accept_decision(did, route_log_id=rid)
-        # Prefer checkbox selection when present; else full to_buy from context
-        ctx = _as_dict(cur.get("context"))
-        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
-        if shop:
-            try:
-                did_i = int(did) if did is not None else None
-            except (TypeError, ValueError):
-                did_i = None
-            selected = _selected_to_buy_from_checks(shop, did_i)
-            _merge_to_buy_into_list(selected or shop.get("to_buy"), did_i)
-        else:
-            _merge_accepted_shopping(cur)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
@@ -2719,6 +2716,8 @@ def render_decision_shopping_added(
                     safe_toast(t("list_created"))
                 except Exception:
                     pass
+                # Open Lista so the user sees the result immediately
+                st.session_state.page = "lista"
             st.rerun()
     with open_col:
         if st.button(
@@ -4488,9 +4487,11 @@ def page_profile() -> None:
             ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, text=True
         ).strip()
         if sha:
-            st.caption(f"Build: {sha}")
+            st.caption(f"Build: {sha} · {BUILD_ID}")
+        else:
+            st.caption(f"Build: {BUILD_ID}")
     except Exception:
-        pass
+        st.caption(f"Build: {BUILD_ID}")
 
     user = db.ensure_user(st.session_state.user_id)
     if user.get("is_pro") or st.session_state.is_pro:
