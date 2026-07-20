@@ -3812,20 +3812,31 @@ def page_execute() -> None:
     import shopping as shop_mod
     import shopping_compat as shop_compat
 
-    bundled_recipe, bundled_shop = shop_compat.resolve_meal_bundle(
-        suggestion,
-        meta={"meal_type": meal_type, "ingredients": seed_ings or []},
-        meal_type=meal_type,
-        language=st.session_state.get("language", "sv"),
-        grok_api_key=resolve_grok_api_key(),
-        include_shopping=True,
-        active_minutes=active_mins,
+    # Prefer recipe/shopping already on the decision — do NOT re-call Grok here
+    # (that was adding 45–90s after Handla & laga). Local catalog only as fill-in.
+    has_usable_recipe = (
+        isinstance(recipe, dict)
+        and bool(recipe.get("steps"))
+        and (
+            bool(recipe.get("ingredient_lines") or recipe.get("ingredients"))
+            or bool(seed_ings)
+        )
     )
-    if bundled_recipe:
-        recipe = bundled_recipe
-    if bundled_shop and not shop:
-        shop = bundled_shop
-    elif isinstance(recipe, dict) and not shop:
+    if not has_usable_recipe or not shop:
+        bundled_recipe, bundled_shop = shop_compat.resolve_meal_bundle(
+            suggestion,
+            meta={"meal_type": meal_type, "ingredients": seed_ings or []},
+            meal_type=meal_type,
+            language=st.session_state.get("language", "sv"),
+            grok_api_key="",  # local/catalog only — keep Handla snappy
+            include_shopping=True,
+            active_minutes=active_mins,
+        )
+        if bundled_recipe and not has_usable_recipe:
+            recipe = bundled_recipe
+        if bundled_shop and not shop:
+            shop = bundled_shop
+    if isinstance(recipe, dict) and not shop:
         derived = shop_compat.shopping_from_recipe(recipe, suggestion=suggestion)
         if derived and derived.get("to_buy"):
             shop = derived
@@ -3989,7 +4000,7 @@ def page_profile() -> None:
         import llm_config
 
         d = llm_config.DIAGNOSTICS
-        if d.get("status") in ("ok", "override"):
+        if d.get("status") in ("ok", "override", "probe_partial"):
             st.caption(f"AI: {d.get('model')} ✓")
         elif d.get("status") == "no_key":
             st.caption("AI: offline — API-nyckel saknas")

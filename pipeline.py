@@ -1067,8 +1067,10 @@ Rules:
                 {"role": "user", "content": user},
             ],
             "temperature": 0.7,
+            # Cap completion size — everyday decisions don't need long essays
+            "max_tokens": 900,
         },
-        timeout=45,
+        timeout=18,
     )
     resp.raise_for_status()
     payload = resp.json()

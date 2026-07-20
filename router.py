@@ -206,7 +206,7 @@ def _llm_route(text: str, *, language: str, api_key: str) -> RouteResult:
             ],
             "temperature": 0.1,
         },
-        timeout=30,
+        timeout=12,
     )
     resp.raise_for_status()
     choices = (resp.json().get("choices") or [])

@@ -567,8 +567,9 @@ Rules:
                 {"role": "user", "content": user},
             ],
             "temperature": 0.4,
+            "max_tokens": 1200,
         },
-        timeout=45,
+        timeout=20,
     )
     resp.raise_for_status()
     payload = resp.json()

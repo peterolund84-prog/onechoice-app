@@ -14,18 +14,19 @@ from __future__ import annotations
 
 import os
 
-# Default aligned with fridge_domain.VISION_MODELS (grok-4.x family).
-_DEFAULT_TEXT_MODEL = "grok-4.5"
+# Prefer fast text models for everyday decide latency; quality models as fallback.
+_DEFAULT_TEXT_MODEL = "grok-4-fast"
 
 # Auto-discovery candidates, tried in order at boot. Model names at xAI have
 # changed under us before (grok-2 retirement broke the app silently), so we
 # never trust ONE hardcoded name again — we probe until one answers.
+# Fast models first — boot probe + decide latency dominate UX.
 CANDIDATE_TEXT_MODELS: tuple[str, ...] = (
-    "grok-4.5",
     "grok-4-fast",
+    "grok-3-mini",
+    "grok-4.5",
     "grok-4",
     "grok-4-latest",
-    "grok-3-mini",
     "grok-3",
     "grok-3-latest",
 )
@@ -37,7 +38,7 @@ _RESOLVED: dict[str, str] = {}
 DIAGNOSTICS: dict[str, str] = {"status": "unresolved", "model": "", "detail": ""}
 
 
-def _probe(model: str, key: str, *, timeout: int = 12) -> tuple[bool, str]:
+def _probe(model: str, key: str, *, timeout: int = 5) -> tuple[bool, str]:
     try:
         import requests  # noqa: PLC0415
 
@@ -61,12 +62,14 @@ def _probe(model: str, key: str, *, timeout: int = 12) -> tuple[bool, str]:
         return False, f"error:{exc}"
 
 
-def resolve_text_model(api_key: str) -> str:
+def resolve_text_model(api_key: str, *, max_probes: int = 3) -> str:
     """
     Return a WORKING model name: explicit override first, then probe the
     candidate list once per process and cache the winner. Falls back to the
     default name if nothing answers (callers will then fail loudly, which is
     correct — DIAGNOSTICS explains why in the UI).
+
+    max_probes caps boot latency — we try the fast models first.
     """
     key = str(api_key or "").strip()
     override = _explicit_override()
@@ -79,15 +82,19 @@ def resolve_text_model(api_key: str) -> str:
         DIAGNOSTICS.update(status="no_key", model="", detail="GROK_API_KEY missing/placeholder")
         return _DEFAULT_TEXT_MODEL
     failures: list[str] = []
-    for cand in CANDIDATE_TEXT_MODELS:
+    for cand in CANDIDATE_TEXT_MODELS[: max(1, int(max_probes))]:
         ok, detail = _probe(cand, key)
         if ok:
             _RESOLVED["model"] = cand
             DIAGNOSTICS.update(status="ok", model=cand, detail="probed")
             return cand
         failures.append(f"{cand}:{detail}")
+    # Prefer a fast default even if probe timed out — decide call will verify
+    _RESOLVED["model"] = _DEFAULT_TEXT_MODEL
     DIAGNOSTICS.update(
-        status="all_failed", model="", detail="; ".join(failures)[:400]
+        status="probe_partial",
+        model=_DEFAULT_TEXT_MODEL,
+        detail="; ".join(failures)[:400],
     )
     return _DEFAULT_TEXT_MODEL
 
