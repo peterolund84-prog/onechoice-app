@@ -119,7 +119,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-premium-minimal-v18-20260720"
+BUILD_ID = "home-premium-minimal-v19-20260720"
 
 I18N = {
     "sv": {
