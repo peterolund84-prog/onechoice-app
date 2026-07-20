@@ -358,6 +358,7 @@ def _check_food(
             ings or None,
             active_minutes=int(active) if active is not None else None,
             servings=1 if meal_type in ("frukost", "kvallsmal") else None,
+            meal_type=meal_type,
         )
         execution = {
             "type": "recipe",
@@ -389,7 +390,11 @@ def _check_food(
         "shopping": shop,
         "shopping_list": shop["to_buy"],  # legacy key for older UI/tests
         "recipe": shop.get("recipe")
-        or shopping.build_recipe(suggestion, shop.get("ingredients")),
+        or shopping.build_recipe(
+            suggestion,
+            shop.get("ingredients"),
+            meal_type=meal_type,
+        ),
         "store": store,
         "max_active_minutes": max_min,
         "meal_type": meal_type,

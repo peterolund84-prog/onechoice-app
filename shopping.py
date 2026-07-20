@@ -218,8 +218,29 @@ def build_shopping(
         "ingredients": ingredients,
         "to_buy": to_buy,
         "assumed_at_home": assumed or ["salt", "peppar", "olja"],
-        "recipe": build_recipe(suggestion, ingredients),
+        "recipe": _materialize_shopping_recipe(
+            suggestion,
+            ingredients,
+            meal_type=str((meta or {}).get("meal_type") or "middag"),
+        ),
     }
+
+
+def _materialize_shopping_recipe(
+    suggestion: str,
+    ingredients: list[str],
+    *,
+    meal_type: str = "middag",
+) -> dict[str, Any]:
+    """Build recipe without re-entering build_shopping (avoids recursion)."""
+    import recipe_engine as reng
+
+    return reng.materialize_recipe(
+        suggestion,
+        ingredients,
+        meal_type=meal_type,
+        allow_llm=False,
+    )
 
 
 def shopping_valid(payload: dict[str, Any] | None, suggestion: str) -> bool:
@@ -246,34 +267,23 @@ def build_recipe(
     *,
     active_minutes: int | None = None,
     servings: int | None = None,
+    meal_type: str = "middag",
+    language: str = "sv",
+    grok_api_key: str = "",
 ) -> dict[str, Any]:
-    """Swedish metric recipe: full ingredient list + ordered steps.
+    """Delegate to structured recipe engine — never title-only stubs."""
+    import recipe_engine as reng
 
-    active_minutes is the single source of truth for cook time when provided.
-    Always attaches per-portion nutrition estimates (top-level + nested).
-    """
-    ings = list(ingredients or _infer_full_ingredients(suggestion) or [])
-    if not ings:
-        ings = ["gul lök", "vitlök", "olja", "salt", "peppar", "säsongsgrönsaker", "ris"]
-    # Dish-name protein must appear in the recipe ingredient list
-    missing = _missing_main_protein(suggestion, ings)
-    if missing:
-        miss_n = _norm_item(missing)
-        ings = [missing] + [i for i in ings if _norm_item(i) != miss_n]
-    steps = _recipe_steps(suggestion, ings)
-    portions = max(1, int(servings or _default_servings(suggestion, ings)))
-    out: dict[str, Any] = {
-        "title": suggestion,
-        "ingredients": ings,
-        "steps": steps,
-        "unit_system": "metric",
-        "language": "sv",
-        "portioner": portions,
-    }
-    if active_minutes is not None:
-        out["active_minutes"] = int(active_minutes)
-    # Static estimator (recipes are not LLM-authored) — always fill numeric fields
-    return ensure_recipe_nutrition(out, suggestion=suggestion, allow_estimate=True)
+    return reng.materialize_recipe(
+        suggestion,
+        list(ingredients) if ingredients else None,
+        meal_type=meal_type,
+        active_minutes=active_minutes,
+        portions=servings,
+        language=language,
+        grok_api_key=grok_api_key,
+        allow_llm=bool(grok_api_key),
+    )
 
 
 # Per 100 g (or per unit where noted): kcal, protein_g, fat_g, carbs_g
@@ -608,10 +618,30 @@ def format_nutrition_line(
         )
     if not nutrition_fields_valid(kcal, protein, portions):
         return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
-    # portions validated but display is always per one portion
+    fat = _as_nutrition_int(
+        recipe.get("fat_g_per_portion") if isinstance(recipe, dict) else None
+    ) if isinstance(recipe, dict) else None
+    carbs = _as_nutrition_int(
+        recipe.get("carbs_g_per_portion") if isinstance(recipe, dict) else None
+    ) if isinstance(recipe, dict) else None
+    if isinstance(nutrition, dict):
+        if fat is None:
+            fat = _as_nutrition_int(nutrition.get("fat_g"))
+        if carbs is None:
+            carbs = _as_nutrition_int(nutrition.get("carbs_g"))
+    if fat is None:
+        fat = 0
+    if carbs is None:
+        carbs = 0
     if language == "en":
-        return f"≈ {kcal} kcal · {protein} g protein / serving"
-    return f"≈ {kcal} kcal · {protein} g protein / portion"
+        return (
+            f"Approx. {kcal} kcal · {protein} g protein · "
+            f"{fat} g fat · {carbs} g carbs"
+        )
+    return (
+        f"Ca {kcal} kcal · {protein} g protein · "
+        f"{fat} g fett · {carbs} g kolh."
+    )
 
 
 def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
@@ -656,6 +686,12 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Häll i linser, 4 dl vatten och 2 dl kokosmjölk. Koka 15–18 min.",
             "Rör i spenat sista minuten. Smaka av med salt och peppar. Servera med ris.",
         ]
+    if "havregrynsgröt" in s or ("havregryn" in s and "banan" in s):
+        return [
+            "Koka upp 2 dl vatten med 1 krm salt (ca 2 min).",
+            "Rör ner 1 dl havregryn. Sjud på låg värme 3–4 min under omrörning.",
+            "Skiva banan ovanpå gröten. Servera varm.",
+        ]
     if "omelett" in s or "omelette" in s:
         return [
             "Vispa 3 ägg med 2 msk mjölk, salt och peppar.",
@@ -665,15 +701,27 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
         ]
     if "smörgås" in s or "macka" in s or ("sandwich" in s and "egg" not in s):
         return [
-            "Ta fram bröd, ost och smör.",
-            "Bred smör på brödet. Lägg på ostskivor.",
-            "Servera som den är — eller grilla 1–2 min om du vill ha den varm.",
+            "Ta fram 2 skivor bröd och 2 skivor ost.",
+            "Bred 1 tsk smör på brödet och lägg på osten.",
+            "Servera direkt — eller grilla 1 min om du vill ha den varm.",
+        ]
+    if "äggröra" in s or "scrambled egg" in s:
+        return [
+            "Vispa 2 ägg med 1 krm salt och peppar i en skål.",
+            "Smält 1 msk smör i stekpanna på medelvärme.",
+            "Häll i äggen och rör långsamt 2–3 min tills röran är krämig. Servera direkt.",
         ]
     if "yoghurt" in s or s.startswith("fil ") or "fil eller" in s or "filmjölk" in s:
+        if "müsli" in s or "musli" in s:
+            return [
+                "Häll 2 dl fil i en skål.",
+                "Strö över 0,5 dl müsli.",
+                "Servera direkt — ingen värme behövs (0 min).",
+            ]
         return [
-            "Ta fram fil eller yoghurt.",
-            "Häll upp i en skål. Toppa med sylt, frukt eller müsli om du har.",
-            "Ät direkt.",
+            "Häll 2 dl fil eller yoghurt i en skål.",
+            "Toppa med frukt eller sylt om du vill.",
+            "Servera direkt (0 min).",
         ]
     if "värm en rest" in s or "reheat leftover" in s:
         return [
@@ -876,8 +924,15 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
         else:
             ings.insert(1, "ost")
         return ings
+    if "müsli" in s or "musli" in s:
+        if "fil" in s or "filmjölk" in s:
+            return ["fil", "müsli"]
     if "yoghurt" in s or "fil eller" in s or s.startswith("fil ") or "filmjölk" in s:
-        return ["yoghurt"]
+        if "müsli" in s or "musli" in s:
+            return ["fil", "müsli"]
+        if "fil" in s and "yoghurt" in s:
+            return ["fil", "yoghurt", "honung"]
+        return ["fil", "honung"]
     if "poke" in s or "poké" in s or ("lax" in s and "bowl" in s):
         return [
             "lax",

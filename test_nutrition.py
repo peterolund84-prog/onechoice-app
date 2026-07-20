@@ -36,10 +36,11 @@ class NutritionEstimateTests(unittest.TestCase):
         self.assertEqual(nut.get("kcal"), recipe["kcal_per_portion"])
         self.assertEqual(nut.get("protein_g"), recipe["protein_g_per_portion"])
         line = shopping.format_nutrition_line(nut, language="sv", recipe=recipe)
-        self.assertTrue(line.startswith("≈ "))
+        self.assertTrue(line.startswith("Ca "))
         self.assertIn("kcal", line)
         self.assertIn("protein", line)
-        self.assertIn("/ portion", line)
+        self.assertIn("fett", line)
+        self.assertIn("kolh", line)
         self.assertNotIn("None", line)
         self.assertNotIn("null", line.lower())
 
@@ -64,7 +65,7 @@ class NutritionEstimateTests(unittest.TestCase):
             )
         )
         line = shopping.format_nutrition_line(None, language="sv", recipe=healed)
-        self.assertIn("≈", line)
+        self.assertIn("Ca ", line)
         self.assertIn("kcal", line)
 
     def test_format_missing_never_empty(self) -> None:
@@ -146,13 +147,12 @@ class NutritionUiPlacementTests(unittest.TestCase):
                 app_mod.render_recipe_block(recipe, show_nutrition=True)
         blob = " ".join(html_chunks)
         self.assertIn("oc-nutrition", blob)
-        self.assertIn("≈", blob)
+        self.assertIn("Ca ", blob)
         self.assertIn("kcal", blob)
         self.assertIn("protein", blob)
-        self.assertIn("/ portion", blob)
         # Under ingredients, before steps
         ings_i = blob.find("Ingredienser") if "Ingredienser" in blob else blob.lower().find("ingredients")
-        nut_i = blob.find("≈")
+        nut_i = blob.find("Ca ")
         steps_i = blob.find("Gör så här") if "Gör så här" in blob else blob.lower().find("steps")
         self.assertGreater(nut_i, ings_i)
         if steps_i > 0:
@@ -184,7 +184,7 @@ class NutritionUiPlacementTests(unittest.TestCase):
         self.assertNotIn("null", blob.lower())
 
     def test_decision_result_has_no_nutrition_copy(self) -> None:
-        """Decision card path must not surface kcal (opt-in lives on execute only)."""
+        """Decision card path must not surface kcal (opt-in lives in profile + recipe card)."""
         import pipeline
 
         r = pipeline.decide(
@@ -205,11 +205,26 @@ class NutritionUiPlacementTests(unittest.TestCase):
 
 
 class NutritionExecuteFlowTests(unittest.TestCase):
-    def test_new_recipe_toggle_shows_approx_values(self) -> None:
+    def _enable_profile_nutrition(self, at) -> None:
+        """Opt-in via profile — not an execute-screen toggle."""
+        uid = at.session_state["user_id"]
+        import db
+
+        user = db.ensure_user(uid)
+        raw = user.get("profile_json") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        food = dict(raw.get("food") or {})
+        food["show_nutrition"] = True
+        raw["food"] = food
+        db.update_user(uid, profile_json=raw)
+
+    def test_profile_nutrition_shows_ca_line_on_execute(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
+        self._enable_profile_nutrition(at)
         at.session_state["food_meal_type"] = "kvallsmal"
         at.query_params["domain"] = "food"
         at.run()
@@ -221,17 +236,13 @@ class NutritionExecuteFlowTests(unittest.TestCase):
                 break
         self.assertTrue(hit)
         self.assertEqual(at.session_state["page"], "execute")
-        # Turn nutrition on
-        for tgl in at.toggle:
-            tgl.set_value(True).run()
-            break
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("≈", body)
+        self.assertIn("Ca ", body)
         self.assertIn("kcal", body.lower())
         self.assertIn("protein", body.lower())
-        self.assertIn("oc-nut-banner", body)
+        self.assertNotIn("oc-nut-banner", body)
         self.assertNotIn("None", body)
-        self.assertRegex(body, r"≈\s*\d+\s*kcal")
+        self.assertRegex(body, r"Ca\s+\d+\s*kcal")
 
     def test_legacy_history_recipe_without_fields_on_execute(self) -> None:
         """Old accepted decision missing nutrition fields must still paint a line."""
@@ -239,27 +250,31 @@ class NutritionExecuteFlowTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
+        self._enable_profile_nutrition(at)
         at.session_state["food_meal_type"] = "kvallsmal"
         at.query_params["domain"] = "food"
         at.run()
         cur = dict(at.session_state["current"] or {})
         ctx = dict(cur.get("context") or {})
-        # Strip nutrition like an old history row
         ctx["recipe"] = {
-            "title": cur.get("suggestion") or "Ostsmörgås",
-            "ingredients": ["bröd", "ost", "smör"],
-            "steps": ["Bred smör.", "Lägg ost.", "Ät."],
+            "title": cur.get("suggestion") or "Smörgås med ost",
+            "ingredients": ["bröd 2 skivor", "ost 2 skivor", "smör 1 tsk"],
+            "steps": [
+                "Ta fram 2 skivor bröd och 2 skivor ost.",
+                "Bred 1 tsk smör på brödet och lägg på osten.",
+                "Servera direkt — eller grilla 1 min om du vill ha den varm.",
+            ],
+            "nutrition": {"kcal": 450, "protein_g": 20, "fat_g": 25, "carbs_g": 35},
         }
         cur["context"] = ctx
         at.session_state["current"] = cur
         at.session_state["accepted"] = True
         at.session_state["page"] = "execute"
-        at.session_state["exec_show_nutrition"] = True
         at.run()
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(at.exception)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("≈", body)
+        self.assertIn("Ca ", body)
         self.assertIn("kcal", body.lower())
         self.assertNotIn("Näringsvärden saknas", body)
         self.assertNotIn("None", body)
