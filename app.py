@@ -1007,7 +1007,14 @@ def init_state() -> None:
     if _peek_share_token() and not st.session_state.user_id:
         st.session_state.guest_mode = True
 
-    if sb.is_configured() and not st.session_state.user_id and not st.session_state.guest_mode:
+    _bootstrap_guest_session()
+
+    if (
+        sb.is_configured()
+        and not st.session_state.user_id
+        and not st.session_state.guest_mode
+        and not _guest_query_active()
+    ):
         st.session_state.page = "auth"
         return
 
@@ -1385,6 +1392,10 @@ def page_auth() -> None:
             st.session_state.guest_mode = True
             st.session_state.user_id = str(uuid.uuid4())
             db.ensure_user(st.session_state.user_id, language=st.session_state.language)
+            st.session_state.access_token = None
+            st.session_state.refresh_token = None
+            db.clear_auth()
+            _set_guest_query_param()
             st.session_state.page = "home"
             st.rerun()
         return
@@ -1408,6 +1419,7 @@ def page_auth() -> None:
                 st.session_state.access_token = sess["access_token"]
                 st.session_state.refresh_token = sess["refresh_token"]
                 st.session_state.guest_mode = False
+                _clear_guest_query_param()
                 db.set_auth(sess["access_token"], sess["refresh_token"])
                 db.ensure_user(
                     sess["user_id"],
@@ -1446,6 +1458,7 @@ def page_auth() -> None:
                         st.session_state.access_token = sess["access_token"]
                         st.session_state.refresh_token = sess["refresh_token"]
                         st.session_state.guest_mode = False
+                        _clear_guest_query_param()
                         db.set_auth(sess["access_token"], sess["refresh_token"])
                         db.ensure_user(
                             sess["user_id"],
@@ -1475,6 +1488,7 @@ def page_auth() -> None:
         st.session_state.refresh_token = None
         st.session_state.user_id = str(uuid.uuid4())
         db.ensure_user(st.session_state.user_id, language=st.session_state.language)
+        _set_guest_query_param()
         st.session_state.page = "home"
         st.rerun()
 
@@ -1524,7 +1538,7 @@ def nav() -> None:
     for key, icon, name, active in items:
         cls = "active" if active else ""
         links.append(
-            f'<a class="{cls}" href="?nav={key}">{icon}<span>{html.escape(name)}</span></a>'
+            f'<a class="{cls}" href="{_qp_href(nav=key)}">{icon}<span>{html.escape(name)}</span></a>'
         )
     st.markdown(
         f'<nav class="oc-nav" aria-label="Navigation">{"".join(links)}</nav>',
@@ -2138,7 +2152,7 @@ def render_persistent_shopping_list() -> None:
             cls = "oc-shop-row checked" if checked else "oc-shop-row"
             mark = "✓" if checked else ""
             parts.append(
-                f'<a class="{cls}" href="?shop_toggle={iid}">'
+                f'<a class="{cls}" href="{_qp_href(shop_toggle=str(iid))}">'
                 f'<span class="oc-chk">{mark}</span><span>{name}</span></a>'
             )
     parts.append("</div>")
@@ -2392,6 +2406,46 @@ def _qp_one(value: Any) -> str | None:
     return text or None
 
 
+def _guest_query_active() -> bool:
+    return _qp_one(st.query_params.get("guest")) == "1"
+
+
+def _bootstrap_guest_session() -> None:
+    """Ensure guest mode survives ?domain= / ?nav= full-page navigations on mobile."""
+    if not (st.session_state.get("guest_mode") or _guest_query_active()):
+        return
+    st.session_state.guest_mode = True
+    st.session_state.access_token = None
+    st.session_state.refresh_token = None
+    db.clear_auth()
+    if not st.session_state.user_id:
+        db.init_db()
+        st.session_state.user_id = str(uuid.uuid4())
+        db.ensure_user(st.session_state.user_id, language=st.session_state.language)
+
+
+def _qp_href(**params: str) -> str:
+    """Build query-string href; carry guest=1 so session survives chip/nav taps."""
+    parts = [f"{k}={html.escape(str(v), quote=True)}" for k, v in params.items()]
+    if st.session_state.get("guest_mode") or _guest_query_active():
+        parts.append("guest=1")
+    return "?" + "&".join(parts)
+
+
+def _set_guest_query_param() -> None:
+    try:
+        st.query_params["guest"] = "1"
+    except Exception:
+        pass
+
+
+def _clear_guest_query_param() -> None:
+    try:
+        del st.query_params["guest"]
+    except Exception:
+        pass
+
+
 def page_home() -> None:
     import router as rt
 
@@ -2402,7 +2456,7 @@ def page_home() -> None:
     # Ghost chips as HTML links (?domain=) — reliable flex-wrap; handler in handle_query_params
     domains = ("food", "clothes", "movie", "workout", "weekend")
     chips = "".join(
-        f'<a class="oc-chip" href="?domain={d}">{html.escape(domain_label(d))}</a>'
+        f'<a class="oc-chip" href="{_qp_href(domain=d)}">{html.escape(domain_label(d))}</a>'
         for d in domains
     )
     st.markdown(f'<div class="oc-chip-row">{chips}</div>', unsafe_allow_html=True)
@@ -2832,9 +2886,9 @@ def page_ambiguous() -> None:
     )
     domains = ("food", "clothes", "movie", "workout", "weekend")
     chips = "".join(
-        f'<a href="?pick={d}">{html.escape(domain_label(d))}</a>' for d in domains
+        f'<a href="{_qp_href(pick=d)}">{html.escape(domain_label(d))}</a>' for d in domains
     )
-    chips += f'<a href="?pick=other">{html.escape(t("other"))}</a>'
+    chips += f'<a href="{_qp_href(pick="other")}">{html.escape(t("other"))}</a>'
     st.markdown(f'<div class="oc-domains">{chips}</div>', unsafe_allow_html=True)
     if st.button(t("home"), use_container_width=True):
         st.session_state.page = "home"
@@ -4013,6 +4067,7 @@ def page_privacy() -> None:
 
 def handle_query_params() -> None:
     qp = st.query_params
+    _bootstrap_guest_session()
 
     privacy = _qp_one(qp.get("privacy"))
     if privacy in ("1", "true", "yes") or st.session_state.get("page") == "privacy":
@@ -4086,10 +4141,13 @@ def handle_query_params() -> None:
             _optimistic_toggle_shopping_item(int(shop_toggle))
         except (TypeError, ValueError) as exc:
             log.warning("invalid shop_toggle %r: %s", shop_toggle, exc)
-        try:
-            del st.query_params["shop_toggle"]
-        except Exception:
-            pass
+        for key in ("shop_toggle", "guest"):
+            try:
+                del st.query_params[key]
+            except Exception:
+                pass
+        if st.session_state.get("guest_mode"):
+            _set_guest_query_param()
         st.rerun()
 
     domain = _qp_one(qp.get("domain"))
