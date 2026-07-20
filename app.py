@@ -953,6 +953,24 @@ def init_state() -> None:
         db.clear_auth()
 
 
+def _run_llm_health_check_once() -> None:
+    """Boot-time probe — log loudly so silent model failure is visible in production."""
+    if st.session_state.get("_llm_health_checked"):
+        return
+    st.session_state["_llm_health_checked"] = True
+    import llm_config
+
+    key = resolve_grok_api_key()
+    ok, detail = llm_config.llm_health_check(key)
+    if ok:
+        log.info("llm_health_check OK model=%s", detail)
+    else:
+        log.error(
+            "llm_health_check FAILED detail=%s — text LLM calls will fall back to local packs",
+            detail,
+        )
+
+
 def get_secret(name: str, default: str = "") -> str:
     """Read a Streamlit secret; also searches one level of nested TOML tables."""
     try:
@@ -3976,6 +3994,7 @@ def page_shared() -> None:
 
 def main() -> None:
     init_state()
+    _run_llm_health_check_once()
     inject_css()
     require_auth_context()
 
