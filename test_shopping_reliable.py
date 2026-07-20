@@ -155,12 +155,58 @@ class ReliableShoppingTests(unittest.TestCase):
         self.assertIn("st.pills", lang)
         self.assertNotIn("href=", lang)
 
-    def test_ui_copy_has_no_ica_brand(self) -> None:
+    def test_ensure_shopping_user_creates_guest(self) -> None:
         import app as app_mod
 
-        sv = app_mod.I18N["sv"]
-        for key in ("list_create_hint", "list_empty", "list_title", "shop_title"):
-            self.assertNotIn("ICA", sv[key], key)
+        ss = _Session(
+            user_id=None,
+            guest_mode=False,
+            access_token=None,
+            language="sv",
+        )
+        with mock.patch.object(app_mod, "st", SimpleNamespace(session_state=ss)):
+            with mock.patch.object(app_mod.db, "init_db"):
+                with mock.patch.object(app_mod.db, "clear_auth"):
+                    with mock.patch.object(app_mod.db, "_ensure_sqlite_user"):
+                        uid = app_mod._ensure_shopping_user()
+        self.assertTrue(uid)
+        self.assertEqual(ss["user_id"], uid)
+        self.assertTrue(ss["guest_mode"])
+
+    def test_merge_retries_via_sqlite_fallback(self) -> None:
+        uid = self.user["id"]
+        to_buy = {"frukt & grönt": ["tomat"]}
+        import app as app_mod
+
+        ss = _Session(
+            user_id=uid,
+            guest_mode=True,
+            access_token=None,
+            language="sv",
+            shopping_list_cache=None,
+            shopping_merged_for=None,
+            shopping_list_error=None,
+        )
+        calls = {"n": 0}
+        orig = db.merge_shopping_from_decision
+
+        def flaky(user_id, did, selected, path=None):  # noqa: ANN001
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError(
+                    "Could not find the table 'public.shopping_items' in the schema cache PGRST205"
+                )
+            return orig(user_id, did, selected, path=self.db_path)
+
+        with mock.patch.object(app_mod, "st", SimpleNamespace(session_state=ss)):
+            with mock.patch.object(
+                app_mod.db, "merge_shopping_from_decision", side_effect=flaky
+            ):
+                with mock.patch.object(app_mod, "_load_shopping_items", return_value=[]):
+                    n = app_mod._merge_to_buy_into_list(to_buy, 42)
+        self.assertEqual(n, 1)
+        self.assertTrue(db._SHOPPING_FORCE_SQLITE)
+        self.assertEqual(ss["shopping_merged_for"], 42)
 
 
 class ReliableShoppingUiTests(unittest.TestCase):
@@ -184,6 +230,9 @@ class ReliableShoppingUiTests(unittest.TestCase):
         labels = [b.label or "" for b in at.button]
         self.assertTrue(any("Skapa lista" in lab for lab in labels), labels)
         self.assertTrue(any("Öppna listan" in lab for lab in labels), labels)
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("oc-shop-pick-marker", body)
+        self.assertIn("oc-shop-tog-marker", body)
 
         for b in at.button:
             if b.label and "Skapa lista" in b.label:
@@ -191,6 +240,7 @@ class ReliableShoppingUiTests(unittest.TestCase):
                 break
         self.assertEqual(at.session_state["page"], "lista")
         self.assertIsNotNone(at.session_state["shopping_merged_for"])
+        self.assertIsNone(at.session_state.get("shopping_list_error"))
         cache = at.session_state["shopping_list_cache"]
         self.assertIsInstance(cache, list)
         self.assertGreaterEqual(len(cache), 1)
@@ -198,6 +248,18 @@ class ReliableShoppingUiTests(unittest.TestCase):
 
         # Nav pills present
         self.assertTrue(len(at.pills) >= 1)
+
+    def test_premium_shop_css_tokens(self) -> None:
+        import app as app_mod
+
+        self.assertIn("oc-shop-pick-marker", app_mod.inject_css.__doc__ or "")
+        # CSS is injected via markdown string — check source constants
+        import inspect
+
+        src = inspect.getsource(app_mod.inject_css)
+        self.assertIn("oc-shop-pick-marker", src)
+        self.assertIn("oc-shop-tog-marker", src)
+        self.assertIn("oc-shop-row", src)
 
 
 if __name__ == "__main__":

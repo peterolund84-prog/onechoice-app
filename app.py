@@ -128,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "shop-select-no-ica-sqlite-fallback-v24-20260720"
+BUILD_ID = "premium-shop-pick-reliable-list-v25-20260720"
 
 I18N = {
     "sv": {
@@ -905,15 +905,21 @@ div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid=
 }}
 /* Fallback if :has() unavailable — still kill borders on bottom-looking buttons */
 .oc-nav-btns-marker {{ display: none !important; }}
-/* Domain pills — match ghost chip look */
-div[data-testid="stPills"] {{
+/* Domain / meal pills — ghost chip look (scoped; never style nav/lang) */
+.oc-chip-row + div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"],
+.oc-sec-label + div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] {{
     display: flex !important;
     flex-wrap: wrap !important;
     justify-content: center !important;
     gap: 8px !important;
     margin: 0 0 1.25rem !important;
 }}
-div[data-testid="stPills"] button {{
+.oc-chip-row + div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+.oc-sec-label + div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
     background: transparent !important;
     color: var(--oc-ink) !important;
     border: 1px solid var(--oc-border) !important;
@@ -928,8 +934,12 @@ div[data-testid="stPills"] button {{
     min-height: 0 !important;
     height: auto !important;
 }}
-div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="stPills"] button[kind="primary"] {{
+.oc-chip-row + div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+.oc-sec-label + div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+.oc-chip-row + div[data-testid="stPills"] button[kind="primary"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button[kind="primary"] {{
     background: transparent !important;
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
@@ -1273,15 +1283,140 @@ div[data-baseweb="input"] {{
     border-color: var(--oc-accent);
     color: var(--oc-accent);
 }}
+/* Executable shopping picks — same card as preview, not bare Streamlit buttons */
+.oc-shop-pick {{
+    background: #fff;
+    border-radius: 20px;
+    border: 1px solid var(--oc-border);
+    padding: 1.15rem 1.1rem 1rem;
+    margin: 0 0 1.1rem;
+    text-align: left;
+}}
+.oc-shop-pick .oc-shop-title {{
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600; margin: 0 0 0.75rem;
+    font-family: "Inter", sans-serif !important;
+}}
+.oc-shop-pick .oc-sec-label {{
+    margin: 0.85rem 0 0.3rem;
+}}
+.oc-shop-pick .oc-sec-label:first-of-type {{
+    margin-top: 0.15rem;
+}}
+.oc-shop-pick .oc-assumed {{
+    margin: 0.85rem 0 0; padding-top: 0.7rem;
+    border-top: 1px solid var(--oc-border);
+    font-size: 0.92rem; color: var(--oc-muted); line-height: 1.4;
+}}
+/* Streamlit bordered container used as premium shop card */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) {{
+    background: #fff !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 20px !important;
+    box-shadow: none !important;
+    padding: 0.85rem 0.85rem 0.65rem !important;
+    margin: 0 0 1.1rem !important;
+}}
+.oc-shop-pick-marker {{ display: none !important; height: 0 !important; margin: 0 !important; }}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-shop-title {{
+    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600; margin: 0 0 0.55rem;
+    font-family: "Inter", sans-serif !important;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-assumed {{
+    margin: 0.75rem 0 0.15rem; padding-top: 0.65rem;
+    border-top: 1px solid var(--oc-border);
+    font-size: 0.92rem; color: var(--oc-muted); line-height: 1.4;
+}}
+/* Toggle rows — kill Streamlit chrome, mimic oc-shop-row */
+.oc-shop-tog-marker {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
+.oc-shop-tog-marker + div[data-testid="stHorizontalBlock"],
+div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] {{
+    margin: 0.28rem 0 !important;
+}}
+.oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
+.oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
+.oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"],
+div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] div.stButton > button,
+div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] button[data-testid="baseButton-secondary"],
+div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"] {{
+    width: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 0.65rem !important;
+    min-height: 3rem !important;
+    height: auto !important;
+    padding: 0.85rem 1rem !important;
+    margin: 0 !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+    color: var(--oc-ink) !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 1rem !important;
+    font-weight: 500 !important;
+    line-height: 1.3 !important;
+    text-align: left !important;
+}}
+.oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[kind="primary"],
+.oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"],
+div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] button[kind="primary"],
+div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"] {{
+    color: var(--oc-muted) !important;
+    text-decoration: line-through !important;
+    opacity: 0.72 !important;
+    border-color: var(--oc-accent) !important;
+}}
 .oc-list-badge {{
     display: inline-block;
     margin: 0.25rem 0 0.75rem;
     padding: 0.35rem 0.65rem;
     border-radius: 999px;
-    background: var(--oc-primary-soft);
+    background: {PRIMARY_SOFT};
     color: var(--oc-ink);
     font-size: 0.82rem;
     font-weight: 600;
+}}
+/* Nav / lang pills must win over global domain-chip pill chrome */
+.oc-nav-pills + div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button {{
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    min-height: 2.6rem !important;
+    padding: 0.35rem 0.2rem !important;
+}}
+.oc-nav-pills + div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button[aria-checked="true"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+    border: none !important;
+    background: transparent !important;
+}}
+.oc-lang-pills + div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.78rem !important;
+    min-height: 1.6rem !important;
+    padding: 0.15rem 0.4rem !important;
+}}
+.oc-lang-pills + div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+    border: none !important;
 }}
 </style>
         """,
@@ -2463,13 +2598,47 @@ def _store_shopping_on_current(shop: dict[str, Any] | None) -> dict[str, Any]:
     return cur
 
 
+def _ensure_shopping_user() -> str | None:
+    """Guarantee a user_id exists for shopping writes (guest or signed-in)."""
+    uid = _shopping_list_user_id()
+    if uid:
+        try:
+            if st.session_state.get("guest_mode") or not st.session_state.get("access_token"):
+                db.clear_auth()
+                db._ensure_sqlite_user(uid)
+            else:
+                db.ensure_user(uid, language=st.session_state.get("language", "sv"))
+        except Exception as exc:
+            log.warning("ensure shopping user failed: %s", exc)
+            try:
+                db._ensure_sqlite_user(uid)
+            except Exception:
+                pass
+        return uid
+    # Soft recover — never leave Skapa lista without a user
+    try:
+        db.init_db()
+        db.clear_auth()
+        uid = str(uuid.uuid4())
+        st.session_state.user_id = uid
+        st.session_state.guest_mode = True
+        db._ensure_sqlite_user(uid)
+        return uid
+    except Exception as exc:
+        log.warning("create shopping user failed: %s", exc)
+        return None
+
+
 def _merge_to_buy_into_list(
     to_buy: dict[str, Any] | None,
     decision_id: int | None = None,
 ) -> int:
     """Upsert selected to_buy rows into the persistent per-user list. Returns count."""
-    uid = _shopping_list_user_id()
-    if not uid or not isinstance(to_buy, dict) or not to_buy:
+    if not isinstance(to_buy, dict) or not to_buy:
+        return 0
+    uid = _ensure_shopping_user()
+    if not uid:
+        st.session_state.shopping_list_error = "no user"
         return 0
     try:
         rows = db.merge_shopping_from_decision(uid, decision_id, to_buy)
@@ -2484,8 +2653,24 @@ def _merge_to_buy_into_list(
         return len(rows or [])
     except Exception as exc:
         log.warning("merge shopping to_buy failed: %s", exc)
-        st.session_state.shopping_list_error = str(exc)[:180]
-        return 0
+        # Last resort: force local SQLite and retry once
+        try:
+            db._mark_shopping_sqlite_fallback(exc)
+            db._ensure_sqlite_user(uid)
+            rows = db.merge_shopping_from_decision(uid, decision_id, to_buy)
+            st.session_state.shopping_list_cache = None
+            st.session_state.shopping_list_error = None
+            if decision_id is not None:
+                st.session_state.shopping_merged_for = decision_id
+            try:
+                _load_shopping_items(force=True)
+            except Exception:
+                pass
+            return len(rows or [])
+        except Exception as exc2:
+            log.warning("merge shopping retry failed: %s", exc2)
+            st.session_state.shopping_list_error = str(exc2)[:180]
+            return 0
 
 
 def _merge_accepted_shopping(cur: dict[str, Any]) -> None:
@@ -2661,7 +2846,7 @@ def _load_shopping_items(*, force: bool = False) -> list[dict[str, Any]]:
     cached = st.session_state.get("shopping_list_cache")
     if not force and isinstance(cached, list):
         return cached
-    uid = _shopping_list_user_id()
+    uid = _ensure_shopping_user()
     if not uid:
         return []
     try:
@@ -2669,7 +2854,12 @@ def _load_shopping_items(*, force: bool = False) -> list[dict[str, Any]]:
         items = db.list_shopping_items(uid)
     except Exception as exc:
         log.warning("load shopping items failed: %s", exc)
-        items = list(cached) if isinstance(cached, list) else []
+        try:
+            db._mark_shopping_sqlite_fallback(exc)
+            db._ensure_sqlite_user(uid)
+            items = db.list_shopping_items(uid)
+        except Exception:
+            items = list(cached) if isinstance(cached, list) else []
     st.session_state.shopping_list_cache = items
     return items
 
@@ -2725,6 +2915,27 @@ def _optimistic_toggle_shopping_item(item_id: int) -> None:
     _flush_shopping_pending_writes()
 
 
+def _render_shop_toggle_button(
+    *,
+    label: str,
+    key: str,
+    checked: bool,
+) -> bool:
+    """Premium row-styled toggle — primary=checked, secondary=open."""
+    st.markdown(
+        f'<div class="oc-shop-tog-marker" data-checked="{"1" if checked else "0"}"></div>',
+        unsafe_allow_html=True,
+    )
+    return bool(
+        st.button(
+            label,
+            key=key,
+            use_container_width=True,
+            type="primary" if checked else "secondary",
+        )
+    )
+
+
 def render_persistent_shopping_list() -> None:
     _flush_shopping_pending_writes()
     items = _load_shopping_items()
@@ -2737,24 +2948,28 @@ def render_persistent_shopping_list() -> None:
     import shopping_items as si
 
     grouped = si.group_items(items)
-    for section, rows in grouped.items():
+    with st.container(border=True):
         st.markdown(
-            f'<div class="oc-sec-label">{html.escape(section)}</div>',
+            '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
             unsafe_allow_html=True,
         )
-        for row in rows:
-            iid = int(row.get("id") or 0)
-            name = str(row.get("name") or "")
-            checked = bool(row.get("checked"))
-            label = f"{'✓ ' if checked else ''}{name}"
-            if st.button(
-                label,
-                key=f"shop_toggle_{iid}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                _optimistic_toggle_shopping_item(iid)
-                st.rerun()
+        for section, rows in grouped.items():
+            st.markdown(
+                f'<div class="oc-sec-label">{html.escape(section)}</div>',
+                unsafe_allow_html=True,
+            )
+            for row in rows:
+                iid = int(row.get("id") or 0)
+                name = str(row.get("name") or "")
+                checked = bool(row.get("checked"))
+                mark = "✓  " if checked else "○  "
+                if _render_shop_toggle_button(
+                    label=f"{mark}{name}",
+                    key=f"shop_toggle_{iid}",
+                    checked=checked,
+                ):
+                    _optimistic_toggle_shopping_item(iid)
+                    st.rerun()
 
 
 def render_decision_shopping_added(
@@ -2774,6 +2989,7 @@ def render_decision_shopping_added(
 
     if err:
         st.warning(t("list_error"))
+        st.caption(html.escape(str(err)[:160]))
     elif already:
         st.markdown(
             f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
@@ -2799,13 +3015,17 @@ def render_decision_shopping_added(
             key="exec_create_list",
         ):
             selected = _selected_to_buy_from_checks(shop, did)
-            n = _merge_to_buy_into_list(selected or to_buy, did)
+            payload = selected if selected else to_buy
+            n = _merge_to_buy_into_list(payload, did)
             if n:
                 try:
                     safe_toast(t("list_created"))
                 except Exception:
                     pass
                 st.session_state.page = "lista"
+                st.session_state.shopping_list_error = None
+            elif not st.session_state.get("shopping_list_error"):
+                st.session_state.shopping_list_error = t("list_error")
             st.rerun()
     with c2:
         if st.button(
@@ -2819,7 +3039,7 @@ def render_decision_shopping_added(
 
 
 def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
-    """Toggleable shopping items — choose what goes on the list."""
+    """Toggleable shopping items — premium card matching the decision preview."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -2828,47 +3048,54 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
     import shopping as shopping_mod
 
     language = st.session_state.get("language", "sv")
-    st.markdown(
-        f'<div class="oc-shop-title" style="margin:0.4rem 0 0.6rem">'
-        f'{html.escape(t("shop_title"))}</div>',
-        unsafe_allow_html=True,
-    )
     checks = st.session_state.get("shopping_checks")
     if not isinstance(checks, dict):
         checks = {}
         st.session_state.shopping_checks = checks
     did = decision_id if decision_id is not None else "x"
-    idx = 0
-    for section, items in to_buy.items():
-        if not items:
-            continue
-        if isinstance(items, str):
-            items = [items]
-        if not isinstance(items, (list, tuple)):
-            continue
+
+    with st.container(border=True):
         st.markdown(
-            f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
+            '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
             unsafe_allow_html=True,
         )
-        for item in items:
-            ckey = f"{did}:{idx}"
-            checked = bool(checks.get(ckey, True))
-            mark = "✓ " if checked else ""
-            if st.button(
-                f"{mark}{item}",
-                key=f"shop_tog_{did}_{idx}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                _toggle_shop_check(decision_id, idx)
-                st.rerun()
-            idx += 1
+        st.markdown(
+            f'<div class="oc-shop-title">{html.escape(t("shop_title"))}</div>',
+            unsafe_allow_html=True,
+        )
+        idx = 0
+        for section, items in to_buy.items():
+            if not items:
+                continue
+            if isinstance(items, str):
+                items = [items]
+            if not isinstance(items, (list, tuple)):
+                continue
+            st.markdown(
+                f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
+                unsafe_allow_html=True,
+            )
+            for item in items:
+                ckey = f"{did}:{idx}"
+                checked = bool(checks.get(ckey, True))
+                mark = "✓  " if checked else "○  "
+                if _render_shop_toggle_button(
+                    label=f"{mark}{item}",
+                    key=f"shop_tog_{did}_{idx}",
+                    checked=checked,
+                ):
+                    _toggle_shop_check(decision_id, idx)
+                    st.rerun()
+                idx += 1
 
-    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
-    if not isinstance(assumed, (list, tuple)):
-        assumed = ["salt", "peppar", "olja"]
-    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
-    st.caption(assumed_line)
+        assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+        if not isinstance(assumed, (list, tuple)):
+            assumed = ["salt", "peppar", "olja"]
+        assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
+        st.markdown(
+            f'<p class="oc-assumed">{html.escape(assumed_line)}</p>',
+            unsafe_allow_html=True,
+        )
 
 
 def _profile_show_nutrition() -> bool:

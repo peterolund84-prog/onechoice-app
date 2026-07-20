@@ -30,6 +30,9 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("var(--oc-accent)", css)
         self.assertNotIn("5A8BFF", css)
         self.assertNotIn("F4F6F8", css)
+        # Premium shopping pick card (execute) stays in design system
+        self.assertIn("oc-shop-pick-marker", css)
+        self.assertIn("oc-shop-tog-marker", css)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
         from streamlit.testing.v1 import AppTest
