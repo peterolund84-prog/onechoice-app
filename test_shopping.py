@@ -11,6 +11,7 @@ import db
 import feasibility
 import pipeline
 import shopping
+import shopping_compat
 
 
 class ShoppingTests(unittest.TestCase):
@@ -53,6 +54,30 @@ class ShoppingTests(unittest.TestCase):
         self.assertGreaterEqual(len(recipe.get("steps") or []), 3)
         assert shop is not None
         self.assertTrue(shop.get("to_buy"))
+
+    def test_shopping_compat_fallback_without_build_meal_bundle(self) -> None:
+        saved = getattr(shopping, "build_meal_bundle", None)
+        try:
+            if hasattr(shopping, "build_meal_bundle"):
+                delattr(shopping, "build_meal_bundle")
+            recipe, shop = shopping_compat.resolve_meal_bundle(
+                "Sallad med tonfisk",
+                meta={
+                    "meal_type": "lunch",
+                    "ingredients": ["tonfisk", "sallad", "gurka", "olja", "salt", "peppar"],
+                },
+                meal_type="lunch",
+                include_shopping=True,
+            )
+            self.assertIsNotNone(recipe)
+            self.assertIsNotNone(shop)
+            assert recipe is not None
+            self.assertGreaterEqual(len(recipe.get("steps") or []), 3)
+            assert shop is not None
+            self.assertTrue(shop.get("to_buy"))
+        finally:
+            if saved is not None:
+                shopping.build_meal_bundle = saved  # type: ignore[attr-defined]
 
     def test_kycklingwok_puts_chicken_on_to_buy(self) -> None:
         payload = shopping.build_shopping("Kycklingwok med ris")

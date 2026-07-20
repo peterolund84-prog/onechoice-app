@@ -402,9 +402,11 @@ def _check_food(
         return FeasibilityResult(ok=True, execution=execution)
 
     # Middag: recipe first → smart shopping list from structured ingredients
+    import shopping_compat as shop_compat
+
     meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
     active = meta.get("active_minutes")
-    recipe, shop = shopping.build_meal_bundle(
+    recipe, shop = shop_compat.resolve_meal_bundle(
         suggestion,
         meta=meta,
         meal_type=meal_type,

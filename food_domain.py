@@ -477,8 +477,9 @@ def apply_meal_execution(
             grok_api_key="",
         )
         import shopping as shop_mod
+        import shopping_compat as shop_compat
 
-        mini = shop_mod.shopping_from_recipe(out["recipe"], suggestion=suggestion)
+        mini = shop_compat.shopping_from_recipe(out["recipe"], suggestion=suggestion)
         if mini and mini.get("to_buy"):
             out["shopping"] = mini
             out["shopping_list"] = mini.get("to_buy")

@@ -3395,8 +3395,9 @@ def page_execute() -> None:
             seed_ings = None
 
     import shopping as shop_mod
+    import shopping_compat as shop_compat
 
-    bundled_recipe, bundled_shop = shop_mod.build_meal_bundle(
+    bundled_recipe, bundled_shop = shop_compat.resolve_meal_bundle(
         suggestion,
         meta={"meal_type": meal_type, "ingredients": seed_ings or []},
         meal_type=meal_type,
@@ -3410,7 +3411,7 @@ def page_execute() -> None:
     if bundled_shop and not shop:
         shop = bundled_shop
     elif isinstance(recipe, dict) and not shop:
-        derived = shop_mod.shopping_from_recipe(recipe, suggestion=suggestion)
+        derived = shop_compat.shopping_from_recipe(recipe, suggestion=suggestion)
         if derived and derived.get("to_buy"):
             shop = derived
 
@@ -3429,7 +3430,15 @@ def page_execute() -> None:
             )
         except Exception as exc2:
             log.error("recipe catalog fallback failed: %s", exc2)
-            recipe = shop_mod.build_recipe(
+            recipe = shop_compat.resolve_meal_bundle(
+                suggestion,
+                meta={"meal_type": meal_type, "ingredients": seed_ings or []},
+                meal_type=meal_type,
+                language=st.session_state.get("language", "sv"),
+                grok_api_key="",
+                include_shopping=False,
+                active_minutes=active_mins,
+            )[0] or shop_mod.build_recipe(
                 suggestion,
                 seed_ings,
                 meal_type=meal_type,
