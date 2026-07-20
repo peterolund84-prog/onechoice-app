@@ -134,7 +134,15 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
         or ["netflix", "svt_play"],
     )
     movie.setdefault("allow_rentals", bool(ctx.get("allow_rentals", False)))
-    movie.setdefault("available_minutes", ctx.get("available_minutes") or 90)
+    movie.setdefault(
+        "available_minutes",
+        ctx.get("available_minutes") or movie.get("available_minutes") or 90,
+    )
+    # Household kids ages — Med barnen hard gate (may also live under weekend)
+    if ctx.get("kids_ages") is not None:
+        movie["kids_ages"] = ctx.get("kids_ages")
+    else:
+        movie.setdefault("kids_ages", movie.get("kids_ages") or [])
 
     workout.setdefault("context", ctx.get("workout_context") or "home")  # gym|home|outdoors
     workout.setdefault("equipment", ctx.get("equipment") or ["none"])
@@ -603,8 +611,25 @@ def _check_movie(
     suggestion = str(candidate.get("suggestion") or "")
     movie = profile.get("movie") or {}
     services = [mocks.normalize_service(s) for s in (movie.get("services") or [])]
-    minutes = int(movie.get("available_minutes") or context.get("available_minutes") or 90)
+    # Format drives time window when present
+    minutes = int(
+        context.get("available_minutes")
+        or movie.get("available_minutes")
+        or 90
+    )
     allow_rent = bool(movie.get("allow_rentals"))
+    mood = str(context.get("mood") or "")
+    fmt = str(context.get("format") or "")
+
+    # Med barnen — hard age gate from household profile
+    if mood == "med_barnen" or (candidate.get("meta") or {}).get("kids_ok") is False:
+        try:
+            import movie_domain as md
+
+            if mood == "med_barnen" and not md.is_age_appropriate(candidate, profile):
+                return FeasibilityResult(ok=False, reasons=["not_age_appropriate"])
+        except Exception:
+            pass
 
     meta_title = (candidate.get("meta") or {}).get("title") or suggestion
     # Strip Swedish wrappers: "Titta på X", "Ett avsnitt av X"
@@ -622,6 +647,17 @@ def _check_movie(
         allow_rentals=allow_rent,
     )
     if match:
+        # Soft format kind preference — reject clear mismatches when both known
+        try:
+            import movie_domain as md
+
+            if fmt and not md.matches_format(
+                {**candidate, "meta": {**(candidate.get("meta") or {}), **match}},
+                fmt,
+            ):
+                return FeasibilityResult(ok=False, reasons=[f"format_mismatch:{fmt}"])
+        except Exception:
+            pass
         return FeasibilityResult(
             ok=True,
             execution={

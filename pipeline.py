@@ -241,6 +241,44 @@ def decide(
             meal_type = fd.default_meal_type()
         ctx["meal_type"] = meal_type
 
+    movie_format: str | None = None
+    movie_mood: str | None = None
+    in_progress_series: str | None = None
+    if domain == "movie":
+        import movie_domain as md
+
+        # History needed for in-progress series + mood preselect (before generate)
+        early_history = db.list_decisions(user_id, domain="movie", limit=40, path=db_path)
+        in_progress_series = (
+            (context_extra or {}).get("in_progress_series")
+            or ctx.get("in_progress_series")
+            or md.find_in_progress_series(early_history)
+        )
+        movie_format = md.normalize_format(
+            (context_extra or {}).get("format")
+            or ctx.get("format")
+            or md.default_format(
+                hour=int(ctx.get("hour") or datetime.now().astimezone().hour),
+                weekday=bool(ctx.get("weekday", True)),
+                in_progress_series=in_progress_series,
+            )
+        )
+        movie_mood = md.normalize_mood(
+            (context_extra or {}).get("mood")
+            or ctx.get("mood")
+            or md.default_mood(
+                hour=int(ctx.get("hour") or datetime.now().astimezone().hour),
+                weekday=bool(ctx.get("weekday", True)),
+                history=early_history,
+            )
+        )
+        ctx = md.apply_context(
+            ctx,
+            fmt=movie_format,
+            mood=movie_mood,
+            in_progress_series=in_progress_series,
+        )
+
     # Fridge photo → cook only from confirmed inventory (no shopping list)
     fridge_mode = False
     available_ingredients: list[str] = []
@@ -268,7 +306,10 @@ def decide(
         ctx["normalized_question"] = route_meta.get("normalized_question")
 
     profile = feasibility.parse_profile(user, ctx)
-    history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
+    if domain == "movie":
+        history = early_history  # noqa: F821 — set in movie branch above
+    else:
+        history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
     prefs = db.get_preferences(user_id, domain, path=db_path)
     # Repetition guard: per meal_type for food (porridge every morning is fine)
     repeat_days = REPEAT_DAYS
@@ -662,6 +703,11 @@ def decide(
         context={
             **ctx,
             "meal_type": meal_type,
+            "format": movie_format or ctx.get("format"),
+            "mood": movie_mood or ctx.get("mood"),
+            "kind": ctx.get("kind"),
+            "in_progress_series": in_progress_series or ctx.get("in_progress_series"),
+            "series_title": ctx.get("series_title"),
             "source": ctx.get("source") or ((top.get("meta") or {}).get("source")),
             "available_ingredients": available_ingredients if fridge_mode else ctx.get("available_ingredients"),
             "fridge_fallback": bool((top.get("meta") or {}).get("fridge_fallback")),
@@ -1029,6 +1075,29 @@ def _grok_candidates(
             list(safe_context.get("available_ingredients") or []),
             language,
         )
+    if domain == "movie":
+        import movie_domain as md
+
+        fmt = md.normalize_format(safe_context.get("format"))
+        mood = md.normalize_mood(safe_context.get("mood"))
+        domain_rules = (
+            f"{domain_rules}\n"
+            f"Format={md.format_label(fmt, language)} "
+            f"(kind={md.format_kind(fmt)}, max ~{md.max_minutes(fmt)} min).\n"
+            f"{md.mood_guidance(mood, language)}\n"
+            f"meta.kind must be '{md.format_kind(fmt)}'. "
+            "meta.title = catalog title for deep link."
+        )
+        if md.is_kids_mood(mood):
+            domain_rules += (
+                "\nHARD: Med barnen — only age-appropriate family content. "
+                "No adult thrillers, no Succession/Night Agent/Dune."
+            )
+        if safe_context.get("in_progress_series") and fmt == "avsnitt":
+            domain_rules += (
+                f"\nUser is mid-series: prefer next episode of "
+                f"{safe_context.get('in_progress_series')!r} when format is Avsnitt."
+            )
     user = f"""
 Domain: {domain}
 Question: {question}
@@ -1135,7 +1204,9 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
         "movie": (
             f"Services={profile.get('movie', {}).get('services')}. "
             f"Max minutes={profile.get('movie', {}).get('available_minutes')}. "
-            "Must be on a subscribed service. No rentals unless allow_rentals. Include deep link target in meta.title."
+            "Must be on a subscribed service. No rentals unless allow_rentals. "
+            "Include deep link target in meta.title. "
+            "ONE suggestion only — format+mood are constraints, never a browse UI."
         ),
         "workout": (
             f"Context={profile.get('workout', {}).get('context')}, "
@@ -1502,6 +1573,15 @@ def _local_candidates(
         import workout_domain as wd
 
         items = wd.local_candidates(language)
+    elif domain == "movie":
+        import movie_domain as md
+
+        items = md.local_candidates(
+            fmt=md.normalize_format((context or {}).get("format")),
+            mood=md.normalize_mood((context or {}).get("mood")),
+            language=language,
+            in_progress_series=(context or {}).get("in_progress_series"),
+        )
     elif domain in ("other", db.NEAR_DOMAIN) and cat:
         items = _near_domain_pack(cat, language)
     else:
@@ -1557,10 +1637,20 @@ def _guaranteed_feasible(
             "justification": "Rent, säkert och funkar hela dagen." if sv else "Clean, safe, works all day.",
         }
     elif domain == "movie":
-        c = {
+        import movie_domain as md
+
+        fmt = md.normalize_format(context.get("format"))
+        mood = md.normalize_mood(context.get("mood"))
+        pack = md.local_candidates(
+            fmt=fmt,
+            mood=mood,
+            language=language,
+            in_progress_series=context.get("in_progress_series"),
+        )
+        c = pack[0] if pack else {
             "suggestion": "Seinfeld",
             "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
-            "meta": {"title": "seinfeld"},
+            "meta": {"title": "seinfeld", "kind": "series", "format": fmt, "mood": mood},
         }
     elif domain == "workout":
         import workout_domain as wd
