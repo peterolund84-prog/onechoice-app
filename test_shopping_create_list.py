@@ -160,8 +160,11 @@ class CreateListUiTests(unittest.TestCase):
             any("Öppna listan" in lab for lab in labels),
             labels,
         )
-        # Checkboxes present for shopping items
-        self.assertGreater(len(at.checkbox), 0)
+        # Toggle buttons present for shopping items (✓ when checked)
+        self.assertTrue(
+            any((b.label or "").startswith("✓ ") for b in at.button),
+            [b.label for b in at.button],
+        )
 
     def test_skapa_lista_fills_persistent_list(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -176,6 +179,18 @@ class CreateListUiTests(unittest.TestCase):
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
+        # Uncheck first ingredient toggle (✓ …)
+        toggled = False
+        for b in at.button:
+            lab = b.label or ""
+            if lab.startswith("✓ "):
+                b.click().run()
+                toggled = True
+                break
+        self.assertTrue(toggled)
+        # After toggle, at least one item should be unchecked (no ✓)
+        checks = at.session_state["shopping_checks"]
+        self.assertTrue(isinstance(checks, dict) and any(v is False for v in checks.values()))
         created = False
         for b in at.button:
             if b.label and "Skapa lista" in b.label:

@@ -126,7 +126,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "shopping-checklist-create-v20-20260720"
+BUILD_ID = "session-safe-nav-fast-food-v21-20260720"
 
 I18N = {
     "sv": {
@@ -1785,18 +1785,40 @@ def _clear_action_query_params() -> None:
 
 
 def lang_bar() -> None:
-    """Compact SV · EN — original HTML look."""
+    """Compact SV · EN via session-safe buttons (HTML links wipe auth on mobile)."""
     lang = st.session_state.language
-    sv_cls = "active" if lang == "sv" else ""
-    en_cls = "active" if lang == "en" else ""
-    st.markdown(
-        f'<div class="oc-lang">'
-        f'<a class="{sv_cls}" href="?lang=sv">SV</a>'
-        f'<span class="oc-lang-sep">·</span>'
-        f'<a class="{en_cls}" href="?lang=en">EN</a>'
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="oc-lang-btns-marker"></div>', unsafe_allow_html=True)
+    _, c1, c2 = st.columns([6, 1, 1])
+    with c1:
+        if st.button(
+            "SV",
+            key="lang_sv_btn",
+            type="primary" if lang == "sv" else "secondary",
+            use_container_width=True,
+        ):
+            if lang != "sv":
+                st.session_state.language = "sv"
+                if st.session_state.user_id and not st.session_state.get("guest_mode"):
+                    try:
+                        db.update_user(st.session_state.user_id, language="sv")
+                    except Exception:
+                        pass
+                st.rerun()
+    with c2:
+        if st.button(
+            "EN",
+            key="lang_en_btn",
+            type="primary" if lang == "en" else "secondary",
+            use_container_width=True,
+        ):
+            if lang != "en":
+                st.session_state.language = "en"
+                if st.session_state.user_id and not st.session_state.get("guest_mode"):
+                    try:
+                        db.update_user(st.session_state.user_id, language="en")
+                    except Exception:
+                        pass
+                st.rerun()
 
 
 def _start_domain_decision(domain: str) -> None:
@@ -1886,25 +1908,26 @@ def render_tagline(text: str | None = None) -> None:
 
 
 def nav() -> None:
-    """Fixed bottom nav — original icon+label HTML (session kept via guest=1 / Streamlit session)."""
+    """Fixed bottom nav — Streamlit buttons (HTML <a href> wipes login on mobile)."""
     page = st.session_state.page
     items = (
-        ("home", ICON_HOME, t("home"), page in ("home", "result")),
-        ("lista", ICON_LIST, t("list_nav"), page == "lista"),
-        ("history", ICON_CLOCK, t("history"), page == "history"),
-        ("profile", ICON_USER, t("profile"), page == "profile"),
+        ("home", t("home"), page in ("home", "result")),
+        ("lista", t("list_nav"), page == "lista"),
+        ("history", t("history"), page == "history"),
+        ("profile", t("profile"), page == "profile"),
     )
-    links = []
-    for key, icon, name, active in items:
-        cls = "active" if active else ""
-        href = _qp_href(nav=key)
-        links.append(
-            f'<a class="{cls}" href="{href}">{icon}<span>{html.escape(name)}</span></a>'
-        )
-    st.markdown(
-        f'<nav class="oc-nav" aria-label="Navigation">{"".join(links)}</nav>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="oc-nav-btns-marker"></div>', unsafe_allow_html=True)
+    cols = st.columns(len(items))
+    for col, (key, name, active) in zip(cols, items):
+        with col:
+            if st.button(
+                name,
+                key=f"nav_btn_{key}",
+                type="primary" if active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.page = "home" if key == "home" else key
+                st.rerun()
 
 
 def render_reroll_dots(reroll_index: int) -> None:
@@ -2394,10 +2417,13 @@ def _selected_to_buy_from_checks(
     shop: dict[str, Any],
     decision_id: int | None,
 ) -> dict[str, list[str]]:
-    """Build to_buy from checkbox widget state (default: all checked)."""
+    """Build to_buy from shopping_checks toggles (default: all checked)."""
     to_buy = shop.get("to_buy") if isinstance(shop.get("to_buy"), dict) else {}
     if not to_buy:
         return {}
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
     did = decision_id if decision_id is not None else "x"
     selected: dict[str, list[str]] = {}
     idx = 0
@@ -2409,12 +2435,21 @@ def _selected_to_buy_from_checks(
         if not isinstance(items, (list, tuple)):
             continue
         for item in items:
-            wkey = f"shop_chk_{did}_{idx}"
+            ckey = f"{did}:{idx}"
             idx += 1
-            # Missing key → treat as checked (first paint / auto-merge)
-            if st.session_state.get(wkey, True):
+            if checks.get(ckey, True):
                 selected.setdefault(str(section), []).append(str(item))
     return selected
+
+
+def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
+    did = decision_id if decision_id is not None else "x"
+    ckey = f"{did}:{idx}"
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
+        st.session_state.shopping_checks = checks
+    checks[ckey] = not bool(checks.get(ckey, True))
 
 
 def _history_status_label(status: str) -> str:
@@ -2697,7 +2732,7 @@ def render_decision_shopping_added(
 
 
 def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
-    """Checkable shopping list grouped by store layout — drives Skapa lista."""
+    """Toggleable shopping items — buttons (Streamlit checkboxes break on remount)."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -2712,6 +2747,10 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
         f'{html.escape(t("shop_title"))} · {html.escape(str(store))}</div>',
         unsafe_allow_html=True,
     )
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
+        st.session_state.shopping_checks = checks
     did = decision_id if decision_id is not None else "x"
     idx = 0
     for section, items in to_buy.items():
@@ -2726,11 +2765,18 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
             unsafe_allow_html=True,
         )
         for item in items:
-            # Unique widget key — do not also write the same key into a dict
-            # (Streamlit owns session_state[widget_key]).
-            wkey = f"shop_chk_{did}_{idx}"
+            ckey = f"{did}:{idx}"
+            checked = bool(checks.get(ckey, True))
+            mark = "✓ " if checked else ""
+            if st.button(
+                f"{mark}{item}",
+                key=f"shop_tog_{did}_{idx}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                _toggle_shop_check(decision_id, idx)
+                st.rerun()
             idx += 1
-            st.checkbox(str(item), value=True, key=wkey)
 
     assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
     if not isinstance(assumed, (list, tuple)):
