@@ -209,3 +209,55 @@ class MealTypeInferTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LeftoverGroundingTests(unittest.TestCase):
+    """Leftovers may only be suggested with EVIDENCE of a recent cooked dinner."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db_path = str(Path(self.tmp.name) / "t.db")
+        db.init_db(self.db_path)
+        self.user = db.ensure_user("leftover-tester", path=self.db_path)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _lunch_decide(self):
+        return pipeline.decide(
+            self.user["id"],
+            "Vad ska jag äta till lunch?",
+            domain_hint="food",
+            language="sv",
+            db_path=self.db_path,
+            context_extra={"meal_type": "lunch"},
+        )
+
+    def test_fresh_user_never_sees_leftovers(self) -> None:
+        for _ in range(6):  # cover rerolls/ranking variance
+            r = self._lunch_decide()
+            self.assertTrue(r.ok)
+            low = (r.suggestion or "").lower()
+            self.assertNotIn("matlåda", low)
+            self.assertNotIn("gårdagens", low)
+            self.assertNotIn("rest", low.split()[0] if low else "")
+
+    def test_grounded_leftover_names_the_dish(self) -> None:
+        d = db.create_decision(
+            user_id=self.user["id"],
+            domain="food",
+            question="middag?",
+            suggestion="Kycklingwok med ris",
+            justification="x",
+            context={"meal_type": "middag"},
+            path=self.db_path,
+        )
+        db.set_decision_status(d["id"], "accepted", path=self.db_path)
+        found = False
+        for _ in range(8):
+            r = self._lunch_decide()
+            if "kycklingwok" in (r.suggestion or "").lower():
+                found = True
+                self.assertIn("gårdagens", r.suggestion.lower())
+                break
+        self.assertTrue(found, "grounded leftover candidate never surfaced")

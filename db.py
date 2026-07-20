@@ -622,6 +622,43 @@ def list_decisions(
         return [_decision_row(r) for r in rows]
 
 
+def recent_cooked_dinner(
+    user_id: str,
+    *,
+    hours: int = 48,
+    path: Path | str | None = None,
+) -> str | None:
+    """
+    Title of an accepted/locked DINNER cooked at home within the window, else
+    None. Grounds leftover suggestions: "matlåda från gårdagens X" may only be
+    shown when X actually exists in the log — and then we name it.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = list_decisions(user_id, domain="food", limit=40, path=path)
+    for r in rows:
+        if str(r.get("status") or "") not in ("accepted", "locked"):
+            continue
+        ctx = r.get("context") if isinstance(r.get("context"), dict) else {}
+        meal = str(ctx.get("meal_type") or "")
+        if meal and meal != "middag":
+            continue
+        # Eating out / leftovers themselves never create new leftovers
+        if ctx.get("eating_out") or ctx.get("leftover"):
+            continue
+        created = r.get("created_at")
+        try:
+            ts = datetime.fromisoformat(str(created).replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        if ts >= cutoff:
+            return str(r.get("suggestion") or "") or None
+    return None
+
+
 def recent_suggestions(
     user_id: str,
     domain: str,

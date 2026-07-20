@@ -3476,6 +3476,22 @@ def page_profile() -> None:
     elif st.session_state.guest_mode:
         st.caption("Guest / lokal demo")
 
+    # AI status — owner diagnostics. Makes silent LLM failure VISIBLE on device.
+    try:
+        import llm_config
+
+        d = llm_config.DIAGNOSTICS
+        if d.get("status") in ("ok", "override"):
+            st.caption(f"AI: {d.get('model')} ✓")
+        elif d.get("status") == "no_key":
+            st.caption("AI: offline — API-nyckel saknas")
+        elif d.get("status") == "all_failed":
+            st.caption(f"AI: offline — ingen modell svarade ({d.get('detail', '')[:120]})")
+        else:
+            st.caption("AI: ej testad ännu")
+    except Exception:
+        pass
+
     user = db.ensure_user(st.session_state.user_id)
     if user.get("is_pro") or st.session_state.is_pro:
         st.success(t("pro_on"))
@@ -3978,6 +3994,17 @@ def main() -> None:
     init_state()
     inject_css()
     require_auth_context()
+
+    # Resolve a WORKING LLM model once per session (probes candidate list).
+    # Result + failure reasons land in llm_config.DIAGNOSTICS → shown in Profil.
+    if not st.session_state.get("llm_probe_done"):
+        try:
+            import llm_config
+
+            llm_config.resolve_text_model(resolve_grok_api_key())
+        except Exception as exc:
+            log.warning("llm model probe failed: %s", exc)
+        st.session_state.llm_probe_done = True
 
     # Handla & laga / Starta — on_click queue (must run before page render)
     try:

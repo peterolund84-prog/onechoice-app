@@ -319,6 +319,28 @@ def decide(
         import food_domain as fd
 
         pinned = fd.meal_candidates(meal_type, language)
+        # GROUNDING: "leftovers" claims state the app cannot see. Only allowed
+        # when an accepted home-cooked dinner exists in the log (last 48h) —
+        # and then we NAME it. Otherwise leftover candidates are dropped.
+        dinner_title = None
+        try:
+            dinner_title = db.recent_cooked_dinner(user_id, path=db_path)
+        except Exception as exc:
+            log.warning("recent_cooked_dinner lookup failed: %s", exc)
+        grounded_pinned = []
+        for c in pinned:
+            if (c.get("meta") or {}).get("leftover"):
+                if not dinner_title:
+                    continue
+                c = dict(c)
+                if language == "sv":
+                    c["suggestion"] = f"Värm gårdagens {dinner_title.lower()}"
+                    c["justification"] = "Redan lagat — klart på 5 minuter."
+                else:
+                    c["suggestion"] = f"Reheat yesterday's {dinner_title.lower()}"
+                    c["justification"] = "Already cooked — ready in 5 minutes."
+            grounded_pinned.append(c)
+        pinned = grounded_pinned
         if pinned:
             typed = [
                 c
@@ -988,6 +1010,7 @@ Rules:
 - justification is ONE line in {lang}, personal, no hedging, no "you could also"
 - every candidate must already pass the domain feasibility rules above
 - avoid anything in the recent/rejected lists when possible
+- NEVER suggest leftovers/matlåda unless the accepted-history above contains a home-cooked dinner within 48h — and then name that exact dish
 - for fridge mode: meta.ingredients MUST list every non-staple ingredient required
 """
     resp = requests.post(

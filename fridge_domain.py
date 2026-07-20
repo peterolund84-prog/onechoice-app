@@ -84,8 +84,17 @@ _ALIASES: dict[str, tuple[str, ...]] = {
 
 SOURCE = "fridge_photo"
 MAX_PHOTOS = 3
-# Vision-capable models currently offered by xAI (old grok-2-vision-* are gone)
-VISION_MODELS = ("grok-4.5", "grok-4.5-latest", "grok-4.3")
+# Vision candidates, tried in order until one answers. Names have shifted at
+# xAI before (grok-2-vision retired silently) — never trust one name.
+VISION_MODELS = (
+    "grok-4.5",
+    "grok-4.5-latest",
+    "grok-4.3",
+    "grok-4-fast",
+    "grok-4",
+    "grok-4-latest",
+    "grok-3",
+)
 MAX_IMAGE_EDGE = 1568  # long-edge cap before upload (phone photos are huge)
 XAI_CHAT_URL = "https://api.x.ai/v1/chat/completions"
 XAI_RESPONSES_URL = "https://api.x.ai/v1/responses"
