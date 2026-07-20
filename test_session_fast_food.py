@@ -21,9 +21,8 @@ class SessionSafeNavTests(unittest.TestCase):
         import app as app_mod
 
         src = inspect.getsource(app_mod.nav)
-        self.assertIn("st.button", src)
+        self.assertIn("st.pills", src)
         self.assertNotIn("href=", src)
-        self.assertIn("nav_btn_", src)
 
     def test_lang_bar_uses_buttons_not_href(self) -> None:
         import inspect
@@ -31,7 +30,7 @@ class SessionSafeNavTests(unittest.TestCase):
         import app as app_mod
 
         src = inspect.getsource(app_mod.lang_bar)
-        self.assertIn("st.button", src)
+        self.assertIn("st.pills", src)
         self.assertNotIn("href=", src)
 
     def test_nav_survives_lista_tap(self) -> None:
@@ -41,17 +40,16 @@ class SessionSafeNavTests(unittest.TestCase):
         at.run()
         uid = at.session_state["user_id"]
         self.assertTrue(uid)
-        # Tap Lista via session-safe button
         hit = False
-        for b in at.button:
-            if b.label and b.label == "Lista":
-                b.click().run()
+        for p in at.pills:
+            if getattr(p, "key", None) == "oc_nav_pills":
+                p.set_value("lista").run()
                 hit = True
                 break
         self.assertTrue(hit)
         self.assertEqual(at.session_state["page"], "lista")
         self.assertEqual(at.session_state["user_id"], uid)
-        self.assertFalse(at.session_state["page"] == "auth")
+        self.assertNotEqual(at.session_state["page"], "auth")
 
 
 class FastFoodDecideTests(unittest.TestCase):

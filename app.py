@@ -49,15 +49,17 @@ Button → transition:
   [result] "Nytt förslag"  (only if not accepted and not reroll-locked)
         → run_decision(reroll=True)
 
-  [execute] food: checkboxes + "Skapa lista" → merge checked items into Lista
-        → opens Lista after create; "Öppna listan" also → page=lista
-        → deferred accept only locks decision (shopping merge is explicit)
+  [execute] food: shopping preview auto-merged into Lista on Handla
+        → badge when merged; "Öppna listan" → page=lista
+        → deferred accept also merges shopping from context (after shop is stored)
 
   [execute] "Tillbaka"
         → page=result  (shows Låst: <suggestion> + only Handla & laga)
 
   [history] "Öppna" on a row
         → restore decision; accepted food/workout → execute, else result
+
+  [lista] toggle buttons check off bought items
 
   [any] error boundary catch
         → log full traceback server-side; user sees Swedish retry UI
@@ -126,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "list-create-only-nav-safe-v22-20260720"
+BUILD_ID = "shopping-works-pills-nav-v23-20260720"
 
 I18N = {
     "sv": {
@@ -152,13 +154,14 @@ I18N = {
         "shop_title": "Inköpslista",
         "list_nav": "Lista",
         "list_title": "Inköpslista",
-        "list_empty": "Listan är tom. Bestäm middag, bocka i vad du behöver och tryck Skapa lista.",
+        "list_empty": "Listan är tom. Bestäm middag och tryck Handla & laga — då fylls listan.",
         "list_add_placeholder": "Lägg till...",
         "list_added_badge": "Tillagt i din lista ✓",
         "list_go": "Öppna listan",
         "list_create": "Skapa lista",
-        "list_create_hint": "Bocka i det du behöver handla.",
+        "list_create_hint": "Varorna läggs i din inköpslista. Bocka av dem under Lista när du handlat.",
         "list_created": "Inköpslistan är uppdaterad.",
+        "list_error": "Kunde inte spara listan. Kör SQL-migrationen shopping_items i Supabase.",
         "list_open_history": "Se dina beslut",
         "history_open": "Öppna",
         "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
@@ -297,13 +300,14 @@ I18N = {
         "shop_title": "Shopping list",
         "list_nav": "List",
         "list_title": "Shopping list",
-        "list_empty": "Your list is empty. Pick dinner, check what you need, then Create list.",
+        "list_empty": "Your list is empty. Pick dinner and tap Shop & cook — items are added automatically.",
         "list_add_placeholder": "Add...",
         "list_added_badge": "Added to your list ✓",
         "list_go": "Open list",
         "list_create": "Create list",
-        "list_create_hint": "Check what you need to buy.",
+        "list_create_hint": "Items go on your shopping list. Check them off under List when bought.",
         "list_created": "Shopping list updated.",
+        "list_error": "Could not save the list. Run the shopping_items SQL migration in Supabase.",
         "list_open_history": "See your decisions",
         "history_open": "Open",
         "history_hint": "Decisions you took — open for recipe and list.",
@@ -1019,6 +1023,66 @@ div[data-testid="stHorizontalBlock"] div.stButton {{
     color: var(--oc-ink) !important;
     background: transparent !important;
 }}
+/* Bottom nav — st.pills fixed bar (session-safe, always visible) */
+.oc-nav-pills + div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] {{
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    z-index: 1100 !important;
+    display: flex !important;
+    justify-content: space-around !important;
+    flex-wrap: nowrap !important;
+    gap: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0.45rem 0.35rem max(0.45rem, env(safe-area-inset-bottom)) !important;
+    background: #fff !important;
+    border-top: 1px solid var(--oc-border) !important;
+    box-sizing: border-box !important;
+}}
+.oc-nav-pills + div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+    flex: 1 1 0 !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.72rem !important;
+    font-weight: 500 !important;
+    min-height: 2.6rem !important;
+    padding: 0.35rem 0.2rem !important;
+}}
+.oc-nav-pills + div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
+.oc-lang-pills + div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] {{
+    display: flex !important;
+    justify-content: flex-end !important;
+    gap: 0.25rem !important;
+    margin: 0 0 0.35rem !important;
+}}
+.oc-lang-pills + div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.78rem !important;
+    min-height: 1.6rem !important;
+    padding: 0.15rem 0.4rem !important;
+}}
+.oc-lang-pills + div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
 /* Bottom nav — fixed bar, text only, accent on active (no pill borders) */
 .oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] {{
     position: fixed !important;
@@ -1238,6 +1302,7 @@ def init_state() -> None:
         "accepted": False,  # permanent after Handla & laga
         "shopping_checks": {},  # checkbox state keyed by decision_id:item
         "shopping_merged_for": None,  # decision_id last successfully merged into list
+        "shopping_list_error": None,  # last shopping DB error (shown in UI)
         "reroll_index": 0,
         "last_question": "",
         "last_domain_hint": None,
@@ -1785,40 +1850,82 @@ def _clear_action_query_params() -> None:
 
 
 def lang_bar() -> None:
-    """Compact SV · EN via session-safe buttons (HTML links wipe auth on mobile)."""
+    """Compact SV · EN via session-safe pills (HTML links wipe auth on mobile)."""
     lang = st.session_state.language
-    st.markdown('<div class="oc-lang-btns-marker"></div>', unsafe_allow_html=True)
-    _, c1, c2 = st.columns([6, 1, 1])
-    with c1:
-        if st.button(
-            "SV",
-            key="lang_sv_btn",
-            type="primary" if lang == "sv" else "secondary",
-            use_container_width=True,
-        ):
-            if lang != "sv":
-                st.session_state.language = "sv"
-                if st.session_state.user_id and not st.session_state.get("guest_mode"):
-                    try:
-                        db.update_user(st.session_state.user_id, language="sv")
-                    except Exception:
-                        pass
-                st.rerun()
-    with c2:
-        if st.button(
-            "EN",
-            key="lang_en_btn",
-            type="primary" if lang == "en" else "secondary",
-            use_container_width=True,
-        ):
-            if lang != "en":
-                st.session_state.language = "en"
-                if st.session_state.user_id and not st.session_state.get("guest_mode"):
-                    try:
-                        db.update_user(st.session_state.user_id, language="en")
-                    except Exception:
-                        pass
-                st.rerun()
+    if lang not in ("sv", "en"):
+        lang = "sv"
+        st.session_state.language = lang
+
+    mirrored = st.session_state.get("_oc_lang_mirror")
+    pending = st.session_state.get("oc_lang_pills")
+    if mirrored is None:
+        st.session_state.oc_lang_pills = lang
+        st.session_state._oc_lang_mirror = lang
+    elif mirrored != lang:
+        st.session_state.oc_lang_pills = lang
+        st.session_state._oc_lang_mirror = lang
+    elif pending in ("sv", "en") and pending != lang:
+        st.session_state.language = pending
+        st.session_state._oc_lang_mirror = pending
+        if st.session_state.user_id and not st.session_state.get("guest_mode"):
+            try:
+                db.update_user(st.session_state.user_id, language=pending)
+            except Exception:
+                pass
+        st.rerun()
+        return
+
+    st.markdown('<div class="oc-lang-pills"></div>', unsafe_allow_html=True)
+    st.pills(
+        "lang",
+        options=["sv", "en"],
+        format_func=lambda x: "SV" if x == "sv" else "EN",
+        selection_mode="single",
+        key="oc_lang_pills",
+        label_visibility="collapsed",
+    )
+
+
+def nav() -> None:
+    """Bottom nav via st.pills — session-safe (no HTML href logout) and visible."""
+    page = st.session_state.page
+    current = "home" if page in ("home", "result", "execute", "fridge", "ambiguous") else page
+    options = ("home", "lista", "history", "profile")
+    if current not in options:
+        current = "home"
+    labels = {
+        "home": t("home"),
+        "lista": t("list_nav"),
+        "history": t("history"),
+        "profile": t("profile"),
+    }
+
+    mirrored = st.session_state.get("_oc_nav_mirror")
+    pending = st.session_state.get("oc_nav_pills")
+    if mirrored is None:
+        # First paint — align pill to page
+        st.session_state.oc_nav_pills = current
+        st.session_state._oc_nav_mirror = current
+    elif mirrored != current:
+        # Page changed elsewhere (Handla→Lista, historik Öppna, …)
+        st.session_state.oc_nav_pills = current
+        st.session_state._oc_nav_mirror = current
+    elif pending in options and pending != current:
+        # User tapped a nav pill
+        st.session_state.page = pending
+        st.session_state._oc_nav_mirror = pending
+        st.rerun()
+        return
+
+    st.markdown('<div class="oc-nav-pills" aria-label="Navigation"></div>', unsafe_allow_html=True)
+    st.pills(
+        "nav",
+        options=list(options),
+        format_func=lambda k: labels.get(k, k),
+        selection_mode="single",
+        key="oc_nav_pills",
+        label_visibility="collapsed",
+    )
 
 
 def _start_domain_decision(domain: str) -> None:
@@ -1905,29 +2012,6 @@ def render_tagline(text: str | None = None) -> None:
     else:
         line = html.escape(raw)
     st.markdown(f'<p class="oc-tagline">{line}</p>', unsafe_allow_html=True)
-
-
-def nav() -> None:
-    """Fixed bottom nav — Streamlit buttons (HTML <a href> wipes login on mobile)."""
-    page = st.session_state.page
-    items = (
-        ("home", t("home"), page in ("home", "result")),
-        ("lista", t("list_nav"), page == "lista"),
-        ("history", t("history"), page == "history"),
-        ("profile", t("profile"), page == "profile"),
-    )
-    st.markdown('<div class="oc-nav-btns-marker"></div>', unsafe_allow_html=True)
-    cols = st.columns(len(items))
-    for col, (key, name, active) in zip(cols, items):
-        with col:
-            if st.button(
-                name,
-                key=f"nav_btn_{key}",
-                type="primary" if active else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state.page = "home" if key == "home" else key
-                st.rerun()
 
 
 def render_reroll_dots(reroll_index: int) -> None:
@@ -2388,9 +2472,9 @@ def _merge_to_buy_into_list(
     try:
         rows = db.merge_shopping_from_decision(uid, decision_id, to_buy)
         st.session_state.shopping_list_cache = None
+        st.session_state.shopping_list_error = None
         if decision_id is not None:
             st.session_state.shopping_merged_for = decision_id
-        # Warm cache so Lista / Öppna listan shows items immediately
         try:
             _load_shopping_items(force=True)
         except Exception:
@@ -2398,6 +2482,7 @@ def _merge_to_buy_into_list(
         return len(rows or [])
     except Exception as exc:
         log.warning("merge shopping to_buy failed: %s", exc)
+        st.session_state.shopping_list_error = str(exc)[:180]
         return 0
 
 
@@ -2418,43 +2503,24 @@ def _merge_accepted_shopping(cur: dict[str, Any]) -> None:
     _merge_to_buy_into_list(to_buy, did_i)
 
 
-def _selected_to_buy_from_checks(
-    shop: dict[str, Any],
-    decision_id: int | None,
-) -> dict[str, list[str]]:
-    """Build to_buy from shopping_checks toggles (default: all checked)."""
-    to_buy = shop.get("to_buy") if isinstance(shop.get("to_buy"), dict) else {}
-    if not to_buy:
-        return {}
-    checks = st.session_state.get("shopping_checks")
-    if not isinstance(checks, dict):
-        checks = {}
-    did = decision_id if decision_id is not None else "x"
-    selected: dict[str, list[str]] = {}
-    idx = 0
-    for section, items in to_buy.items():
-        if not items:
-            continue
-        if isinstance(items, str):
-            items = [items]
-        if not isinstance(items, (list, tuple)):
-            continue
-        for item in items:
-            ckey = f"{did}:{idx}"
-            idx += 1
-            if checks.get(ckey, True):
-                selected.setdefault(str(section), []).append(str(item))
-    return selected
-
-
-def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
-    did = decision_id if decision_id is not None else "x"
-    ckey = f"{did}:{idx}"
-    checks = st.session_state.get("shopping_checks")
-    if not isinstance(checks, dict):
-        checks = {}
-        st.session_state.shopping_checks = checks
-    checks[ckey] = not bool(checks.get(ckey, True))
+def _flush_db_accept() -> None:
+    """Best-effort persist accept + auto-fill shopping list after Handla & laga."""
+    if not _session_pop("pending_db_accept", None):
+        return
+    cur = st.session_state.get("current")
+    cur = cur if isinstance(cur, dict) else {}
+    did = cur.get("decision_id") or st.session_state.get("decision_id")
+    rid = cur.get("route_log_id") or st.session_state.get("route_log_id")
+    try:
+        if st.session_state.get("guest_mode"):
+            db.clear_auth()
+        pipeline.try_accept_decision(did, route_log_id=rid)
+        # Handla & laga → listan fylls automatiskt (en lista per användare)
+        _merge_accepted_shopping(cur)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("deferred DB accept failed (UI already open): %s", exc)
 
 
 def _history_status_label(status: str) -> str:
@@ -2505,28 +2571,6 @@ def _restore_decision_from_row(row: dict[str, Any]) -> None:
         st.session_state.page = "execute"
     else:
         st.session_state.page = "result"
-
-
-def _flush_db_accept() -> None:
-    """Best-effort persist accept — sync, only after UI is already visible.
-
-    Shopping is NOT merged here — user must press Skapa lista after bocka-ing
-    ingredients. Auto-merge made toggles look broken (list already full).
-    """
-    if not _session_pop("pending_db_accept", None):
-        return
-    cur = st.session_state.get("current")
-    cur = cur if isinstance(cur, dict) else {}
-    did = cur.get("decision_id") or st.session_state.get("decision_id")
-    rid = cur.get("route_log_id") or st.session_state.get("route_log_id")
-    try:
-        if st.session_state.get("guest_mode"):
-            db.clear_auth()
-        pipeline.try_accept_decision(did, route_log_id=rid)
-    except BaseException as exc:
-        if _is_streamlit_control_flow(exc):
-            raise
-        log.exception("deferred DB accept failed (UI already open): %s", exc)
 
 
 def _flush_db_accept_bg() -> None:
@@ -2677,7 +2721,7 @@ def render_persistent_shopping_list() -> None:
 def render_decision_shopping_added(
     shop: dict[str, Any] | None, language: str
 ) -> None:
-    """Execute shopping: check items → Skapa lista → persistent Inköpslista."""
+    """Execute shopping preview — Handla auto-merges into Lista; open list here."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -2687,8 +2731,12 @@ def render_decision_shopping_added(
     did = _active_decision_id()
     merged_for = st.session_state.get("shopping_merged_for")
     already = did is not None and merged_for is not None and int(merged_for) == int(did)
+    err = st.session_state.get("shopping_list_error")
 
-    if already:
+    if err:
+        st.warning(t("list_error"))
+        st.caption(html.escape(str(err)[:160]))
+    elif already:
         st.markdown(
             f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
             unsafe_allow_html=True,
@@ -2699,89 +2747,19 @@ def render_decision_shopping_added(
             unsafe_allow_html=True,
         )
 
-    render_checkable_shopping(shop, did)
+    render_shopping_card(shop, language)
 
-    create_col, open_col = st.columns(2)
-    with create_col:
-        if st.button(
-            t("list_create"),
-            type="primary",
-            use_container_width=True,
-            key="exec_create_list",
-        ):
-            selected = _selected_to_buy_from_checks(shop, did)
-            n = _merge_to_buy_into_list(selected or to_buy, did)
-            if n:
-                try:
-                    safe_toast(t("list_created"))
-                except Exception:
-                    pass
-                # Open Lista so the user sees the result immediately
-                st.session_state.page = "lista"
-            st.rerun()
-    with open_col:
-        if st.button(
-            t("list_go"),
-            type="secondary",
-            use_container_width=True,
-            key="exec_open_list",
-        ):
-            st.session_state.page = "lista"
-            st.rerun()
-
-
-def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
-    """Toggleable shopping items — buttons (Streamlit checkboxes break on remount)."""
-    if not shop or not isinstance(shop, dict):
-        return
-    to_buy = shop.get("to_buy") or {}
-    if not isinstance(to_buy, dict) or not to_buy:
-        return
-    import shopping as shopping_mod
-
-    language = st.session_state.get("language", "sv")
-    store = shop.get("store") or "ICA"
-    st.markdown(
-        f'<div class="oc-shop-title" style="margin:0.4rem 0 0.6rem">'
-        f'{html.escape(t("shop_title"))} · {html.escape(str(store))}</div>',
-        unsafe_allow_html=True,
-    )
-    checks = st.session_state.get("shopping_checks")
-    if not isinstance(checks, dict):
-        checks = {}
-        st.session_state.shopping_checks = checks
-    did = decision_id if decision_id is not None else "x"
-    idx = 0
-    for section, items in to_buy.items():
-        if not items:
-            continue
-        if isinstance(items, str):
-            items = [items]
-        if not isinstance(items, (list, tuple)):
-            continue
-        st.markdown(
-            f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
-            unsafe_allow_html=True,
-        )
-        for item in items:
-            ckey = f"{did}:{idx}"
-            checked = bool(checks.get(ckey, True))
-            mark = "✓ " if checked else ""
-            if st.button(
-                f"{mark}{item}",
-                key=f"shop_tog_{did}_{idx}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                _toggle_shop_check(decision_id, idx)
-                st.rerun()
-            idx += 1
-
-    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
-    if not isinstance(assumed, (list, tuple)):
-        assumed = ["salt", "peppar", "olja"]
-    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
-    st.caption(assumed_line)
+    if st.button(
+        t("list_go"),
+        type="primary",
+        use_container_width=True,
+        key="exec_open_list",
+    ):
+        # Ensure merge happened even if flush raced
+        if not already:
+            _merge_to_buy_into_list(to_buy, did)
+        st.session_state.page = "lista"
+        st.rerun()
 
 
 def _profile_show_nutrition() -> bool:
@@ -4382,6 +4360,10 @@ def page_lista() -> None:
                 except Exception as exc:
                     log.warning("manual shopping add failed: %s", exc)
                 st.rerun()
+    err = st.session_state.get("shopping_list_error")
+    if err:
+        st.warning(t("list_error"))
+        st.caption(html.escape(str(err)[:160]))
     items = _load_shopping_items()
     if not items:
         st.markdown(
