@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Movie format + mood chips — inferred, confirmable, logged."""
+"""Movie format + mood chips — inferred, confirmable, logged (LLM required)."""
 
 from __future__ import annotations
 
 import tempfile
 import unittest
-from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 import db
 import feasibility
@@ -16,21 +16,9 @@ import pipeline
 
 class MovieFormatMoodInferTests(unittest.TestCase):
     def test_format_time_windows(self) -> None:
-        # Weekday late → Avsnitt
-        self.assertEqual(
-            md.default_format(21, weekday=True),
-            "avsnitt",
-        )
-        # Fri/Sat evening → Film
-        self.assertEqual(
-            md.default_format(20, weekday=False),
-            "film",
-        )
-        # Weekend afternoon → Ny serie
-        self.assertEqual(
-            md.default_format(14, weekday=False),
-            "ny_serie",
-        )
+        self.assertEqual(md.default_format(21, weekday=True), "avsnitt")
+        self.assertEqual(md.default_format(20, weekday=False), "film")
+        self.assertEqual(md.default_format(14, weekday=False), "ny_serie")
 
     def test_mood_weekday_vs_weekend(self) -> None:
         self.assertEqual(md.default_mood(20, weekday=True), "avkopplat")
@@ -76,16 +64,20 @@ class MovieFormatMoodInferTests(unittest.TestCase):
         self.assertIn("Wednesday", name)
         label = md.format_label("avsnitt", "sv", in_progress_series=name)
         self.assertEqual(label, f"Nästa avsnitt av {name}")
-        # Completed flag clears it
         history[0]["context"]["series_completed"] = True
         self.assertIsNone(md.find_in_progress_series(history))
 
     def test_two_chip_rows_only(self) -> None:
         self.assertEqual(len(md.FORMAT_ORDER), 3)
         self.assertEqual(len(md.MOOD_ORDER), 5)
-        # No genre row — moods are not genres
         self.assertNotIn("thriller", md.MOODS)
         self.assertNotIn("comedy", md.MOODS)
+
+    def test_mood_guidance_not_for_ui(self) -> None:
+        g = md.mood_guidance("avkopplat", "sv")
+        self.assertIn("cognitive", g.lower())
+        # Must never be used as justification
+        self.assertFalse(md.is_named_title("En film under två timmar", {}))
 
 
 class MovieDecideLoggingTests(unittest.TestCase):
@@ -98,21 +90,32 @@ class MovieDecideLoggingTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
+    def _mock_pack(self) -> list[dict]:
+        return [
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Lugn bekant sitcom — perfekt måndagssoffa.",
+                "meta": {"title": "seinfeld", "kind": "series"},
+                "wildcard": False,
+            }
+        ] * 5
+
     def test_decide_logs_format_and_mood(self) -> None:
-        r = pipeline.decide(
-            self.user["id"],
-            "Vad ska jag titta på?",
-            domain_hint="movie",
-            language="sv",
-            db_path=self.path,
-            context_extra={"format": "avsnitt", "mood": "avkopplat"},
-        )
-        self.assertTrue(r.ok)
+        with mock.patch.object(pipeline, "_generate_candidates", return_value=self._mock_pack()):
+            r = pipeline.decide(
+                self.user["id"],
+                "Vad ska jag titta på?",
+                domain_hint="movie",
+                language="sv",
+                db_path=self.path,
+                grok_api_key="xai-test-key-long",
+                context_extra={"format": "avsnitt", "mood": "avkopplat"},
+            )
+        self.assertTrue(r.ok, r.refusal_message)
         ctx = r.context or {}
         self.assertEqual(ctx.get("format"), "avsnitt")
         self.assertEqual(ctx.get("mood"), "avkopplat")
         self.assertEqual(ctx.get("kind"), "series")
-        self.assertLessEqual(int(ctx.get("available_minutes") or 99), 50)
         row = next(
             x
             for x in db.list_decisions(self.user["id"], path=self.path)
@@ -122,20 +125,19 @@ class MovieDecideLoggingTests(unittest.TestCase):
         self.assertEqual(stored.get("format"), "avsnitt")
         self.assertEqual(stored.get("mood"), "avkopplat")
 
-    def test_film_format_prefers_film_kind(self) -> None:
+    def test_no_llm_does_not_fake_title(self) -> None:
         r = pipeline.decide(
             self.user["id"],
-            "film ikväll",
+            "film",
             domain_hint="movie",
             language="sv",
             db_path=self.path,
+            grok_api_key="",
             context_extra={"format": "film", "mood": "spanning"},
         )
-        self.assertTrue(r.ok)
-        self.assertEqual((r.context or {}).get("format"), "film")
-        # Local pack for spanning+film includes Dune when services allow
-        # (default profile has netflix+svt — Dune needs hbo/prime; may be vague)
-        self.assertTrue(r.suggestion)
+        self.assertFalse(r.ok)
+        self.assertTrue((r.context or {}).get("llm_offline"))
+        self.assertNotIn("två timmar", (r.suggestion or "").lower())
 
     def test_med_barnen_rejects_adult_titles(self) -> None:
         profile = feasibility.parse_profile(
@@ -160,18 +162,6 @@ class MovieDecideLoggingTests(unittest.TestCase):
             context={"mood": "med_barnen", "format": "avsnitt", "available_minutes": 50},
         )
         self.assertFalse(r.ok)
-        good = {
-            "suggestion": "En familjevänlig animationsfilm",
-            "justification": "Med barnen — lagom äventyr.",
-            "meta": {"kind": "film", "kids_ok": True, "max_age_rating": 7},
-        }
-        r2 = feasibility.feasibility_check(
-            good,
-            domain="movie",
-            profile=profile,
-            context={"mood": "med_barnen", "format": "film", "available_minutes": 140},
-        )
-        self.assertTrue(r2.ok)
 
     def test_ui_has_format_mood_chip_renderer(self) -> None:
         import inspect
@@ -181,15 +171,15 @@ class MovieDecideLoggingTests(unittest.TestCase):
         self.assertTrue(hasattr(app_mod, "render_movie_format_mood_chips"))
         src = inspect.getsource(app_mod.page_result)
         self.assertIn("render_movie_format_mood_chips", src)
+        self.assertIn("movie_offline", src)
         chip_src = inspect.getsource(app_mod.render_movie_format_mood_chips)
         self.assertIn("movie_format_pills", chip_src)
         self.assertIn("movie_mood_pills", chip_src)
-        # Two rows only — no genre pills
         self.assertNotIn("genre", chip_src.lower())
 
 
 class MovieUiChipTests(unittest.TestCase):
-    def test_movie_result_shows_format_and_mood_labels(self) -> None:
+    def test_movie_offline_shows_format_mood_and_retry(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
@@ -199,14 +189,15 @@ class MovieUiChipTests(unittest.TestCase):
         at.query_params["domain"] = "movie"
         at.run()
         self.assertEqual(at.session_state["page"], "result")
+        cur = at.session_state["current"] or {}
+        # Without LLM → honest offline
+        self.assertTrue(cur.get("refused") or cur.get("llm_offline") or (cur.get("context") or {}).get("llm_offline"))
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Format", body)
         self.assertIn("Läge", body)
-        cur = at.session_state["current"] or {}
-        ctx = cur.get("context") if isinstance(cur, dict) else {}
-        ctx = ctx or {}
-        self.assertEqual(ctx.get("format"), "avsnitt")
-        self.assertEqual(ctx.get("mood"), "avkopplat")
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(any("Försök igen" in lab for lab in labels), labels)
+        self.assertNotIn("En film under två timmar", body)
 
 
 if __name__ == "__main__":

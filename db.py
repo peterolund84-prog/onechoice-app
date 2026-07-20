@@ -355,6 +355,25 @@ def init_db(path: Path | str | None = None) -> None:
                 ON shopping_items(user_id, checked, created_at DESC)
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS validation_failures (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at TEXT NOT NULL,
+                decision_domain TEXT,
+                reason TEXT NOT NULL,
+                source TEXT,
+                language TEXT,
+                detail TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_validation_failures_domain
+                ON validation_failures(decision_domain, created_at DESC)
+            """
+        )
 
 
 def ensure_public_share(
@@ -924,6 +943,41 @@ def _decision_row(row: sqlite3.Row) -> dict[str, Any]:
     except json.JSONDecodeError:
         d["context"] = {}
     return d
+
+
+# ---------------------------------------------------------------------------
+# Output validation failure telemetry
+# ---------------------------------------------------------------------------
+def log_validation_failure(
+    *,
+    decision_domain: str | None,
+    reason: str,
+    source: str = "unknown",
+    language: str | None = None,
+    detail: str | None = None,
+    path: Path | str | None = None,
+) -> None:
+    """Best-effort telemetry — never raises into the decide path."""
+    try:
+        init_db(path)
+        with get_conn(path) as conn:
+            conn.execute(
+                """
+                INSERT INTO validation_failures (
+                    created_at, decision_domain, reason, source, language, detail
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    utc_now(),
+                    decision_domain,
+                    str(reason or "unknown")[:120],
+                    str(source or "unknown")[:80],
+                    language,
+                    (detail or "")[:400] or None,
+                ),
+            )
+    except Exception as exc:
+        log.warning("log_validation_failure failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
