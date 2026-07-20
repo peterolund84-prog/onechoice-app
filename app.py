@@ -848,7 +848,62 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
 div[data-testid="stHorizontalBlock"] div.stButton {{
     width: 100% !important; min-height: 2.5rem !important;
 }}
-/* Home domain chips — HTML flex row (not Streamlit columns) */
+/* Domain chips + bottom nav — Streamlit buttons (no full-page reload) */
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button {{
+    width: 100% !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    min-height: 2.35rem !important;
+    padding: 8px 12px !important;
+}}
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button:hover {{
+    border-color: var(--oc-ink) !important;
+    color: var(--oc-ink) !important;
+}}
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] {{
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; bottom: 0 !important;
+    z-index: 1100 !important;
+    background: #fff !important;
+    border-top: 1px solid var(--oc-border) !important;
+    padding: 0.55rem 0.5rem max(0.55rem, env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+}}
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button {{
+    background: transparent !important;
+    color: var(--oc-muted) !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 0.68rem !important;
+    font-weight: 500 !important;
+    min-height: 2.6rem !important;
+    padding: 0.35rem 0.15rem !important;
+}}
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+    background: transparent !important;
+}}
+.oc-lang-btns div.stButton > button {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.78rem !important;
+    min-height: 1.8rem !important;
+    padding: 0.1rem 0.35rem !important;
+}}
+.oc-lang-btns div.stButton > button[kind="primary"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
+/* Home domain chips — HTML flex row (legacy; prefer .oc-chip-btns) */
 .oc-chip-row {{
     display: flex !important;
     flex-wrap: wrap !important;
@@ -1016,6 +1071,7 @@ def init_state() -> None:
         and not _guest_query_active()
     ):
         st.session_state.page = "auth"
+        _clear_action_query_params()
         return
 
     # Local / guest fallback
@@ -1376,6 +1432,7 @@ def require_auth_context() -> None:
 
 
 def page_auth() -> None:
+    _clear_action_query_params()
     lang_bar()
     st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
     st.markdown(
@@ -1413,19 +1470,21 @@ def page_auth() -> None:
     if mode == "login":
         if st.button(t("login_cta"), type="primary", use_container_width=True):
             try:
-                sess = sb.sign_in(email.strip(), password)
-                st.session_state.user_id = sess["user_id"]
-                st.session_state.user_email = sess.get("email")
-                st.session_state.access_token = sess["access_token"]
-                st.session_state.refresh_token = sess["refresh_token"]
-                st.session_state.guest_mode = False
-                _clear_guest_query_param()
-                db.set_auth(sess["access_token"], sess["refresh_token"])
-                db.ensure_user(
-                    sess["user_id"],
-                    language=st.session_state.language,
-                    email=sess.get("email"),
-                )
+                with st.spinner(t("loading")):
+                    sess = sb.sign_in(email.strip(), password)
+                    st.session_state.user_id = sess["user_id"]
+                    st.session_state.user_email = sess.get("email")
+                    st.session_state.access_token = sess["access_token"]
+                    st.session_state.refresh_token = sess["refresh_token"]
+                    st.session_state.guest_mode = False
+                    _clear_guest_query_param()
+                    _clear_action_query_params()
+                    db.set_auth(sess["access_token"], sess["refresh_token"])
+                    db.ensure_user(
+                        sess["user_id"],
+                        language=st.session_state.language,
+                        email=sess.get("email"),
+                    )
                 st.session_state.page = "home"
                 st.rerun()
             except Exception as exc:
@@ -1493,18 +1552,102 @@ def page_auth() -> None:
         st.rerun()
 
 
+def _clear_action_query_params() -> None:
+    """Drop ?domain= / ?nav= params that cause reload loops after auth loss."""
+    for key in ("domain", "pick", "nav", "shop_toggle", "occasion", "meal", "lang"):
+        try:
+            del st.query_params[key]
+        except Exception:
+            pass
+
+
 def lang_bar() -> None:
     lang = st.session_state.language
-    sv_cls = "active" if lang == "sv" else ""
-    en_cls = "active" if lang == "en" else ""
-    st.markdown(
-        f'<div class="oc-lang">'
-        f'<a class="{sv_cls}" href="?lang=sv">SV</a>'
-        f'<span class="oc-lang-sep">·</span>'
-        f'<a class="{en_cls}" href="?lang=en">EN</a>'
-        f"</div>",
-        unsafe_allow_html=True,
+    _, c1, c2 = st.columns([6, 1, 1])
+    with c1:
+        st.markdown('<div class="oc-lang-btns">', unsafe_allow_html=True)
+        if st.button(
+            "SV",
+            key="lang_sv_btn",
+            type="primary" if lang == "sv" else "secondary",
+            use_container_width=True,
+        ):
+            if lang != "sv":
+                st.session_state.language = "sv"
+                if st.session_state.user_id and not st.session_state.get("guest_mode"):
+                    try:
+                        db.update_user(st.session_state.user_id, language="sv")
+                    except Exception:
+                        pass
+                st.rerun()
+    with c2:
+        if st.button(
+            "EN",
+            key="lang_en_btn",
+            type="primary" if lang == "en" else "secondary",
+            use_container_width=True,
+        ):
+            if lang != "en":
+                st.session_state.language = "en"
+                if st.session_state.user_id and not st.session_state.get("guest_mode"):
+                    try:
+                        db.update_user(st.session_state.user_id, language="en")
+                    except Exception:
+                        pass
+                st.rerun()
+
+
+def _start_domain_decision(domain: str) -> None:
+    """Start a domain chip decision without ?domain= navigation (keeps auth session)."""
+    if domain == "clothes":
+        st.session_state.last_domain_hint = "clothes"
+        st.session_state.pending_clothes_question = pipeline._default_question(
+            "clothes", st.session_state.get("language", "sv")
+        )
+        st.session_state.clothes_occasion = None
+        st.session_state.page = "clothes_occasion"
+        st.rerun()
+        return
+    if domain == "food":
+        import food_domain as fd
+
+        if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
+            st.session_state.food_meal_type = fd.default_meal_type()
+    run_decision(question="", domain_hint=domain, reroll=False, via_router=False)
+
+
+def _pick_ambiguous_domain(pick: str) -> None:
+    pending = st.session_state.pending_free_text or st.session_state.last_question or ""
+    st.session_state.force_route_domain = pick
+    st.session_state.last_domain_hint = pick
+    st.session_state.pending_free_text = None
+    if pick == "clothes":
+        st.session_state.pending_clothes_question = pending
+        st.session_state.clothes_occasion = None
+        st.session_state.page = "clothes_occasion"
+        st.rerun()
+        return
+    run_decision(
+        question=pending,
+        domain_hint=pick,
+        reroll=False,
+        via_router=True,
     )
+
+
+def render_domain_chips(*, key_prefix: str = "home") -> None:
+    """Domain shortcuts as Streamlit buttons — survives mobile without losing login."""
+    domains = ("food", "clothes", "movie", "workout", "weekend")
+    st.markdown('<div class="oc-chip-btns-marker"></div>', unsafe_allow_html=True)
+    cols = st.columns(len(domains))
+    for col, d in zip(cols, domains):
+        with col:
+            if st.button(
+                domain_label(d),
+                key=f"{key_prefix}_domain_{d}",
+                use_container_width=True,
+            ):
+                _start_domain_decision(d)
 
 
 def render_logo() -> None:
@@ -1529,21 +1672,23 @@ def render_tagline(text: str | None = None) -> None:
 def nav() -> None:
     page = st.session_state.page
     items = (
-        ("home", ICON_HOME, t("home"), page in ("home", "result")),
-        ("lista", ICON_LIST, t("list_nav"), page == "lista"),
-        ("history", ICON_CLOCK, t("history"), page == "history"),
-        ("profile", ICON_USER, t("profile"), page == "profile"),
+        ("home", t("home"), page in ("home", "result")),
+        ("lista", t("list_nav"), page == "lista"),
+        ("history", t("history"), page == "history"),
+        ("profile", t("profile"), page == "profile"),
     )
-    links = []
-    for key, icon, name, active in items:
-        cls = "active" if active else ""
-        links.append(
-            f'<a class="{cls}" href="{_qp_href(nav=key)}">{icon}<span>{html.escape(name)}</span></a>'
-        )
-    st.markdown(
-        f'<nav class="oc-nav" aria-label="Navigation">{"".join(links)}</nav>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="oc-nav-btns-marker"></div>', unsafe_allow_html=True)
+    cols = st.columns(len(items))
+    for col, (key, name, active) in zip(cols, items):
+        with col:
+            if st.button(
+                name,
+                key=f"nav_btn_{key}",
+                type="primary" if active else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state.page = "home" if key == "home" else key
+                st.rerun()
 
 
 def render_reroll_dots(reroll_index: int) -> None:
@@ -2142,21 +2287,24 @@ def render_persistent_shopping_list() -> None:
     import shopping_items as si
 
     grouped = si.group_items(items)
-    parts: list[str] = ['<div class="oc-shop-list">']
     for section, rows in grouped.items():
-        parts.append(f'<div class="oc-sec-label">{html.escape(section)}</div>')
+        st.markdown(
+            f'<div class="oc-sec-label">{html.escape(section)}</div>',
+            unsafe_allow_html=True,
+        )
         for row in rows:
             iid = int(row.get("id") or 0)
-            name = html.escape(str(row.get("name") or ""))
+            name = str(row.get("name") or "")
             checked = bool(row.get("checked"))
-            cls = "oc-shop-row checked" if checked else "oc-shop-row"
-            mark = "✓" if checked else ""
-            parts.append(
-                f'<a class="{cls}" href="{_qp_href(shop_toggle=str(iid))}">'
-                f'<span class="oc-chk">{mark}</span><span>{name}</span></a>'
-            )
-    parts.append("</div>")
-    st.markdown("".join(parts), unsafe_allow_html=True)
+            label = f"{'✓ ' if checked else ''}{name}"
+            if st.button(
+                label,
+                key=f"shop_toggle_{iid}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                _optimistic_toggle_shopping_item(iid)
+                st.rerun()
 
 
 def render_decision_shopping_added(
@@ -2453,13 +2601,8 @@ def page_home() -> None:
     render_logo()
     render_tagline()
 
-    # Ghost chips as HTML links (?domain=) — reliable flex-wrap; handler in handle_query_params
-    domains = ("food", "clothes", "movie", "workout", "weekend")
-    chips = "".join(
-        f'<a class="oc-chip" href="{_qp_href(domain=d)}">{html.escape(domain_label(d))}</a>'
-        for d in domains
-    )
-    st.markdown(f'<div class="oc-chip-row">{chips}</div>', unsafe_allow_html=True)
+    # Ghost chips — Streamlit buttons (HTML ?domain= links reset session on mobile)
+    render_domain_chips(key_prefix="home")
 
     if st.button(t("fridge_cta"), use_container_width=True, key="home_fridge"):
         st.session_state.fridge_step = "capture"
@@ -2885,11 +3028,15 @@ def page_ambiguous() -> None:
         unsafe_allow_html=True,
     )
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    chips = "".join(
-        f'<a href="{_qp_href(pick=d)}">{html.escape(domain_label(d))}</a>' for d in domains
-    )
-    chips += f'<a href="{_qp_href(pick="other")}">{html.escape(t("other"))}</a>'
-    st.markdown(f'<div class="oc-domains">{chips}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="oc-chip-btns-marker"></div>', unsafe_allow_html=True)
+    cols = st.columns(len(domains) + 1)
+    for i, d in enumerate(domains):
+        with cols[i]:
+            if st.button(domain_label(d), key=f"ambig_{d}", use_container_width=True):
+                _pick_ambiguous_domain(d)
+    with cols[-1]:
+        if st.button(t("other"), key="ambig_other", use_container_width=True):
+            _pick_ambiguous_domain("other")
     if st.button(t("home"), use_container_width=True):
         st.session_state.page = "home"
         st.session_state.pending_free_text = None
