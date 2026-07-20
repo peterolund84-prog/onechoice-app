@@ -144,6 +144,7 @@ I18N = {
         "nutrition_title": "Visa näringsvärden",
         "nutrition_hint": "Ca-värden per portion under receptet — aldrig på beslutskortet. Av som standard.",
         "nutrition_recipe_toggle": "Visa ca-värden (kcal / protein)",
+        "nutrition_missing": "Näringsvärden saknas",
         "nutrition_saved": "Sparat.",
         "back_to_decision": "Tillbaka",
         "error_friendly": "Något gick fel — försök igen",
@@ -272,6 +273,7 @@ I18N = {
         "nutrition_title": "Show nutrition estimates",
         "nutrition_hint": "Approx. per serving under the recipe — never on the decision card. Off by default.",
         "nutrition_recipe_toggle": "Show approx. nutrition (kcal / protein)",
+        "nutrition_missing": "Nutrition unavailable",
         "nutrition_saved": "Saved.",
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
@@ -712,10 +714,67 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 .oc-recipe ul li {{
     font-size: 1rem; color: var(--oc-ink); line-height: 1.4; padding: 0.28rem 0;
 }}
-.oc-recipe .oc-nutrition {{
+.oc-recipe .oc-nutrition,
+.oc-nutrition {{
     margin: 0.65rem 0 0.15rem; padding: 0;
-    font-size: 0.88rem; color: var(--oc-muted); line-height: 1.35;
-    font-weight: 400; letter-spacing: 0; text-transform: none;
+    font-size: 0.92rem; color: var(--oc-muted) !important; line-height: 1.35;
+    font-weight: 500; letter-spacing: 0; text-transform: none;
+    font-family: "Inter", sans-serif !important;
+}}
+.oc-nutrition.missing {{
+    color: var(--oc-muted) !important; font-weight: 400 !important;
+}}
+/* Nutrition control — visible banner (values live here, not in hidden widget label) */
+.oc-nut-wrap {{
+    margin: 0.85rem 0 1rem !important;
+    width: 100% !important;
+}}
+.oc-nut-banner {{
+    margin: 0 !important;
+    padding: 0.9rem 1rem !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    font-size: 0.95rem !important;
+    line-height: 1.35 !important;
+    font-weight: 600 !important;
+    color: var(--oc-ink) !important;
+    font-family: "Inter", sans-serif !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}}
+.oc-nut-banner.off {{
+    color: var(--oc-muted) !important;
+    font-weight: 500 !important;
+}}
+.oc-nut-banner.missing {{
+    color: var(--oc-muted) !important;
+    font-weight: 400 !important;
+}}
+div[data-testid="stVerticalBlock"]:has([data-testid="stCheckbox"] input[aria-label*="kcal"]) {{
+    margin-top: -0.35rem !important;
+}}
+/* Nutrition toggle label must stay visible (global widget-label hide below) */
+div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] label,
+label[data-testid="stWidgetLabel"],
+[data-testid="stCheckbox"] p,
+div[data-baseweb="checkbox"] + div,
+[data-testid="stMarkdownContainer"] .oc-nutrition,
+[data-testid="stMarkdownContainer"] .oc-nut-banner {{
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    color: var(--oc-ink) !important;
+}}
+/* Streamlit toggle uses the same label testid — force readable */
+div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
+div[data-testid="stCheckbox"] label p {{
+    display: block !important;
+    color: var(--oc-ink) !important;
+    font-size: 0.95rem !important;
+    font-family: "Inter", sans-serif !important;
 }}
 .oc-error {{
     padding: 1.8rem 1.4rem; text-align: center; margin: 2rem 0 1rem;
@@ -782,8 +841,12 @@ div[data-testid="stCheckbox"] label {{
 .oc-nav .oc-ico {{ width: 1.15rem; height: 1.15rem; display: block; }}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
 div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
-div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"] {{
+div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] label[data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] label {{
     display: flex !important;
+    visibility: visible !important;
 }}
 div[data-testid="stHorizontalBlock"] {{
     display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
@@ -2000,6 +2063,79 @@ def _set_profile_show_nutrition(enabled: bool) -> None:
     db.update_user(uid, profile_json=raw)
 
 
+def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
+    """Return (label, has_values) for the nutrition control — never None/null text."""
+    import shopping as shopping_mod
+
+    lang = st.session_state.get("language", "sv")
+    missing = t("nutrition_missing")
+    if not isinstance(recipe, dict):
+        return missing, False
+    try:
+        healed = shopping_mod.ensure_recipe_nutrition(
+            recipe,
+            suggestion=str(recipe.get("title") or ""),
+            allow_estimate=True,
+        )
+    except Exception:
+        healed = recipe
+    line = shopping_mod.format_nutrition_line(
+        healed.get("nutrition") if isinstance(healed.get("nutrition"), dict) else None,
+        language=lang,
+        recipe=healed if isinstance(healed, dict) else None,
+    )
+    if not line or line.strip().lower() in ("none", "null"):
+        return missing, False
+    has_vals = "kcal" in line.lower() and "≈" in line
+    return line, has_vals
+
+
+def _render_execute_nutrition_control(recipe: dict[str, Any] | None) -> bool:
+    """Visible nutrition banner + switch. Banner always shows values when ON."""
+    show_nut_pref = _profile_show_nutrition()
+    last_prof = st.session_state.get("_nut_prof_sync")
+    if last_prof is None:
+        if "exec_show_nutrition" not in st.session_state:
+            st.session_state.exec_show_nutrition = bool(show_nut_pref)
+        st.session_state._nut_prof_sync = bool(show_nut_pref)
+    elif last_prof != bool(show_nut_pref):
+        st.session_state.exec_show_nutrition = bool(show_nut_pref)
+        st.session_state._nut_prof_sync = bool(show_nut_pref)
+
+    nut_line, nut_has = _nutrition_display_line(recipe)
+    want_nut = bool(st.session_state.get("exec_show_nutrition"))
+
+    if want_nut:
+        banner_cls = "oc-nut-banner" if nut_has else "oc-nut-banner missing"
+        banner_text = nut_line if nut_has else t("nutrition_missing")
+    else:
+        banner_cls = "oc-nut-banner off"
+        banner_text = t("nutrition_recipe_toggle")
+
+    st.markdown(
+        f'<div class="oc-nut-wrap"><p class="{banner_cls}">{html.escape(banner_text)}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+    toggle_kwargs = {
+        "key": "exec_show_nutrition",
+        "label_visibility": "collapsed",
+    }
+    if hasattr(st, "toggle"):
+        want_nut = bool(st.toggle("nutrition", **toggle_kwargs))
+    else:
+        want_nut = bool(st.checkbox("nutrition", **toggle_kwargs))
+
+    if want_nut != bool(show_nut_pref):
+        try:
+            _set_profile_show_nutrition(want_nut)
+            st.session_state._nut_prof_sync = want_nut
+        except Exception as exc:
+            log.warning("save nutrition pref failed: %s", exc)
+
+    return want_nut
+
+
 def render_recipe_block(
     recipe: dict[str, Any] | None,
     fallback_ings: list[str] | None = None,
@@ -2017,25 +2153,9 @@ def render_recipe_block(
     if show_nutrition is None:
         show_nutrition = _profile_show_nutrition()
     if show_nutrition:
-        import shopping as shopping_mod
-
-        nut = recipe.get("nutrition")
-        if not isinstance(nut, dict) and ings:
-            try:
-                nut = shopping_mod.estimate_nutrition(
-                    list(ings),
-                    suggestion=str(recipe.get("title") or ""),
-                )
-            except Exception:
-                nut = None
-        line = shopping_mod.format_nutrition_line(
-            nut if isinstance(nut, dict) else None,
-            language=st.session_state.get("language", "sv"),
-        )
-        if line:
-            nutrition_html = (
-                f'<p class="oc-nutrition">{html.escape(line)}</p>'
-            )
+        line, has_vals = _nutrition_display_line(recipe)
+        cls = "oc-nutrition" if has_vals else "oc-nutrition missing"
+        nutrition_html = f'<p class="{cls}">{html.escape(line)}</p>'
     st.markdown(
         f'<div class="oc-recipe">'
         f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
@@ -3279,6 +3399,27 @@ def page_execute() -> None:
                 "Gör i ordning och ät.",
             ],
         }
+        try:
+            import shopping as shopping_mod
+
+            recipe = shopping_mod.ensure_recipe_nutrition(
+                recipe, suggestion=suggestion, allow_estimate=True
+            )
+        except Exception:
+            pass
+
+    # Heal legacy history payloads missing top-level nutrition fields
+    if isinstance(recipe, dict):
+        try:
+            import shopping as shopping_mod
+
+            recipe = shopping_mod.ensure_recipe_nutrition(
+                recipe,
+                suggestion=suggestion,
+                allow_estimate=True,
+            )
+        except Exception as exc:
+            log.warning("recipe nutrition heal failed: %s", exc)
 
     if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
         try:
@@ -3286,31 +3427,16 @@ def page_execute() -> None:
         except Exception:
             pass
 
+    # Nutrition opt-in — BEFORE shopping list so values are never buried
+    want_nut = _render_execute_nutrition_control(
+        recipe if isinstance(recipe, dict) else None
+    )
+
     did = _active_decision_id(cur)
     try:
         render_checkable_shopping(shop, did)
     except Exception as exc:
         log.warning("shopping list render failed: %s", exc)
-
-    # Opt-in on the recipe surface — paint recipe THIS run; never rerun-before-paint
-    show_nut = _profile_show_nutrition()
-    if "exec_show_nutrition" not in st.session_state:
-        st.session_state.exec_show_nutrition = bool(show_nut)
-    if hasattr(st, "toggle"):
-        want_nut = st.toggle(
-            t("nutrition_recipe_toggle"),
-            key="exec_show_nutrition",
-        )
-    else:
-        want_nut = st.checkbox(
-            t("nutrition_recipe_toggle"),
-            key="exec_show_nutrition",
-        )
-    if bool(want_nut) != bool(show_nut):
-        try:
-            _set_profile_show_nutrition(bool(want_nut))
-        except Exception as exc:
-            log.warning("save nutrition pref failed: %s", exc)
 
     ings_fallback = list(recipe.get("ingredients") or []) if isinstance(recipe, dict) else []
     try:
