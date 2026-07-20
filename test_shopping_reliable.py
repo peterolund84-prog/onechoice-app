@@ -30,12 +30,14 @@ class ReliableShoppingTests(unittest.TestCase):
         self.db_path = str(Path(self.tmp.name) / "shop.db")
         db.init_db(self.db_path)
         self.user = db.ensure_user(language="sv", path=self.db_path)
+        db._SHOPPING_FORCE_SQLITE = False
 
     def tearDown(self) -> None:
+        db._SHOPPING_FORCE_SQLITE = False
         self.tmp.cleanup()
 
-    def test_handla_auto_merges_shopping(self) -> None:
-        """Handla & laga must fill Lista without a separate Skapa lista click."""
+    def test_handla_does_not_auto_merge(self) -> None:
+        """Handla & laga opens execute — Skapa lista is what fills Lista."""
         uid = self.user["id"]
         r = pipeline.decide(
             uid,
@@ -63,24 +65,82 @@ class ReliableShoppingTests(unittest.TestCase):
             shopping_list_error=None,
             route_log_id=None,
         )
-        orig_merge = db.merge_shopping_from_decision
         orig_accept = pipeline.try_accept_decision
-
-        def merge_local(user_id, did, to_buy, path=None):  # noqa: ANN001
-            return orig_merge(user_id, did, to_buy, path=self.db_path)
 
         def accept_local(did, route_log_id=None, db_path=None):  # noqa: ANN001
             return pipeline.accept_decision(did, db_path=self.db_path)
 
         with mock.patch.object(app_mod, "st", SimpleNamespace(session_state=ss)):
-            with mock.patch.object(app_mod.db, "merge_shopping_from_decision", side_effect=merge_local):
-                with mock.patch.object(pipeline, "try_accept_decision", side_effect=accept_local):
-                    with mock.patch.object(app_mod, "_load_shopping_items", return_value=[]):
-                        app_mod._flush_db_accept()
+            with mock.patch.object(pipeline, "try_accept_decision", side_effect=accept_local):
+                with mock.patch.object(app_mod, "_load_shopping_items", return_value=[]):
+                    app_mod._flush_db_accept()
 
-        self.assertEqual(ss["shopping_merged_for"], cur.get("decision_id"))
+        self.assertIsNone(ss.get("shopping_merged_for"))
         items = db.list_shopping_items(uid, path=self.db_path)
-        self.assertGreaterEqual(len(items), 2)
+        self.assertEqual(len(items), 0)
+
+    def test_skapa_lista_merges_selected(self) -> None:
+        uid = self.user["id"]
+        to_buy = {
+            "kött & fisk": ["kycklingfilé", "bacon"],
+            "frukt & grönt": ["gul lök"],
+        }
+        import app as app_mod
+
+        ss = _Session(
+            user_id=uid,
+            shopping_list_cache=None,
+            shopping_merged_for=None,
+            shopping_list_error=None,
+            shopping_checks={"1:0": True, "1:1": False, "1:2": True},
+        )
+        shop = {"to_buy": to_buy, "store": ""}
+        orig_merge = db.merge_shopping_from_decision
+
+        def merge_local(user_id, did, selected, path=None):  # noqa: ANN001
+            return orig_merge(user_id, did, selected, path=self.db_path)
+
+        with mock.patch.object(app_mod, "st", SimpleNamespace(session_state=ss)):
+            with mock.patch.object(
+                app_mod.db, "merge_shopping_from_decision", side_effect=merge_local
+            ):
+                with mock.patch.object(app_mod, "_load_shopping_items", return_value=[]):
+                    selected = app_mod._selected_to_buy_from_checks(shop, 1)
+                    n = app_mod._merge_to_buy_into_list(selected, 1)
+
+        self.assertEqual(n, 2)
+        names = {r["name"] for r in db.list_shopping_items(uid, path=self.db_path)}
+        self.assertEqual(names, {"kycklingfilé", "gul lök"})
+
+    def test_missing_supabase_table_falls_back_to_sqlite(self) -> None:
+        uid = self.user["id"]
+
+        class _Boom(Exception):
+            pass
+
+        def boom(*_a, **_k):  # noqa: ANN001
+            raise _Boom(
+                '{"message":"Could not find the table \'public.shopping_items\' '
+                'in the schema cache","code":"PGRST205"}'
+            )
+
+        with mock.patch.object(db, "_use_supabase", return_value=True):
+            with mock.patch.object(db, "_tokens", return_value=("a", "r")):
+                with mock.patch(
+                    "supabase_store.list_shopping_items", side_effect=boom
+                ):
+                    rows = db.list_shopping_items(uid, path=self.db_path)
+        self.assertEqual(rows, [])
+        self.assertTrue(db._SHOPPING_FORCE_SQLITE)
+
+        db.merge_shopping_from_decision(
+            uid,
+            None,
+            {"frukt & grönt": ["banan"]},
+            path=self.db_path,
+        )
+        names = {r["name"] for r in db.list_shopping_items(uid, path=self.db_path)}
+        self.assertEqual(names, {"banan"})
 
     def test_nav_uses_pills_not_href(self) -> None:
         import inspect
@@ -95,9 +155,16 @@ class ReliableShoppingTests(unittest.TestCase):
         self.assertIn("st.pills", lang)
         self.assertNotIn("href=", lang)
 
+    def test_ui_copy_has_no_ica_brand(self) -> None:
+        import app as app_mod
+
+        sv = app_mod.I18N["sv"]
+        for key in ("list_create_hint", "list_empty", "list_title", "shop_title"):
+            self.assertNotIn("ICA", sv[key], key)
+
 
 class ReliableShoppingUiTests(unittest.TestCase):
-    def test_handla_fills_list_and_nav_pills(self) -> None:
+    def test_handla_then_skapa_lista(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
@@ -112,18 +179,18 @@ class ReliableShoppingUiTests(unittest.TestCase):
                 break
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(bool(at.session_state["ui_error"]))
-        # Auto-merge on Handla
-        self.assertIsNotNone(at.session_state["shopping_merged_for"])
+        # Must choose items — no auto-merge on Handla
+        self.assertIsNone(at.session_state["shopping_merged_for"])
         labels = [b.label or "" for b in at.button]
+        self.assertTrue(any("Skapa lista" in lab for lab in labels), labels)
         self.assertTrue(any("Öppna listan" in lab for lab in labels), labels)
-        # No fragile Skapa lista required
-        self.assertFalse(any("Skapa lista" in lab for lab in labels), labels)
 
         for b in at.button:
-            if b.label and "Öppna listan" in b.label:
+            if b.label and "Skapa lista" in b.label:
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "lista")
+        self.assertIsNotNone(at.session_state["shopping_merged_for"])
         cache = at.session_state["shopping_list_cache"]
         self.assertIsInstance(cache, list)
         self.assertGreaterEqual(len(cache), 1)

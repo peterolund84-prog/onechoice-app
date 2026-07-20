@@ -36,10 +36,16 @@ requirements.txt
 2. Klistra in hela filen `supabase/schema.sql`
 3. Klicka **Run**
 
+På äldre projekt som redan kört schema: kör även  
+`supabase/migrations/20260720_shopping_items.sql`  
+(annars saknas `public.shopping_items` och PostgREST ger `PGRST205`).  
+Appen faller tillbaka till lokal SQLite för listan tills migrationen är körd.
+
 Schemat skapar:
 - `profiles` (kopplad till `auth.users`)
 - `decisions`
 - `preferences`
+- `shopping_items` (per-användare inköpslista)
 - trigger som skapar profil vid signup
 - **Row Level Security** så varje användare bara ser sin data
 
@@ -128,7 +134,7 @@ Max 3 rerolls → lock. See `DOMAIN_SPEC.md`.
 
 ## GDPR (före publik lansering)
 
-1. Kör `supabase/schema.sql` (eller `migrations/20260719_gdpr.sql` på äldre projekt)
+1. Kör `supabase/schema.sql` (eller `migrations/20260719_gdpr.sql` + `migrations/20260720_shopping_items.sql` på äldre projekt)
 2. Bekräfta EU-region i Supabase Dashboard
 3. Schemalägg `purge_routed_query_raw_text(90)` och `purge_expired_user_photos()` (pg_cron / Edge Function)
 4. Läs `PRIVACY.md` — byt till egen `PRIVACY_URL` om policyn hostas externt

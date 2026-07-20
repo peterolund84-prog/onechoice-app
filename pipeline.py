@@ -1117,7 +1117,8 @@ Rules:
 def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
     rules = {
         "food": (
-            "Only Swedish supermarket basic assortment (ICA/Coop/Willys/Lidl/Hemköp). "
+            "Only Swedish supermarket basic assortment available at major chains "
+            "(ICA, Coop, Willys, Lidl, Hemköp) — never invent a single preferred store. "
             "No teff, fresh lemongrass, specialty imports. Max 30 min weekday / 60 min weekend. "
             "Wildcard = flavor adventure, never sourcing. Eating out only if open + near user. "
             "CRITICAL shopping rule: put FULL ingredient list in meta.ingredients first. "
@@ -1738,18 +1739,14 @@ def _ensure_food_shopping(
     if not shop and isinstance((top.get("meta") or {}).get("shopping"), dict):
         shop = top["meta"]["shopping"]
     if not shop:
-        try:
-            store_name = (feasibility.parse_profile(user, {}).get("food") or {}).get("store") or "ICA"
-        except Exception:
-            store_name = "ICA"
         shop = shopping.build_shopping(
             suggestion,
             meta=top.get("meta") if isinstance(top.get("meta"), dict) else {},
-            store=store_name,
+            store="",
         )
     if not shop or not shopping.shopping_valid(shop, suggestion):
         # Last chance: infer from dish name alone
-        shop = shopping.build_shopping(suggestion, store="ICA")
+        shop = shopping.build_shopping(suggestion, store="")
     if not shop:
         return execution
     out = dict(execution)
@@ -1799,7 +1796,7 @@ def _execution_for(
                 "label": "Öppna karta" if sv else "Open map",
                 "url": f"https://www.google.com/maps/search/{q}",
             }
-        shop = shopping.build_shopping(suggestion, store="ICA")
+        shop = shopping.build_shopping(suggestion, store="")
         recipe = (shop or {}).get("recipe") or shopping.build_recipe(
             suggestion, (shop or {}).get("ingredients")
         )

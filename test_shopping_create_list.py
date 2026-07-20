@@ -117,7 +117,8 @@ class CreateListMergeTests(unittest.TestCase):
         import app as app_mod
 
         self.assertEqual(app_mod.I18N["sv"]["list_go"], "Öppna listan")
-        self.assertIn("Handla", app_mod.I18N["sv"]["list_empty"])
+        self.assertIn("Skapa lista", app_mod.I18N["sv"]["list_empty"])
+        self.assertNotIn("ICA", app_mod.I18N["sv"]["list_create_hint"])
 
 
 if __name__ == "__main__":

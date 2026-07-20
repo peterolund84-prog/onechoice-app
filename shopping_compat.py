@@ -14,7 +14,7 @@ def resolve_meal_bundle(
     *,
     meta: dict[str, Any] | None = None,
     meal_type: str = "middag",
-    store: str = "ICA",
+    store: str = "",
     language: str = "sv",
     grok_api_key: str = "",
     include_shopping: bool = True,
@@ -61,7 +61,7 @@ def shopping_from_recipe(
     recipe: dict[str, Any],
     *,
     suggestion: str = "",
-    store: str = "ICA",
+    store: str = "",
 ) -> dict[str, Any] | None:
     import shopping as shop
 

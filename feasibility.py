@@ -103,7 +103,7 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
     weekend = dict(profile.get("weekend") or {})
 
     # Defaults — executable V1 assumptions
-    food.setdefault("store", ctx.get("store") or "ICA")
+    food.setdefault("store", ctx.get("store") or "")
     food.setdefault("household_size", int(ctx.get("household_size") or 1))
     food.setdefault("allergies", list(dietary) if isinstance(dietary, list) else [])
     food.setdefault("diet", ctx.get("diet") or "omnivore")
@@ -242,7 +242,7 @@ def _check_food(
     eating_out = bool((candidate.get("meta") or {}).get("eating_out")) or any(
         w in suggestion.lower() for w in ("restaurang", "beställ", "takeaway", "hämtmat")
     )
-    store = (profile.get("food") or {}).get("store") or "ICA"
+    store = (profile.get("food") or {}).get("store") or ""
     is_weekend = bool(profile.get("is_weekend") or context.get("is_weekend"))
     meal_type = str(
         (candidate.get("meta") or {}).get("meal_type")
@@ -450,17 +450,19 @@ def _default_shopping_list(suggestion: str) -> dict[str, list[str]]:
 
 
 def _format_shopping(shop_or_legacy: dict[str, Any] | None, store: str) -> str:
+    # Never brand a single chain — list is generic supermarket staples.
+    _ = store
     if not shop_or_legacy:
-        return f"Handla på {store}."
+        return "Inköpslista med vanliga matvaror."
     if "to_buy" in shop_or_legacy:
-        parts = [f"Inköpslista ({shop_or_legacy.get('store') or store}):"]
+        parts = ["Inköpslista:"]
         for section, items in (shop_or_legacy.get("to_buy") or {}).items():
             if items:
                 parts.append(f"{section}: {', '.join(items)}")
         assumed = shop_or_legacy.get("assumed_at_home") or []
         parts.append(shopping.format_assumed_line(list(assumed)))
         return " · ".join(parts)
-    parts = [f"Inköpslista ({store}):"]
+    parts = ["Inköpslista:"]
     for section, items in shop_or_legacy.items():
         if items:
             parts.append(f"{section}: {', '.join(items)}")
