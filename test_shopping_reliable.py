@@ -250,16 +250,15 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertTrue(len(at.pills) >= 1)
 
     def test_premium_shop_css_tokens(self) -> None:
-        import app as app_mod
-
-        self.assertIn("oc-shop-pick-marker", app_mod.inject_css.__doc__ or "")
-        # CSS is injected via markdown string — check source constants
         import inspect
+
+        import app as app_mod
 
         src = inspect.getsource(app_mod.inject_css)
         self.assertIn("oc-shop-pick-marker", src)
         self.assertIn("oc-shop-tog-marker", src)
         self.assertIn("oc-shop-row", src)
+        self.assertIn("oc-shop-pick", src)
 
 
 if __name__ == "__main__":
