@@ -223,16 +223,14 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "execute")
         # Turn nutrition on
         for tgl in at.toggle:
-            lab = (tgl.label or "").lower()
-            if "ca-värden" in lab or "närings" in lab or "kcal" in lab or "≈" in lab:
-                tgl.set_value(True).run()
-                break
+            tgl.set_value(True).run()
+            break
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("≈", body)
         self.assertIn("kcal", body.lower())
         self.assertIn("protein", body.lower())
+        self.assertIn("oc-nut-banner", body)
         self.assertNotIn("None", body)
-        # Execute rebuilds locally; at minimum UI must show numbers
         self.assertRegex(body, r"≈\s*\d+\s*kcal")
 
     def test_legacy_history_recipe_without_fields_on_execute(self) -> None:

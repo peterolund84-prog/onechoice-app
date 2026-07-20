@@ -724,13 +724,45 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 .oc-nutrition.missing {{
     color: var(--oc-muted) !important; font-weight: 400 !important;
 }}
+/* Nutrition control — visible banner (values live here, not in hidden widget label) */
+.oc-nut-wrap {{
+    margin: 0.85rem 0 1rem !important;
+    width: 100% !important;
+}}
+.oc-nut-banner {{
+    margin: 0 !important;
+    padding: 0.9rem 1rem !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    font-size: 0.95rem !important;
+    line-height: 1.35 !important;
+    font-weight: 600 !important;
+    color: var(--oc-ink) !important;
+    font-family: "Inter", sans-serif !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}}
+.oc-nut-banner.off {{
+    color: var(--oc-muted) !important;
+    font-weight: 500 !important;
+}}
+.oc-nut-banner.missing {{
+    color: var(--oc-muted) !important;
+    font-weight: 400 !important;
+}}
+div[data-testid="stVerticalBlock"]:has([data-testid="stCheckbox"] input[aria-label*="kcal"]) {{
+    margin-top: -0.35rem !important;
+}}
 /* Nutrition toggle label must stay visible (global widget-label hide below) */
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] label,
 label[data-testid="stWidgetLabel"],
 [data-testid="stCheckbox"] p,
 div[data-baseweb="checkbox"] + div,
-[data-testid="stMarkdownContainer"] .oc-nutrition {{
+[data-testid="stMarkdownContainer"] .oc-nutrition,
+[data-testid="stMarkdownContainer"] .oc-nut-banner {{
     display: flex !important;
     visibility: visible !important;
     opacity: 1 !important;
@@ -811,7 +843,8 @@ div[data-testid="stCheckbox"] label {{
 div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
 div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
-div[data-testid="stCheckbox"] label[data-testid="stWidgetLabel"] {{
+div[data-testid="stCheckbox"] label[data-testid="stWidgetLabel"],
+div[data-testid="stCheckbox"] label {{
     display: flex !important;
     visibility: visible !important;
 }}
@@ -2055,6 +2088,52 @@ def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
         return missing, False
     has_vals = "kcal" in line.lower() and "≈" in line
     return line, has_vals
+
+
+def _render_execute_nutrition_control(recipe: dict[str, Any] | None) -> bool:
+    """Visible nutrition banner + switch. Banner always shows values when ON."""
+    show_nut_pref = _profile_show_nutrition()
+    last_prof = st.session_state.get("_nut_prof_sync")
+    if last_prof is None:
+        if "exec_show_nutrition" not in st.session_state:
+            st.session_state.exec_show_nutrition = bool(show_nut_pref)
+        st.session_state._nut_prof_sync = bool(show_nut_pref)
+    elif last_prof != bool(show_nut_pref):
+        st.session_state.exec_show_nutrition = bool(show_nut_pref)
+        st.session_state._nut_prof_sync = bool(show_nut_pref)
+
+    nut_line, nut_has = _nutrition_display_line(recipe)
+    want_nut = bool(st.session_state.get("exec_show_nutrition"))
+
+    if want_nut:
+        banner_cls = "oc-nut-banner" if nut_has else "oc-nut-banner missing"
+        banner_text = nut_line if nut_has else t("nutrition_missing")
+    else:
+        banner_cls = "oc-nut-banner off"
+        banner_text = t("nutrition_recipe_toggle")
+
+    st.markdown(
+        f'<div class="oc-nut-wrap"><p class="{banner_cls}">{html.escape(banner_text)}</p></div>',
+        unsafe_allow_html=True,
+    )
+
+    toggle_kwargs = {
+        "key": "exec_show_nutrition",
+        "label_visibility": "collapsed",
+    }
+    if hasattr(st, "toggle"):
+        want_nut = bool(st.toggle("nutrition", **toggle_kwargs))
+    else:
+        want_nut = bool(st.checkbox("nutrition", **toggle_kwargs))
+
+    if want_nut != bool(show_nut_pref):
+        try:
+            _set_profile_show_nutrition(want_nut)
+            st.session_state._nut_prof_sync = want_nut
+        except Exception as exc:
+            log.warning("save nutrition pref failed: %s", exc)
+
+    return want_nut
 
 
 def render_recipe_block(
@@ -3348,42 +3427,16 @@ def page_execute() -> None:
         except Exception:
             pass
 
+    # Nutrition opt-in — BEFORE shopping list so values are never buried
+    want_nut = _render_execute_nutrition_control(
+        recipe if isinstance(recipe, dict) else None
+    )
+
     did = _active_decision_id(cur)
     try:
         render_checkable_shopping(shop, did)
     except Exception as exc:
         log.warning("shopping list render failed: %s", exc)
-
-    # Opt-in on the recipe surface — paint recipe THIS run; never rerun-before-paint
-    show_nut = _profile_show_nutrition()
-    if "exec_show_nutrition" not in st.session_state:
-        st.session_state.exec_show_nutrition = bool(show_nut)
-    nut_line, nut_has = _nutrition_display_line(
-        recipe if isinstance(recipe, dict) else None
-    )
-    # When ON the control itself shows ≈ kcal · protein (not a blank switch)
-    prev_on = bool(st.session_state.get("exec_show_nutrition"))
-    toggle_label = nut_line if prev_on else t("nutrition_recipe_toggle")
-    toggle_kwargs = {
-        "key": "exec_show_nutrition",
-        "label_visibility": "visible",
-    }
-    if hasattr(st, "toggle"):
-        want_nut = st.toggle(toggle_label, **toggle_kwargs)
-    else:
-        want_nut = st.checkbox(toggle_label, **toggle_kwargs)
-    if bool(want_nut):
-        # CSS-proof line next to the control (widget labels are globally hidden)
-        cls = "oc-nutrition" if nut_has else "oc-nutrition missing"
-        st.markdown(
-            f'<p class="{cls}">{html.escape(nut_line)}</p>',
-            unsafe_allow_html=True,
-        )
-    if bool(want_nut) != bool(show_nut):
-        try:
-            _set_profile_show_nutrition(bool(want_nut))
-        except Exception as exc:
-            log.warning("save nutrition pref failed: %s", exc)
 
     ings_fallback = list(recipe.get("ingredients") or []) if isinstance(recipe, dict) else []
     try:
