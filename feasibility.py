@@ -353,6 +353,22 @@ def _check_food(
         meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
         ings = list(meta.get("ingredients") or [])
         active = meta.get("active_minutes")
+        # Leftover / explicitly recipe-less decisions ("Matlåda från gårdagens
+        # gryta", "Värm en rest") have nothing to materialize — forcing a
+        # recipe here raised ValueError and killed decide(). Simple execution.
+        if bool(meta.get("leftover") or meta.get("no_recipe")):
+            execution = {
+                "type": "simple",
+                "label": "Ät nu",
+                "url": None,
+                "detail": "Inget recept behövs — värm och ät.",
+                "shopping": None,
+                "shopping_list": None,
+                "recipe": None,
+                "meal_type": meal_type,
+                "max_active_minutes": max_min,
+            }
+            return FeasibilityResult(ok=True, execution=execution)
         recipe = shopping.build_recipe(
             suggestion,
             ings or None,

@@ -1220,7 +1220,11 @@ def apply_fridge_execution(
     out["url"] = None
     out["source"] = SOURCE
     ings = names_only(ingredients)
-    if fallback and not ings:
+    # fallback=True means the honest no_cook_empty state ("Inget klart utan
+    # inköp"). It must NEVER force a recipe — even if a stray item (a lemon)
+    # was detected, there is nothing to cook. Forcing one raised ValueError
+    # and killed decide().
+    if fallback:
         out["label"] = "Föreslå med inköpslista" if language == "sv" else "Suggest with shopping list"
         out["detail"] = (
             "Ingen receptvy — för lite synligt i kylen."

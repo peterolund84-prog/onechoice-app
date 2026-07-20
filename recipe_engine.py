@@ -15,6 +15,8 @@ from typing import Any
 
 import requests
 
+import llm_config
+
 import shopping
 
 log = logging.getLogger("onechoice.recipe")
@@ -90,6 +92,7 @@ def _step_is_concrete(step: str) -> bool:
         return True
     verbs = (
         "koka", "vispa", "stek", "blanda", "hacka", "skiva", "rör", "sjud",
+        "förbered", "tillaga",
         "gratinera", "bryn", "krossa", "tillsätt", "häll", "bred", "lägg",
         "ta fram", "servera", "häll upp", "strö", "ät", "rosta", "stapla",
         "forma", "grilla", "krydda", "smaka", "värm", "skär", "strimla",
@@ -420,8 +423,38 @@ _CATALOG: dict[str, dict[str, Any]] = {
 }
 
 
+# English pack titles → Swedish catalog keys. V1 note: the recipe body stays
+# Swedish until the catalog is translated; this keeps EN mode WORKING instead
+# of raising ValueError (which killed decide() for language="en").
+_EN_ALIASES: dict[str, str] = {
+    "oatmeal with banana": "havregrynsgröt med banan",
+    "oatmeal porridge": "havregrynsgröt med banan",
+    "cheese sandwich": "smörgås med ost",
+    "ham and cheese sandwich": "smörgås med ost",
+    "egg sandwich and coffee": "smörgås med ost",
+    "egg sandwiches": "smörgås med ost",
+    "eggs and crispbread": "ägg och knäcke",
+    "scrambled eggs": "äggröra",
+    "fried eggs with tomato": "äggröra",
+    "filmjölk or yoghurt": "fil eller yoghurt",
+    "plain yoghurt": "fil eller yoghurt",
+    "yoghurt with jam": "fil eller yoghurt",
+    "yoghurt bowl with banana": "fil med müsli",
+    "filmjölk with muesli": "fil med müsli",
+    "omelette with pepper and cheese": "proteinomelett med grönt",
+    "chicken stir-fry from what you have": "kycklingwok med ris",
+    "creamy tomato pasta": "krämig tomatsås-pasta",
+    "tomato pasta with garlic": "krämig tomatsås-pasta",
+}
+
+
 def _catalog_lookup(title: str) -> dict[str, Any] | None:
     key = _norm_title(title)
+    alias = _EN_ALIASES.get(key)
+    if alias and alias in _CATALOG:
+        out = dict(_CATALOG[alias])
+        out["title"] = title
+        return out
     if key in _CATALOG:
         return dict(_CATALOG[key])
     for cat_key, recipe in _CATALOG.items():
@@ -485,7 +518,7 @@ Rules:
         "https://api.x.ai/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         json={
-            "model": "grok-2-latest",
+            "model": llm_config.text_model(),
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
