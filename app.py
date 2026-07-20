@@ -49,8 +49,15 @@ Button → transition:
   [result] "Nytt förslag"  (only if not accepted and not reroll-locked)
         → run_decision(reroll=True)
 
+  [execute] food: checkboxes + "Skapa lista" → merge checked items into Lista
+        → badge when merged; "Öppna listan" → page=lista
+        → deferred accept also merges shopping from context (after shop is stored)
+
   [execute] "Tillbaka"
         → page=result  (shows Låst: <suggestion> + only Handla & laga)
+
+  [history] "Öppna" on a row
+        → restore decision; accepted food/workout → execute, else result
 
   [any] error boundary catch
         → log full traceback server-side; user sees Swedish retry UI
@@ -119,7 +126,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-premium-minimal-v19-20260720"
+BUILD_ID = "shopping-checklist-create-v20-20260720"
 
 I18N = {
     "sv": {
@@ -145,10 +152,20 @@ I18N = {
         "shop_title": "Inköpslista",
         "list_nav": "Lista",
         "list_title": "Inköpslista",
-        "list_empty": "Listan är tom. Acceptera ett matbeslut så fylls den på.",
+        "list_empty": "Listan är tom. Bestäm middag, bocka i vad du behöver och tryck Skapa lista.",
         "list_add_placeholder": "Lägg till...",
         "list_added_badge": "Tillagt i din lista ✓",
         "list_go": "Öppna listan",
+        "list_create": "Skapa lista",
+        "list_create_hint": "Bocka i det du behöver handla.",
+        "list_created": "Inköpslistan är uppdaterad.",
+        "list_open_history": "Se dina beslut",
+        "history_open": "Öppna",
+        "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
+        "history_status_shown": "Visat",
+        "history_status_accepted": "Genomfört",
+        "history_status_rejected": "Avböjt",
+        "history_status_locked": "Låst",
         "recipe_title": "Recept",
         "ingredients_title": "Ingredienser",
         "steps_title": "Gör så här",
@@ -280,10 +297,20 @@ I18N = {
         "shop_title": "Shopping list",
         "list_nav": "List",
         "list_title": "Shopping list",
-        "list_empty": "Your list is empty. Accept a meal decision to fill it.",
+        "list_empty": "Your list is empty. Pick dinner, check what you need, then Create list.",
         "list_add_placeholder": "Add...",
         "list_added_badge": "Added to your list ✓",
         "list_go": "Open list",
+        "list_create": "Create list",
+        "list_create_hint": "Check what you need to buy.",
+        "list_created": "Shopping list updated.",
+        "list_open_history": "See your decisions",
+        "history_open": "Open",
+        "history_hint": "Decisions you took — open for recipe and list.",
+        "history_status_shown": "Shown",
+        "history_status_accepted": "Done",
+        "history_status_rejected": "Rejected",
+        "history_status_locked": "Locked",
         "recipe_title": "Recipe",
         "ingredients_title": "Ingredients",
         "steps_title": "Steps",
@@ -1210,6 +1237,7 @@ def init_state() -> None:
         "decision_id": None,  # explicit mirror of current["decision_id"]
         "accepted": False,  # permanent after Handla & laga
         "shopping_checks": {},  # checkbox state keyed by decision_id:item
+        "shopping_merged_for": None,  # decision_id last successfully merged into list
         "reroll_index": 0,
         "last_question": "",
         "last_domain_hint": None,
@@ -2311,11 +2339,42 @@ def open_execute_now(cur: dict[str, Any] | None = None) -> None:
     st.rerun()
 
 
+def _store_shopping_on_current(shop: dict[str, Any] | None) -> dict[str, Any]:
+    """Write materialized shopping back onto session current.context (merge-safe)."""
+    cur = st.session_state.get("current")
+    cur = dict(cur) if isinstance(cur, dict) else {}
+    if not shop or not isinstance(shop, dict):
+        return cur
+    ctx = dict(_as_dict(cur.get("context")))
+    ctx["shopping"] = shop
+    if isinstance(shop.get("recipe"), dict) and not isinstance(ctx.get("recipe"), dict):
+        ctx["recipe"] = shop["recipe"]
+    cur["context"] = ctx
+    st.session_state.current = cur
+    return cur
+
+
+def _merge_to_buy_into_list(
+    to_buy: dict[str, Any] | None,
+    decision_id: int | None = None,
+) -> int:
+    """Upsert selected to_buy rows into the persistent per-user list. Returns count."""
+    uid = _shopping_list_user_id()
+    if not uid or not isinstance(to_buy, dict) or not to_buy:
+        return 0
+    try:
+        rows = db.merge_shopping_from_decision(uid, decision_id, to_buy)
+        st.session_state.shopping_list_cache = None
+        if decision_id is not None:
+            st.session_state.shopping_merged_for = decision_id
+        return len(rows or [])
+    except Exception as exc:
+        log.warning("merge shopping to_buy failed: %s", exc)
+        return 0
+
+
 def _merge_accepted_shopping(cur: dict[str, Any]) -> None:
     """Upsert to_buy items into the persistent shopping list on accept."""
-    uid = _shopping_list_user_id()
-    if not uid:
-        return
     ctx = _as_dict(cur.get("context"))
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
     if not shop:
@@ -2325,10 +2384,87 @@ def _merge_accepted_shopping(cur: dict[str, Any]) -> None:
         return
     did = cur.get("decision_id") or st.session_state.get("decision_id")
     try:
-        db.merge_shopping_from_decision(uid, did, to_buy)
-        st.session_state.shopping_list_cache = None
-    except Exception as exc:
-        log.warning("merge shopping from decision failed: %s", exc)
+        did_i = int(did) if did is not None else None
+    except (TypeError, ValueError):
+        did_i = None
+    _merge_to_buy_into_list(to_buy, did_i)
+
+
+def _selected_to_buy_from_checks(
+    shop: dict[str, Any],
+    decision_id: int | None,
+) -> dict[str, list[str]]:
+    """Build to_buy from checkbox widget state (default: all checked)."""
+    to_buy = shop.get("to_buy") if isinstance(shop.get("to_buy"), dict) else {}
+    if not to_buy:
+        return {}
+    did = decision_id if decision_id is not None else "x"
+    selected: dict[str, list[str]] = {}
+    idx = 0
+    for section, items in to_buy.items():
+        if not items:
+            continue
+        if isinstance(items, str):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            continue
+        for item in items:
+            wkey = f"shop_chk_{did}_{idx}"
+            idx += 1
+            # Missing key → treat as checked (first paint / auto-merge)
+            if st.session_state.get(wkey, True):
+                selected.setdefault(str(section), []).append(str(item))
+    return selected
+
+
+def _history_status_label(status: str) -> str:
+    key = f"history_status_{status}"
+    pack = I18N.get(st.session_state.get("language", "sv"), I18N["sv"])
+    return str(pack.get(key) or status)
+
+
+def _restore_decision_from_row(row: dict[str, Any]) -> None:
+    """Load a stored decision into session and open result/execute."""
+    ctx = row.get("context")
+    if not isinstance(ctx, dict):
+        ctx = _as_dict(ctx)
+    status = str(row.get("status") or "")
+    accepted = status in ("accepted", "locked")
+    cur: dict[str, Any] = {
+        "ok": True,
+        "domain": row.get("domain"),
+        "suggestion": row.get("suggestion") or "",
+        "justification": row.get("justification") or "",
+        "execution_type": row.get("execution_type"),
+        "execution_label": row.get("execution_label"),
+        "execution_url": row.get("execution_url"),
+        "decision_id": row.get("id"),
+        "reroll_index": int(row.get("reroll_index") or 0),
+        "locked": accepted,
+        "refused": False,
+        "refusal_message": None,
+        "context": ctx if isinstance(ctx, dict) else {},
+        "explore": False,
+        "route": None,
+        "route_log_id": None,
+        "ui_message": None,
+        "needs_domain_pick": False,
+        "accepted": accepted,
+    }
+    st.session_state.current = cur
+    st.session_state.decision_id = row.get("id")
+    st.session_state.accepted = accepted
+    st.session_state.reroll_index = int(row.get("reroll_index") or 0)
+    st.session_state.ui_error = None
+    food_cook = _is_food_cook(cur)
+    is_workout = (cur.get("domain") or "") == "workout" or cur.get("execution_type") == "workout"
+    if accepted and (food_cook or is_workout):
+        if is_workout:
+            _reset_workout_player()
+            _ensure_workout_in_session(cur)
+        st.session_state.page = "execute"
+    else:
+        st.session_state.page = "result"
 
 
 def _flush_db_accept() -> None:
@@ -2343,7 +2479,18 @@ def _flush_db_accept() -> None:
         if st.session_state.get("guest_mode"):
             db.clear_auth()
         pipeline.try_accept_decision(did, route_log_id=rid)
-        _merge_accepted_shopping(cur)
+        # Prefer checkbox selection when present; else full to_buy from context
+        ctx = _as_dict(cur.get("context"))
+        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+        if shop:
+            try:
+                did_i = int(did) if did is not None else None
+            except (TypeError, ValueError):
+                did_i = None
+            selected = _selected_to_buy_from_checks(shop, did_i)
+            _merge_to_buy_into_list(selected or shop.get("to_buy"), did_i)
+        else:
+            _merge_accepted_shopping(cur)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
@@ -2498,24 +2645,59 @@ def render_persistent_shopping_list() -> None:
 def render_decision_shopping_added(
     shop: dict[str, Any] | None, language: str
 ) -> None:
-    """Per-decision recipe view — items for reference + persistent-list badge."""
+    """Execute shopping: check items → Skapa lista → persistent Inköpslista."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
     if not isinstance(to_buy, dict) or not to_buy:
         return
-    st.markdown(
-        f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
-        unsafe_allow_html=True,
-    )
-    render_shopping_card(shop, language)
-    if st.button(t("list_go"), type="secondary", use_container_width=True, key="exec_open_list"):
-        st.session_state.page = "lista"
-        st.rerun()
+
+    did = _active_decision_id()
+    merged_for = st.session_state.get("shopping_merged_for")
+    already = did is not None and merged_for is not None and int(merged_for) == int(did)
+
+    if already:
+        st.markdown(
+            f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<p class="oc-meta">{html.escape(t("list_create_hint"))}</p>',
+            unsafe_allow_html=True,
+        )
+
+    render_checkable_shopping(shop, did)
+
+    create_col, open_col = st.columns(2)
+    with create_col:
+        if st.button(
+            t("list_create"),
+            type="primary",
+            use_container_width=True,
+            key="exec_create_list",
+        ):
+            selected = _selected_to_buy_from_checks(shop, did)
+            n = _merge_to_buy_into_list(selected or to_buy, did)
+            if n:
+                try:
+                    safe_toast(t("list_created"))
+                except Exception:
+                    pass
+            st.rerun()
+    with open_col:
+        if st.button(
+            t("list_go"),
+            type="secondary",
+            use_container_width=True,
+            key="exec_open_list",
+        ):
+            st.session_state.page = "lista"
+            st.rerun()
 
 
 def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
-    """Checkable shopping list grouped by store layout."""
+    """Checkable shopping list grouped by store layout — drives Skapa lista."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -2548,7 +2730,7 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
             # (Streamlit owns session_state[widget_key]).
             wkey = f"shop_chk_{did}_{idx}"
             idx += 1
-            st.checkbox(str(item), key=wkey)
+            st.checkbox(str(item), value=True, key=wkey)
 
     assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
     if not isinstance(assumed, (list, tuple)):
@@ -4033,6 +4215,17 @@ def page_execute() -> None:
         if derived and derived.get("to_buy"):
             shop = derived
 
+    # Persist rebuilt shopping onto the decision so accept/merge/Skapa lista see it
+    if isinstance(shop, dict) and shop.get("to_buy"):
+        cur = _store_shopping_on_current(shop)
+        ctx = _as_dict(cur.get("context"))
+        if isinstance(recipe, dict):
+            ctx = dict(ctx)
+            ctx["recipe"] = recipe
+            cur = dict(cur)
+            cur["context"] = ctx
+            st.session_state.current = cur
+
     if not isinstance(recipe, dict) or not recipe.get("steps"):
         try:
             import recipe_engine as reng
@@ -4111,7 +4304,7 @@ def page_execute() -> None:
         st.rerun()
     nav()
 
-    # Persist accept AFTER the user can already see the list/recipe
+    # Safety net if accept was deferred earlier in the page
     try:
         _flush_db_accept()
     except Exception as exc:
@@ -4144,6 +4337,25 @@ def page_lista() -> None:
                 except Exception as exc:
                     log.warning("manual shopping add failed: %s", exc)
                 st.rerun()
+    items = _load_shopping_items()
+    if not items:
+        st.markdown(
+            f'<p class="oc-meta">{html.escape(t("list_empty"))}</p>',
+            unsafe_allow_html=True,
+        )
+        if st.button(t("home"), type="primary", use_container_width=True, key="lista_go_home"):
+            st.session_state.page = "home"
+            st.rerun()
+        if st.button(
+            t("list_open_history"),
+            type="secondary",
+            use_container_width=True,
+            key="lista_go_history",
+        ):
+            st.session_state.page = "history"
+            st.rerun()
+        nav()
+        return
     render_persistent_shopping_list()
     nav()
 
@@ -4155,17 +4367,38 @@ def page_history() -> None:
         f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("history_title"))}</p>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        f'<p class="oc-meta">{html.escape(t("history_hint"))}</p>',
+        unsafe_allow_html=True,
+    )
+    if st.button(t("list_go"), type="secondary", use_container_width=True, key="hist_open_list"):
+        st.session_state.page = "lista"
+        st.rerun()
     rows = db.list_decisions(st.session_state.user_id, limit=30)
     if not rows:
         st.info(t("history_empty"))
     else:
         for r in rows:
+            rid = r.get("id")
+            status = str(r.get("status") or "")
+            status_lbl = _history_status_label(status)
+            when = str(r.get("created_at") or "")
+            if "T" in when:
+                when = when.replace("T", " ")[:16]
             st.markdown(
-                f'<div class="oc-hist"><strong>{html.escape(r.get("suggestion",""))}</strong>'
-                f'<span>{html.escape(r.get("created_at",""))} · {html.escape(r.get("status",""))} · '
-                f'{html.escape(domain_label(r.get("domain","")))}</span></div>',
+                f'<div class="oc-hist"><strong>{html.escape(str(r.get("suggestion") or ""))}</strong>'
+                f'<span>{html.escape(when)} · {html.escape(status_lbl)} · '
+                f'{html.escape(domain_label(r.get("domain") or ""))}</span></div>',
                 unsafe_allow_html=True,
             )
+            if rid is not None and st.button(
+                t("history_open"),
+                key=f"hist_open_{rid}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                _restore_decision_from_row(r)
+                st.rerun()
     nav()
 
 
