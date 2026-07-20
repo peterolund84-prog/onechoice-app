@@ -261,3 +261,38 @@ class LeftoverGroundingTests(unittest.TestCase):
                 self.assertIn("gårdagens", r.suggestion.lower())
                 break
         self.assertTrue(found, "grounded leftover candidate never surfaced")
+
+    def test_llm_style_leftover_phrase_blocked_without_evidence(self) -> None:
+        """LLM may copy 'Matlåda från gårdagens gryta' without meta.leftover."""
+        import food_domain as fd
+
+        out = fd.ground_leftover_candidates(
+            [
+                {
+                    "suggestion": "Matlåda från gårdagens gryta",
+                    "justification": "Lunch utan krångel.",
+                    "meta": {"meal_type": "lunch"},
+                }
+            ],
+            None,
+            language="sv",
+        )
+        self.assertEqual(out, [])
+
+    def test_llm_style_leftover_renamed_with_evidence(self) -> None:
+        import food_domain as fd
+
+        out = fd.ground_leftover_candidates(
+            [
+                {
+                    "suggestion": "Matlåda från gårdagens gryta",
+                    "justification": "Lunch utan krångel.",
+                    "meta": {"meal_type": "lunch"},
+                }
+            ],
+            "Kycklingwok med ris",
+            language="sv",
+        )
+        self.assertEqual(len(out), 1)
+        self.assertIn("kycklingwok", out[0]["suggestion"].lower())
+        self.assertNotIn("gryta", out[0]["suggestion"].lower())

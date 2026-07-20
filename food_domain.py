@@ -102,6 +102,67 @@ def assume_at_home_only(meal_type: str) -> bool:
     return bool((MEAL_TYPES.get(meal_type) or {}).get("assume_at_home_only"))
 
 
+def mentions_leftovers(text: str) -> bool:
+    """True when suggestion/justification claims yesterday's food or a matlåda."""
+    import re
+
+    blob = (text or "").lower()
+    if not blob:
+        return False
+    if (
+        "matlåda" in blob
+        or "leftover" in blob
+        or "gårdagens" in blob
+        or "värm en rest" in blob
+        or "reheat leftover" in blob
+    ):
+        return True
+    if re.search(r"\brest(er|en|erna)?\b", blob):
+        return True
+    if "yesterday" in blob and ("reheat" in blob or "warm" in blob):
+        return True
+    return False
+
+
+def is_leftover_candidate(candidate: dict[str, Any]) -> bool:
+    meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    if meta.get("leftover"):
+        return True
+    blob = f"{candidate.get('suggestion') or ''} {candidate.get('justification') or ''}"
+    return mentions_leftovers(blob)
+
+
+def ground_leftover_candidates(
+    candidates: list[dict[str, Any]],
+    dinner_title: str | None,
+    language: str = "sv",
+) -> list[dict[str, Any]]:
+    """
+    Drop ungrounded leftover suggestions; rename grounded ones to the actual dish.
+    Applies to pinned packs AND LLM output (meta.leftover is not required).
+    """
+    sv = language == "sv"
+    out: list[dict[str, Any]] = []
+    for c in candidates:
+        if not is_leftover_candidate(c):
+            out.append(c)
+            continue
+        if not dinner_title:
+            continue
+        row = dict(c)
+        if sv:
+            row["suggestion"] = f"Värm gårdagens {dinner_title.lower()}"
+            row["justification"] = "Redan lagat — klart på 5 minuter."
+        else:
+            row["suggestion"] = f"Reheat yesterday's {dinner_title.lower()}"
+            row["justification"] = "Already cooked — ready in 5 minutes."
+        meta = dict(row.get("meta") or {})
+        meta["leftover"] = True
+        row["meta"] = meta
+        out.append(row)
+    return out
+
+
 def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]]:
     """Pinned candidates shaped by meal type (generation, not just filter)."""
     sv = language == "sv"

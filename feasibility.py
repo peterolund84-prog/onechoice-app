@@ -278,6 +278,18 @@ def _check_food(
     if active is not None and int(active) > max_min and not fridge_mode:
         reasons.append("too_long")
 
+    # Leftovers require evidence of a recent home-cooked dinner (non-fridge food).
+    if not fridge_mode:
+        try:
+            import food_domain as fd
+
+            if fd.is_leftover_candidate(candidate) and not context.get(
+                "recent_dinner_title"
+            ):
+                reasons.append("food_ungrounded_leftover")
+        except Exception:
+            pass
+
     if fridge_mode:
         if eating_out:
             reasons.append("fridge_no_eating_out")

@@ -319,28 +319,6 @@ def decide(
         import food_domain as fd
 
         pinned = fd.meal_candidates(meal_type, language)
-        # GROUNDING: "leftovers" claims state the app cannot see. Only allowed
-        # when an accepted home-cooked dinner exists in the log (last 48h) —
-        # and then we NAME it. Otherwise leftover candidates are dropped.
-        dinner_title = None
-        try:
-            dinner_title = db.recent_cooked_dinner(user_id, path=db_path)
-        except Exception as exc:
-            log.warning("recent_cooked_dinner lookup failed: %s", exc)
-        grounded_pinned = []
-        for c in pinned:
-            if (c.get("meta") or {}).get("leftover"):
-                if not dinner_title:
-                    continue
-                c = dict(c)
-                if language == "sv":
-                    c["suggestion"] = f"Värm gårdagens {dinner_title.lower()}"
-                    c["justification"] = "Redan lagat — klart på 5 minuter."
-                else:
-                    c["suggestion"] = f"Reheat yesterday's {dinner_title.lower()}"
-                    c["justification"] = "Already cooked — ready in 5 minutes."
-            grounded_pinned.append(c)
-        pinned = grounded_pinned
         if pinned:
             typed = [
                 c
@@ -409,6 +387,22 @@ def decide(
         )
         if not candidates:
             candidates = [fr.fridge_fallback(available_ingredients, language=language)]
+
+    # GROUNDING: block matlåda/gårdagens from pinned packs AND LLM output.
+    if domain == "food" and not fridge_mode:
+        import food_domain as fd
+
+        dinner_title = ctx.get("recent_dinner_title")
+        if dinner_title is None:
+            try:
+                dinner_title = db.recent_cooked_dinner(user_id, path=db_path)
+            except Exception as exc:
+                log.warning("recent_cooked_dinner lookup failed: %s", exc)
+                dinner_title = None
+            ctx["recent_dinner_title"] = dinner_title
+        candidates = fd.ground_leftover_candidates(
+            candidates, dinner_title, language=language
+        )
 
     if skip_feasibility or domain == db.NEAR_DOMAIN:
         # Fridge must never pull supermarket / meal-type packs via this branch
@@ -491,6 +485,42 @@ def decide(
         explore=explore,
     )
     top = ranked[0] if ranked else survivors[0]
+
+    # Final leftover gate — catches LLM phrases that slipped through ranking
+    if domain == "food" and not fridge_mode:
+        import food_domain as fd
+
+        dinner_title = ctx.get("recent_dinner_title")
+        if fd.is_leftover_candidate(top) and not dinner_title:
+            non_left = [
+                c for c in ranked[1:] if not fd.is_leftover_candidate(c)
+            ] or [
+                c
+                for c in survivors
+                if not fd.is_leftover_candidate(c)
+            ]
+            if non_left:
+                top = non_left[0]
+            else:
+                return DecisionResult(
+                    ok=False,
+                    domain="food",
+                    suggestion="",
+                    justification="",
+                    refused=True,
+                    refusal_message=(
+                        "Jag hittade inget konkret att föreslå just nu — prova en annan måltidstyp."
+                        if language == "sv"
+                        else "Nothing concrete to suggest right now — try another meal type."
+                    ),
+                    context=ctx,
+                    route=(route_meta or {}).get("route"),
+                    route_log_id=(route_meta or {}).get("route_log_id"),
+                )
+        elif fd.is_leftover_candidate(top) and dinner_title:
+            grounded = fd.ground_leftover_candidates([top], dinner_title, language)
+            if grounded:
+                top = grounded[0]
 
     # Final fridge grounding gate — never display ungrounded / canned meal phrases
     if fridge_mode:
