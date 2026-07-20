@@ -318,7 +318,18 @@ def decide(
     if domain == "food" and meal_type and not fridge_mode:
         import food_domain as fd
 
-        pinned = fd.meal_candidates(meal_type, language)
+        if ctx.get("recent_dinner_title") is None:
+            try:
+                ctx["recent_dinner_title"] = db.recent_cooked_dinner(user_id, path=db_path)
+            except Exception as exc:
+                log.warning("recent_cooked_dinner lookup failed: %s", exc)
+                ctx["recent_dinner_title"] = None
+
+        pinned = fd.meal_candidates(
+            meal_type,
+            language,
+            recent_dinner=ctx.get("recent_dinner_title"),
+        )
         if pinned:
             typed = [
                 c
@@ -400,6 +411,8 @@ def decide(
                 log.warning("recent_cooked_dinner lookup failed: %s", exc)
                 dinner_title = None
             ctx["recent_dinner_title"] = dinner_title
+        if dinner_title is None:
+            ctx["recent_dinner_title"] = None
         candidates = fd.ground_leftover_candidates(
             candidates, dinner_title, language=language
         )
@@ -612,6 +625,7 @@ def decide(
             location=str(ctx.get("location") or user.get("location") or "Sverige"),
             ingredients=list(meta_top.get("ingredients") or []),
             active_minutes=int(active) if active is not None else None,
+            candidate_meta=meta_top,
         )
         # Strip shopping from context for non-dinner meals
         if not fd.show_shopping(meal_type):

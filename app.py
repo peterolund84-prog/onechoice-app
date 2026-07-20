@@ -3342,6 +3342,35 @@ def page_execute() -> None:
         or st.session_state.get("food_meal_type")
         or "middag"
     )
+    try:
+        import food_domain as fd
+
+        if fd.is_no_recipe_meal(
+            suggestion,
+            meta=_as_dict(ctx),
+            execution={"type": cur.get("execution_type")},
+        ):
+            recipe = fd.reheat_execution_recipe(
+                suggestion, language=st.session_state.get("language", "sv")
+            )
+            render_recipe_block(recipe, show_nutrition=False)
+            if st.button(
+                t("back_to_decision"),
+                type="secondary",
+                use_container_width=True,
+                key="exec_back_leftover",
+            ):
+                st.session_state.page = "result"
+                st.rerun()
+            nav()
+            try:
+                _flush_db_accept()
+            except Exception:
+                pass
+            return
+    except Exception as exc:
+        log.warning("leftover execute shortcut failed: %s", exc)
+
     seed_ings: list[str] | None = None
     if isinstance(recipe, dict) and recipe.get("ingredient_lines"):
         seed_ings = [str(x) for x in recipe.get("ingredient_lines") or []]
@@ -3500,6 +3529,16 @@ def page_profile() -> None:
             st.caption(f"AI: offline — ingen modell svarade ({d.get('detail', '')[:120]})")
         else:
             st.caption("AI: ej testad ännu")
+    except Exception:
+        pass
+    try:
+        import subprocess
+
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"], stderr=subprocess.DEVNULL, text=True
+        ).strip()
+        if sha:
+            st.caption(f"Build: {sha}")
     except Exception:
         pass
 

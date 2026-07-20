@@ -163,6 +163,78 @@ def ground_leftover_candidates(
     return out
 
 
+def leftover_meal_candidate(
+    dinner_title: str,
+    meal_type: str,
+    language: str = "sv",
+) -> dict[str, Any]:
+    """Only emitted when recent_cooked_dinner returned evidence."""
+    sv = language == "sv"
+    title = dinner_title.strip()
+    if sv:
+        suggestion = f"Värm gårdagens {title.lower()}"
+        justification = "Redan lagat — klart på 5 minuter."
+    else:
+        suggestion = f"Reheat yesterday's {title.lower()}"
+        justification = "Already cooked — ready in 5 minutes."
+    return {
+        "suggestion": suggestion,
+        "justification": justification,
+        "meta": {
+            "meal_type": meal_type,
+            "active_minutes": 5,
+            "leftover": True,
+            "no_recipe": True,
+            "ingredients": [],
+        },
+    }
+
+
+def reheat_execution_recipe(suggestion: str, *, language: str = "sv") -> dict[str, Any]:
+    """Honest reheat steps — never a fabricated cook-from-scratch recipe."""
+    sv = language == "sv"
+    if sv:
+        steps = [
+            "Ta fram matlådan eller resterna från kylen.",
+            "Värm i mikro 2–3 min (eller i kastrull på medelvärme) tills maten är genomvarm.",
+            "Rör om, smaka av. Servera direkt.",
+        ]
+    else:
+        steps = [
+            "Take the lunchbox or leftovers from the fridge.",
+            "Reheat in the microwave 2–3 min (or in a pan) until piping hot.",
+            "Stir, taste, and serve.",
+        ]
+    return {
+        "title": suggestion,
+        "ingredients": [],
+        "ingredient_lines": [],
+        "steps": steps,
+        "nutrition": {"kcal": 0, "protein_g": 0, "fat_g": 0, "carbs_g": 0},
+        "no_recipe": True,
+        "leftover": True,
+    }
+
+
+def is_no_recipe_meal(
+    suggestion: str,
+    meta: dict[str, Any] | None = None,
+    execution: dict[str, Any] | None = None,
+) -> bool:
+    """Leftovers and explicit no-recipe decisions — never run the recipe engine."""
+    meta = meta if isinstance(meta, dict) else {}
+    execution = execution if isinstance(execution, dict) else {}
+    exec_meta = execution.get("meta") if isinstance(execution.get("meta"), dict) else {}
+    if meta.get("leftover") or meta.get("no_recipe"):
+        return True
+    if exec_meta.get("leftover") or exec_meta.get("no_recipe"):
+        return True
+    if execution.get("type") == "simple" and execution.get("recipe") is None:
+        if is_leftover_candidate({"suggestion": suggestion, "meta": meta}):
+            return True
+    return is_leftover_candidate({"suggestion": suggestion, "meta": meta})
+
+
 def ingredient_hints_for(suggestion: str, meal_type: str, language: str = "sv") -> list[str]:
     """Ingredient list from pinned meal packs — used when recipe must be rebuilt."""
     target = (suggestion or "").strip().lower()
@@ -173,7 +245,12 @@ def ingredient_hints_for(suggestion: str, meal_type: str, language: str = "sv") 
     return []
 
 
-def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]]:
+def meal_candidates(
+    meal_type: str,
+    language: str = "sv",
+    *,
+    recent_dinner: str | None = None,
+) -> list[dict[str, Any]]:
     """Pinned candidates shaped by meal type (generation, not just filter)."""
     sv = language == "sv"
     if meal_type == "frukost":
@@ -222,21 +299,11 @@ def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]
             },
         ]
     if meal_type == "lunch":
-        return [
-            {
-                "suggestion": "Matlåda från gårdagens gryta" if sv else "Leftover lunchbox",
-                "justification": (
-                    "Lunch utan krångel — värm det du redan lagat."
-                    if sv
-                    else "Easy lunch — reheat what you already cooked."
-                ),
-                "meta": {
-                    "meal_type": "lunch",
-                    "active_minutes": 5,
-                    "leftover": True,
-                    "ingredients": [],
-                },
-            },
+        out: list[dict[str, Any]] = []
+        if recent_dinner:
+            out.append(leftover_meal_candidate(recent_dinner, "lunch", language))
+        out.extend(
+            [
             {
                 "suggestion": "Äggmacka och kaffe" if sv else "Egg sandwich and coffee",
                 "justification": (
@@ -277,8 +344,10 @@ def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]
                 },
             },
         ]
+        )
+        return out
     if meal_type == "kvallsmal":
-        return [
+        out = [
             {
                 "suggestion": "Smörgås med ost" if sv else "Cheese sandwich",
                 "justification": (
@@ -309,22 +378,10 @@ def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]
                     "ingredients": ["fil"],
                 },
             },
-            {
-                "suggestion": "Värm en rest" if sv else "Reheat leftovers",
-                "justification": (
-                    "Ingen ny matlagning — mikra det som finns."
-                    if sv
-                    else "No new cooking — microwave what’s there."
-                ),
-                "meta": {
-                    "meal_type": "kvallsmal",
-                    "active_minutes": 3,
-                    "no_cook": True,
-                    "leftover": True,
-                    "ingredients": [],
-                },
-            },
         ]
+        if recent_dinner:
+            out.append(leftover_meal_candidate(recent_dinner, "kvallsmal", language))
+        return out
     # middag — empty here; pipeline local dinner pack is used
     return []
 
@@ -338,21 +395,14 @@ def apply_meal_execution(
     location: str = "Sverige",
     ingredients: list[str] | None = None,
     active_minutes: int | None = None,
+    candidate_meta: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Adjust execution payload for meal type (shopping / labels)."""
     out = dict(execution or {})
     out["meal_type"] = meal_type
-    # Some decisions legitimately have NO recipe: reheating leftovers, honest
-    # empty-fridge fallbacks. Forcing a recipe here used to raise ValueError
-    # and kill the whole decide() call. Explicit flag-based skip — not a
-    # silent fallback: the execute view shows the instruction text instead.
-    meta = execution.get("meta") if isinstance(execution, dict) else {}
-    meta = meta if isinstance(meta, dict) else {}
-    no_recipe = bool(meta.get("leftover") or meta.get("no_recipe")) or (
-        bool(meta.get("fridge_fallback")) and not (ingredients or meta.get("ingredients"))
-    )
-    if no_recipe:
-        out["recipe"] = None
+    meta = candidate_meta if isinstance(candidate_meta, dict) else {}
+    if is_no_recipe_meal(suggestion, meta=meta, execution=execution):
+        out["recipe"] = reheat_execution_recipe(suggestion, language=language)
         out["shopping"] = None
         out["shopping_list"] = None
         out["type"] = "simple"

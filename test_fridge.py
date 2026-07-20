@@ -241,7 +241,8 @@ class FridgeGroundingTests(unittest.TestCase):
         import food_domain as fd
 
         canned = [c["suggestion"].lower() for c in fd.meal_candidates("kvallsmal", "sv")]
-        self.assertIn("värm en rest", canned)
+        self.assertNotIn("värm en rest", canned)
+        self.assertNotIn("matlåda", " ".join(canned))
 
         r = pipeline.decide(
             self.user["id"],

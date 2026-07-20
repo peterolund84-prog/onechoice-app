@@ -96,6 +96,17 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertIn(b.suggestion, recent_bfast)
         tmp.cleanup()
 
+    def test_lunch_pack_never_includes_ungrounded_leftover(self) -> None:
+        lunch = [c["suggestion"].lower() for c in fd.meal_candidates("lunch", "sv")]
+        self.assertNotIn("matlåda från gårdagens gryta", lunch)
+        self.assertNotIn("leftover lunchbox", lunch)
+
+    def test_lunch_includes_named_leftover_with_evidence(self) -> None:
+        lunch = fd.meal_candidates("lunch", "sv", recent_dinner="Kycklinggryta")
+        titles = [c["suggestion"].lower() for c in lunch]
+        self.assertTrue(any("kycklinggryta" in t for t in titles))
+        self.assertFalse(any("matlåda" in t for t in titles))
+
     def test_evening_is_simple(self) -> None:
         cands = fd.meal_candidates("kvallsmal", "sv")
         self.assertTrue(cands)
@@ -306,3 +317,22 @@ class LeftoverGroundingTests(unittest.TestCase):
         recipe = (r.context or {}).get("recipe")
         self.assertIsInstance(recipe, dict)
         self.assertTrue(reng.recipe_is_valid(recipe, r.suggestion))
+
+    def test_leftover_lunch_gets_reheat_steps_not_error(self) -> None:
+        d = db.create_decision(
+            user_id=self.user["id"],
+            domain="food",
+            question="middag?",
+            suggestion="Kycklinggryta",
+            justification="x",
+            context={"meal_type": "middag"},
+            path=self.db_path,
+        )
+        db.set_decision_status(d["id"], "accepted", path=self.db_path)
+        r = self._lunch_decide()
+        if "gårdagens" not in (r.suggestion or "").lower():
+            self.skipTest("leftover candidate not selected this roll")
+        recipe = (r.context or {}).get("recipe") or {}
+        steps = " ".join(str(s) for s in (recipe.get("steps") or [])).lower()
+        self.assertIn("mikro", steps)
+        self.assertNotIn("kunde inte generera", steps)
