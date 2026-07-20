@@ -296,3 +296,13 @@ class LeftoverGroundingTests(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertIn("kycklingwok", out[0]["suggestion"].lower())
         self.assertNotIn("gryta", out[0]["suggestion"].lower())
+
+    def test_lunch_tonfisk_has_recipe_after_accept(self) -> None:
+        r = self._lunch_decide()
+        while "tonfisk" not in (r.suggestion or "").lower():
+            r = self._lunch_decide()
+        import recipe_engine as reng
+
+        recipe = (r.context or {}).get("recipe")
+        self.assertIsInstance(recipe, dict)
+        self.assertTrue(reng.recipe_is_valid(recipe, r.suggestion))

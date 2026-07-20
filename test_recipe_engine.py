@@ -67,6 +67,20 @@ class RecipeEngineMaterializeTests(unittest.TestCase):
         steps = " ".join(str(s).lower() for s in recipe.get("steps") or [])
         self.assertIn("kyckling", steps)
 
+    def test_sallad_med_tonfisk_catalog_recipe(self) -> None:
+        recipe = reng.materialize_recipe(
+            "Sallad med tonfisk",
+            ["tonfisk", "sallad", "gurka", "olja", "salt", "peppar"],
+            meal_type="lunch",
+            allow_llm=False,
+        )
+        self.assertTrue(reng.recipe_is_valid(recipe, "Sallad med tonfisk"))
+        blob = " ".join(str(x).lower() for x in recipe.get("ingredients") or [])
+        self.assertIn("tonfisk", blob)
+        self.assertNotIn("torsk", blob)
+        steps = " ".join(str(s).lower() for s in recipe.get("steps") or [])
+        self.assertIn("tonfisk", steps)
+
     def test_ensure_valid_recipe_regenerates_stub(self) -> None:
         stub = {
             "title": "Havregrynsgröt med banan",

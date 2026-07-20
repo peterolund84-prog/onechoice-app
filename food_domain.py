@@ -163,6 +163,16 @@ def ground_leftover_candidates(
     return out
 
 
+def ingredient_hints_for(suggestion: str, meal_type: str, language: str = "sv") -> list[str]:
+    """Ingredient list from pinned meal packs — used when recipe must be rebuilt."""
+    target = (suggestion or "").strip().lower()
+    for c in meal_candidates(meal_type, language):
+        if (c.get("suggestion") or "").strip().lower() == target:
+            meta = c.get("meta") if isinstance(c.get("meta"), dict) else {}
+            return [str(x) for x in (meta.get("ingredients") or []) if str(x).strip()]
+    return []
+
+
 def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]]:
     """Pinned candidates shaped by meal type (generation, not just filter)."""
     sv = language == "sv"
@@ -399,6 +409,22 @@ def apply_meal_execution(
             "Snabblunch — ingen stor inköpslista."
             if language == "sv"
             else "Quick lunch — no big shopping list."
+        )
+        import recipe_engine as reng
+
+        ings = list(ingredients or []) or ingredient_hints_for(suggestion, meal_type, language)
+        mins = active_minutes
+        if mins is None and isinstance(execution, dict):
+            mins = (execution.get("meta") or {}).get("active_minutes")
+        out["recipe"] = reng.ensure_valid_recipe(
+            out.get("recipe") if isinstance(out.get("recipe"), dict) else None,
+            suggestion,
+            meal_type=meal_type,
+            ingredient_hints=ings or None,
+            active_minutes=int(mins) if mins is not None else None,
+            portions=1,
+            language=language,
+            grok_api_key="",
         )
         return out
     # middag keeps full shopping from pipeline

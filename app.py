@@ -3337,6 +3337,11 @@ def page_execute() -> None:
             active_mins = None
 
     # ALWAYS materialize a valid structured recipe — never title-only stubs
+    meal_type = str(
+        ctx.get("meal_type")
+        or st.session_state.get("food_meal_type")
+        or "middag"
+    )
     seed_ings: list[str] | None = None
     if isinstance(recipe, dict) and recipe.get("ingredient_lines"):
         seed_ings = [str(x) for x in recipe.get("ingredient_lines") or []]
@@ -3344,11 +3349,17 @@ def page_execute() -> None:
         seed_ings = [str(x) for x in recipe.get("ingredients") or []]
     elif isinstance(shop, dict) and shop.get("ingredients"):
         seed_ings = [str(x) for x in shop.get("ingredients") or []]
-    meal_type = str(
-        ctx.get("meal_type")
-        or st.session_state.get("food_meal_type")
-        or "middag"
-    )
+    if not seed_ings:
+        try:
+            import food_domain as fd
+
+            seed_ings = fd.ingredient_hints_for(
+                suggestion,
+                meal_type,
+                language=st.session_state.get("language", "sv"),
+            ) or None
+        except Exception:
+            pass
     try:
         import recipe_engine as reng
 

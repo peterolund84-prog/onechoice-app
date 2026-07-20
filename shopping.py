@@ -149,11 +149,34 @@ PROTEIN_ALIASES = {
     "lax": ("lax", "salmon"),
     "nötfärs": ("nötfärs", "köttfärs", "färs", "burgare"),
     "räkor": ("räkor", "scampi", "shrimp"),
-    "torsk": ("torsk", "fisk"),
+    "tonfisk": ("tonfisk", "tuna"),
+    "torsk": ("torsk", "cod"),
     "ägg": ("ägg", "omelett", "omelette"),
     "bacon": ("bacon",),
     "fläsk": ("fläsk", "karré", "kotlett"),
 }
+
+
+def _title_mentions(term: str, text: str) -> bool:
+    """Word-boundary match — 'tonfisk' must not match cue 'fisk'."""
+    return bool(re.search(rf"\b{re.escape(term)}\b", (text or "").lower()))
+
+
+def _cue_in_title(cue: str, text: str) -> bool:
+    """Match whole words or compound titles (kycklinggryta), not tonfisk→fisk."""
+    s = (text or "").lower()
+    c = cue.lower()
+    if _title_mentions(c, s):
+        return True
+    return len(c) >= 5 and c in s
+
+
+def _dish_protein(suggestion: str) -> str | None:
+    s = (suggestion or "").lower()
+    for canonical, cues in PROTEIN_ALIASES.items():
+        if any(_cue_in_title(cue, s) for cue in cues):
+            return canonical
+    return None
 
 
 def build_shopping(
@@ -651,11 +674,21 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
     protein = _missing_main_protein(suggestion, [])  # canonical from name, if any
     # If protein already in ingredients, still resolve display name from aliases
     if protein is None:
-        for canonical, cues in PROTEIN_ALIASES.items():
-            if any(c in s for c in cues):
-                protein = canonical
-                break
+        protein = _dish_protein(suggestion)
 
+    if ("tonfisk" in s or "tuna" in s) and "sallad" in s:
+        return [
+            "Skölj och strimla sallad (ca 4 dl). Skär 1 gurka i kuber.",
+            "Öppna 1 burk tonfisk i vatten och låt rinna av.",
+            "Blanda sallad, gurka och tonfisk i en skål. Ringla 1 msk olivaolja.",
+            "Krydda med salt och peppar. Servera direkt.",
+        ]
+    if "äggmacka" in s or ("egg" in s and "sandwich" in s):
+        return [
+            "Stek 2 ägg i 1 msk smör till önskad konsistens (ca 4 min).",
+            "Rosta 2 skivor bröd i brödrost eller torr panna (1 min).",
+            "Lägg äggen på brödet. Smaka av med salt och peppar. Servera med kaffe.",
+        ]
     if "kycklingwok" in s or ("kyckling" in s and "wok" in s):
         return [
             "Skölj 2 dl ris och koka enligt förpackningen (ca 1,5 dl vatten per dl ris).",
@@ -794,8 +827,8 @@ def _missing_main_protein(suggestion: str, to_buy: list[str]) -> str | None:
     s = suggestion.lower()
     buy = " ".join(_strip_hint(x) for x in to_buy)
     for canonical, cues in PROTEIN_ALIASES.items():
-        if any(c in s for c in cues):
-            if not any(c in buy or canonical in buy for c in cues):
+        if any(_cue_in_title(cue, s) for cue in cues):
+            if not any(_cue_in_title(cue, buy) or canonical in buy for cue in cues):
                 return canonical
     return None
 
@@ -956,6 +989,10 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
             "salt",
             "peppar",
         ]
+    if "tonfisk" in s or ("tuna" in s and "salad" in s):
+        return ["tonfisk", "sallad", "gurka", "olja", "salt", "peppar"]
+    if "äggmacka" in s or ("egg" in s and "sandwich" in s):
+        return ["ägg", "bröd", "smör", "salt", "peppar"]
     if "pad thai" in s or "padthai" in s:
         return [
             "kycklingfilé",
@@ -974,10 +1011,9 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
     # Generic cook: still require something concrete — fail soft with staples + veg + carb
     # If dish names a protein, include it
     ingredients = ["gul lök", "vitlök", "olja", "salt", "peppar"]
-    for canonical, cues in PROTEIN_ALIASES.items():
-        if any(c in s for c in cues):
-            ingredients.insert(0, canonical)
-            break
+    protein = _dish_protein(suggestion)
+    if protein:
+        ingredients.insert(0, protein)
     else:
         # no protein detected — still need a main; use seasonal veg + carb to buy
         ingredients.extend(["säsongsgrönsaker", "ris"])
