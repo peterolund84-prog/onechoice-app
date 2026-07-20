@@ -401,13 +401,18 @@ def _check_food(
         }
         return FeasibilityResult(ok=True, execution=execution)
 
-    # Middag: full list → split to_buy / assumed_at_home
-    shop = shopping.build_shopping(
+    # Middag: recipe first → smart shopping list from structured ingredients
+    meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    active = meta.get("active_minutes")
+    recipe, shop = shopping.build_meal_bundle(
         suggestion,
-        meta=candidate.get("meta") or {},
+        meta=meta,
+        meal_type=meal_type,
         store=store,
+        include_shopping=True,
+        active_minutes=int(active) if active is not None else None,
     )
-    if not shop or not shopping.shopping_valid(shop, suggestion):
+    if not shop or not recipe:
         return FeasibilityResult(ok=False, reasons=["shopping_incomplete"])
 
     execution = {
@@ -416,13 +421,8 @@ def _check_food(
         "url": None,
         "detail": shopping.format_assumed_line(shop["assumed_at_home"]),
         "shopping": shop,
-        "shopping_list": shop["to_buy"],  # legacy key for older UI/tests
-        "recipe": shop.get("recipe")
-        or shopping.build_recipe(
-            suggestion,
-            shop.get("ingredients"),
-            meal_type=meal_type,
-        ),
+        "shopping_list": shop["to_buy"],
+        "recipe": recipe,
         "store": store,
         "max_active_minutes": max_min,
         "meal_type": meal_type,

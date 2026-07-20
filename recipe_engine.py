@@ -399,6 +399,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
             {"name": "ris", "amount": "2", "unit": "dl", "category": "to_buy"},
             {"name": "broccoli", "amount": "200", "unit": "g", "category": "to_buy"},
             {"name": "morot", "amount": "1", "unit": "st", "category": "to_buy"},
+            {"name": "paprika (färsk)", "amount": "1", "unit": "st", "category": "to_buy"},
             {"name": "sojasås", "amount": "2", "unit": "msk", "category": "to_buy"},
             {"name": "olja", "amount": "1", "unit": "msk", "category": "assumed_home"},
             {"name": "salt", "amount": "1", "unit": "krm", "category": "assumed_home"},
@@ -406,7 +407,7 @@ _CATALOG: dict[str, dict[str, Any]] = {
         ],
         "steps": [
             "Skölj 2 dl ris och koka enligt förpackning (ca 12 min).",
-            "Skär 400 g kycklingfilé i bitar. Strimla morot och broccoli.",
+            "Skär 400 g kycklingfilé i bitar. Strimla morot, broccoli och paprika.",
             "Hetta upp 1 msk olja i wok. Stek kyckling 5–6 min tills genomstekt.",
             "Tillsätt grönsaker, stek 4 min. Ringla 2 msk sojasås. Servera med ris.",
         ],

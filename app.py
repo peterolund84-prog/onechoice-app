@@ -3389,20 +3389,32 @@ def page_execute() -> None:
             ) or None
         except Exception:
             pass
-    try:
-        import recipe_engine as reng
+    # Title-only stub seeds break validation — drop them
+    if seed_ings and len(seed_ings) == 1:
+        if seed_ings[0].strip().lower() == suggestion.strip().lower():
+            seed_ings = None
 
-        recipe = reng.ensure_valid_recipe(
-            recipe if isinstance(recipe, dict) else None,
-            suggestion,
-            meal_type=meal_type,
-            ingredient_hints=seed_ings,
-            active_minutes=active_mins,
-            language=st.session_state.get("language", "sv"),
-            grok_api_key=resolve_grok_api_key(),
-        )
-    except Exception as exc:
-        log.warning("execute recipe materialize failed: %s", exc)
+    import shopping as shop_mod
+
+    bundled_recipe, bundled_shop = shop_mod.build_meal_bundle(
+        suggestion,
+        meta={"meal_type": meal_type, "ingredients": seed_ings or []},
+        meal_type=meal_type,
+        language=st.session_state.get("language", "sv"),
+        grok_api_key=resolve_grok_api_key(),
+        include_shopping=True,
+        active_minutes=active_mins,
+    )
+    if bundled_recipe:
+        recipe = bundled_recipe
+    if bundled_shop and not shop:
+        shop = bundled_shop
+    elif isinstance(recipe, dict) and not shop:
+        derived = shop_mod.shopping_from_recipe(recipe, suggestion=suggestion)
+        if derived and derived.get("to_buy"):
+            shop = derived
+
+    if not isinstance(recipe, dict) or not recipe.get("steps"):
         try:
             import recipe_engine as reng
 
@@ -3417,12 +3429,14 @@ def page_execute() -> None:
             )
         except Exception as exc2:
             log.error("recipe catalog fallback failed: %s", exc2)
-            recipe = {
-                "title": suggestion,
-                "ingredients": seed_ings or [suggestion],
-                "steps": ["Kunde inte generera recept — försök igen."],
-                "nutrition": {"kcal": 0, "protein_g": 0, "fat_g": 0, "carbs_g": 0},
-            }
+            recipe = shop_mod.build_recipe(
+                suggestion,
+                seed_ings,
+                meal_type=meal_type,
+                active_minutes=active_mins,
+                language=st.session_state.get("language", "sv"),
+                grok_api_key="",
+            )
 
     if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
         try:

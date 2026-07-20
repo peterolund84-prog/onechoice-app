@@ -184,13 +184,52 @@ def build_shopping(
     *,
     meta: dict[str, Any] | None = None,
     store: str = "ICA",
+    recipe: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """
-    Return structured shopping payload or None if validation fails
-    (caller must regenerate / discard candidate).
+    Return structured shopping payload or None if validation fails.
+
+    Prefer recipe-first: when a structured recipe exists, derive to_buy from it
+    (single source of truth for ingredients + amounts).
     """
     meta = meta or {}
-    full = meta.get("ingredients") or _infer_full_ingredients(suggestion)
+    meal_type = str(meta.get("meal_type") or "middag")
+    existing = recipe if isinstance(recipe, dict) else meta.get("recipe")
+    if isinstance(existing, dict):
+        shop = shopping_from_recipe(existing, suggestion=suggestion, store=store)
+        if shop and shopping_valid(shop, suggestion):
+            return shop
+
+    hints = list(meta.get("ingredients") or []) or _infer_full_ingredients(suggestion)
+    if hints:
+        non_staple = [h for h in hints if not _is_staple(str(h))]
+        missing = _missing_main_protein(suggestion, non_staple)
+        if missing and _norm_item(missing) not in {_norm_item(str(h)) for h in hints}:
+            hints = [missing] + hints
+        try:
+            built = _materialize_shopping_recipe(
+                suggestion, hints, meal_type=meal_type
+            )
+            import recipe_engine as reng
+
+            if reng.recipe_is_valid(built, suggestion):
+                shop = shopping_from_recipe(built, suggestion=suggestion, store=store)
+                if shop and shopping_valid(shop, suggestion):
+                    return shop
+        except Exception:
+            pass
+
+    return _build_shopping_from_names(suggestion, hints, store=store, meal_type=meal_type)
+
+
+def _build_shopping_from_names(
+    suggestion: str,
+    full: list[str] | None,
+    *,
+    store: str = "ICA",
+    meal_type: str = "middag",
+) -> dict[str, Any] | None:
+    """Legacy name-list path — used when recipe materialization fails."""
     if not full:
         return None
 
@@ -212,7 +251,6 @@ def build_shopping(
         else:
             to_buy_flat.append(item)
 
-    # Critical: main protein from dish name must be on to_buy AND in ingredients
     missing = _missing_main_protein(suggestion, to_buy_flat)
     if missing:
         to_buy_flat.insert(0, missing)
@@ -222,31 +260,160 @@ def build_shopping(
         if miss_n not in {_norm_item(x) for x in ingredients}:
             ingredients = [missing] + list(ingredients)
 
-    # Re-validate: every ingredient in exactly one list
     all_listed = {_norm_item(x) for x in to_buy_flat + assumed}
     for item in ingredients:
         if _norm_item(item) not in all_listed:
             return None
 
-    # Protein still missing after patch → fail hard
     if _missing_main_protein(suggestion, to_buy_flat):
         return None
 
-    to_buy = _group_by_store(to_buy_flat)
-    # Annotate skippable pantry with hint
-    to_buy = _annotate_skippable(to_buy)
+    to_buy = _annotate_skippable(_group_by_store(to_buy_flat))
+    recipe = _materialize_shopping_recipe(
+        suggestion, ingredients, meal_type=meal_type
+    )
 
     return {
         "store": store,
         "ingredients": ingredients,
         "to_buy": to_buy,
         "assumed_at_home": assumed or ["salt", "peppar", "olja"],
-        "recipe": _materialize_shopping_recipe(
-            suggestion,
-            ingredients,
-            meal_type=str((meta or {}).get("meal_type") or "middag"),
-        ),
+        "recipe": recipe,
     }
+
+
+def _names_from_recipe(recipe: dict[str, Any]) -> list[str]:
+    """Plain ingredient names from a structured recipe."""
+    structured = recipe.get("ingredients_structured")
+    if isinstance(structured, list) and structured:
+        names: list[str] = []
+        for ing in structured:
+            if isinstance(ing, dict):
+                n = _norm_item(str(ing.get("name") or ""))
+                if n:
+                    names.append(n)
+        if names:
+            return names
+    lines = list(recipe.get("ingredient_lines") or recipe.get("ingredients") or [])
+    out: list[str] = []
+    for line in lines:
+        raw = str(line).strip()
+        if not raw:
+            continue
+        out.append(_strip_hint(raw))
+    return out
+
+
+def shopping_from_recipe(
+    recipe: dict[str, Any],
+    *,
+    suggestion: str = "",
+    store: str = "ICA",
+) -> dict[str, Any] | None:
+    """
+    Smart shopping list: split recipe ingredients into to_buy vs assumed_at_home.
+    Respects ingredients_structured category when present.
+    """
+    if not isinstance(recipe, dict):
+        return None
+    title = suggestion or str(recipe.get("title") or "")
+    structured = recipe.get("ingredients_structured")
+    to_buy_flat: list[str] = []
+    assumed: list[str] = []
+    all_names: list[str] = []
+
+    if isinstance(structured, list) and structured and isinstance(structured[0], dict):
+        for ing in structured:
+            if not isinstance(ing, dict):
+                continue
+            name = _norm_item(str(ing.get("name") or ""))
+            if not name:
+                continue
+            all_names.append(name)
+            cat = str(ing.get("category") or "").lower()
+            if cat == "assumed_home" or _is_staple(name):
+                if name not in assumed:
+                    assumed.append(name)
+            elif name not in to_buy_flat:
+                to_buy_flat.append(name)
+    else:
+        for name in _names_from_recipe(recipe):
+            if not name or name in all_names:
+                continue
+            all_names.append(name)
+            if _is_staple(name):
+                assumed.append(name)
+            else:
+                to_buy_flat.append(name)
+
+    missing = _missing_main_protein(title, to_buy_flat)
+    if missing:
+        to_buy_flat.insert(0, missing)
+        if _norm_item(missing) not in {_norm_item(x) for x in all_names}:
+            all_names.insert(0, missing)
+
+    if not all_names:
+        return None
+
+    to_buy = _annotate_skippable(_group_by_store(to_buy_flat))
+
+    return {
+        "store": store,
+        "ingredients": all_names,
+        "to_buy": to_buy,
+        "assumed_at_home": assumed or ["salt", "peppar", "olja"],
+        "recipe": recipe,
+    }
+
+
+def build_meal_bundle(
+    suggestion: str,
+    *,
+    meta: dict[str, Any] | None = None,
+    meal_type: str = "middag",
+    store: str = "ICA",
+    language: str = "sv",
+    grok_api_key: str = "",
+    include_shopping: bool = True,
+    active_minutes: int | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """
+    Recipe first, shopping derived from recipe — one pipeline for execute/decide.
+    Returns (recipe, shopping_payload).
+    """
+    import recipe_engine as reng
+
+    meta = dict(meta or {})
+    meta.setdefault("meal_type", meal_type)
+    hints = [str(x).strip() for x in (meta.get("ingredients") or []) if str(x).strip()]
+    existing = meta.get("recipe") if isinstance(meta.get("recipe"), dict) else None
+
+    recipe: dict[str, Any] | None = None
+    if existing and reng.recipe_is_valid(existing, suggestion):
+        recipe = dict(existing)
+    else:
+        try:
+            recipe = reng.materialize_recipe(
+                suggestion,
+                hints or None,
+                meal_type=meal_type,
+                active_minutes=active_minutes or meta.get("active_minutes"),
+                language=language,
+                grok_api_key=grok_api_key,
+                allow_llm=bool(grok_api_key),
+            )
+        except Exception:
+            recipe = None
+
+    if not recipe or not reng.recipe_is_valid(recipe, suggestion):
+        return None, None
+
+    shop = None
+    if include_shopping:
+        shop = shopping_from_recipe(recipe, suggestion=suggestion, store=store)
+        if shop and not shopping_valid(shop, suggestion):
+            shop = None
+    return recipe, shop
 
 
 def _materialize_shopping_recipe(

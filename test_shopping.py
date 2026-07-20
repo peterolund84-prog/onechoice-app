@@ -14,6 +14,46 @@ import shopping
 
 
 class ShoppingTests(unittest.TestCase):
+    def test_shopping_from_recipe_structured(self) -> None:
+        recipe = {
+            "title": "Sallad med tonfisk",
+            "ingredients_structured": [
+                {"name": "tonfisk", "category": "to_buy"},
+                {"name": "sallad", "category": "to_buy"},
+                {"name": "olja", "category": "assumed_home"},
+                {"name": "salt", "category": "assumed_home"},
+            ],
+            "steps": ["a", "b", "c"],
+        }
+        shop = shopping.shopping_from_recipe(recipe, suggestion="Sallad med tonfisk")
+        self.assertIsNotNone(shop)
+        assert shop is not None
+        flat = " ".join(
+            shopping._strip_hint(i)
+            for section in shop["to_buy"].values()
+            for i in section
+        ).lower()
+        self.assertIn("tonfisk", flat)
+        self.assertIn("sallad", flat)
+        self.assertIn("olja", " ".join(shop["assumed_at_home"]))
+
+    def test_build_meal_bundle_recipe_and_shop(self) -> None:
+        recipe, shop = shopping.build_meal_bundle(
+            "Sallad med tonfisk",
+            meta={
+                "meal_type": "lunch",
+                "ingredients": ["tonfisk", "sallad", "gurka", "olja", "salt", "peppar"],
+            },
+            meal_type="lunch",
+            include_shopping=True,
+        )
+        self.assertIsNotNone(recipe)
+        self.assertIsNotNone(shop)
+        assert recipe is not None
+        self.assertGreaterEqual(len(recipe.get("steps") or []), 3)
+        assert shop is not None
+        self.assertTrue(shop.get("to_buy"))
+
     def test_kycklingwok_puts_chicken_on_to_buy(self) -> None:
         payload = shopping.build_shopping("Kycklingwok med ris")
         self.assertIsNotNone(payload)

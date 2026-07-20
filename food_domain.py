@@ -476,6 +476,15 @@ def apply_meal_execution(
             language=language,
             grok_api_key="",
         )
+        import shopping as shop_mod
+
+        mini = shop_mod.shopping_from_recipe(out["recipe"], suggestion=suggestion)
+        if mini and mini.get("to_buy"):
+            out["shopping"] = mini
+            out["shopping_list"] = mini.get("to_buy")
+            out["detail"] = shop_mod.format_assumed_line(
+                list(mini.get("assumed_at_home") or []), language=language
+            )
         return out
     # middag keeps full shopping from pipeline
     out["label"] = out.get("label") or (
