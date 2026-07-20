@@ -59,7 +59,7 @@ class PublicShareDbTests(unittest.TestCase):
             justification="Snabb vardag",
             status="accepted",
             context={
-                "shopping": {"store": "ICA", "to_buy": {"Kött": ["köttfärs"]}},
+                "shopping": {"store": "", "to_buy": {"Kött": ["köttfärs"]}},
                 "recipe": {"active_minutes": 20, "steps": ["Stek"]},
             },
             path=path,

@@ -9,12 +9,15 @@ Data access for OneChoice.
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+log = logging.getLogger("onechoice.db")
 
 DB_PATH = Path(__file__).resolve().parent / "onechoice.db"
 # Streamlit Cloud mounts the repo read-only under /mount/src — use /tmp there
@@ -59,6 +62,49 @@ def _use_supabase(path: Path | str | None = None) -> bool:
         return sb.is_configured()
     except Exception:
         return False
+
+
+def _shopping_table_missing(exc: BaseException) -> bool:
+    """True when Supabase/PostgREST has no public.shopping_items yet."""
+    msg = str(exc)
+    low = msg.lower()
+    if "shopping_items" not in low and "shopping_ite" not in low:
+        return False
+    return (
+        "PGRST205" in msg
+        or "could not find the table" in low
+        or "schema cache" in low
+        or "does not exist" in low
+    )
+
+
+# Once we detect a missing shopping_items table, keep using local SQLite
+# so the app works until the migration is applied in Supabase.
+_SHOPPING_FORCE_SQLITE = False
+
+
+def _shopping_sqlite_path() -> Path:
+    return DB_PATH
+
+
+def _mark_shopping_sqlite_fallback(exc: BaseException | None = None) -> None:
+    global _SHOPPING_FORCE_SQLITE
+    _SHOPPING_FORCE_SQLITE = True
+    try:
+        init_db(_shopping_sqlite_path())
+    except Exception:
+        pass
+    if exc is not None:
+        log.warning(
+            "shopping_items missing in Supabase — using local SQLite fallback: %s",
+            exc,
+        )
+
+
+def _shopping_use_supabase(path: Path | str | None = None) -> bool:
+    if _SHOPPING_FORCE_SQLITE:
+        return False
+    return _use_supabase(path)
 
 
 def _tokens() -> tuple[str, str]:
@@ -1039,11 +1085,18 @@ def list_shopping_items(
     *,
     path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
-    if _use_supabase(path):
+    if _shopping_use_supabase(path):
         import supabase_store as store
 
         at, rt = _tokens()
-        return store.list_shopping_items(user_id, at, rt)
+        try:
+            return store.list_shopping_items(user_id, at, rt)
+        except Exception as exc:
+            if _shopping_table_missing(exc):
+                _mark_shopping_sqlite_fallback(exc)
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return list_shopping_items(user_id, path=_shopping_sqlite_path())
+            raise
     with get_conn(path) as conn:
         rows = conn.execute(
             """
@@ -1062,13 +1115,22 @@ def purge_stale_checked_shopping_items(
     hours: int = 24,
     path: Path | str | None = None,
 ) -> int:
-    if _use_supabase(path):
+    if _shopping_use_supabase(path):
         import supabase_store as store
 
         at, rt = _tokens()
-        return store.purge_stale_checked_shopping_items(
-            user_id, at, rt, hours=hours
-        )
+        try:
+            return store.purge_stale_checked_shopping_items(
+                user_id, at, rt, hours=hours
+            )
+        except Exception as exc:
+            if _shopping_table_missing(exc):
+                _mark_shopping_sqlite_fallback(exc)
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return purge_stale_checked_shopping_items(
+                    user_id, hours=hours, path=_shopping_sqlite_path()
+                )
+            raise
     with get_conn(path) as conn:
         cur = conn.execute(
             """
@@ -1117,31 +1179,57 @@ def upsert_shopping_item(
     if not clean:
         return None
     cat = category if category in si.CATEGORIES else si.categorize_item(clean)
-    if _use_supabase(path):
+    if _shopping_use_supabase(path):
         import supabase_store as store
 
         at, rt = _tokens()
-        return store.upsert_shopping_item(
-            user_id,
-            clean,
-            cat,
-            source_decision_id=source_decision_id,
-            access_token=at,
-            refresh_token=rt,
-        )
+        try:
+            return store.upsert_shopping_item(
+                user_id,
+                clean,
+                cat,
+                source_decision_id=source_decision_id,
+                access_token=at,
+                refresh_token=rt,
+            )
+        except Exception as exc:
+            if _shopping_table_missing(exc):
+                _mark_shopping_sqlite_fallback(exc)
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return upsert_shopping_item(
+                    user_id,
+                    clean,
+                    cat,
+                    source_decision_id=source_decision_id,
+                    path=_shopping_sqlite_path(),
+                )
+            raise
     with get_conn(path) as conn:
         existing = _find_open_shopping_item(conn, user_id, clean)
         if existing:
             return _shopping_item_row(existing)
-        cur = conn.execute(
-            """
-            INSERT INTO shopping_items (
-                user_id, name, category, checked, source_decision_id,
-                created_at, checked_at
-            ) VALUES (?, ?, ?, 0, ?, ?, NULL)
-            """,
-            (user_id, clean, cat, source_decision_id, utc_now()),
-        )
+        sid = source_decision_id
+        try:
+            cur = conn.execute(
+                """
+                INSERT INTO shopping_items (
+                    user_id, name, category, checked, source_decision_id,
+                    created_at, checked_at
+                ) VALUES (?, ?, ?, 0, ?, ?, NULL)
+                """,
+                (user_id, clean, cat, sid, utc_now()),
+            )
+        except sqlite3.IntegrityError:
+            # Supabase decision ids may not exist in local SQLite — drop the FK
+            cur = conn.execute(
+                """
+                INSERT INTO shopping_items (
+                    user_id, name, category, checked, source_decision_id,
+                    created_at, checked_at
+                ) VALUES (?, ?, ?, 0, NULL, ?, NULL)
+                """,
+                (user_id, clean, cat, utc_now()),
+            )
         row = conn.execute(
             "SELECT * FROM shopping_items WHERE id = ?", (cur.lastrowid,)
         ).fetchone()
@@ -1178,13 +1266,22 @@ def toggle_shopping_item(
     *,
     path: Path | str | None = None,
 ) -> dict[str, Any] | None:
-    if _use_supabase(path):
+    if _shopping_use_supabase(path):
         import supabase_store as store
 
         at, rt = _tokens()
-        return store.toggle_shopping_item(
-            user_id, item_id, checked, access_token=at, refresh_token=rt
-        )
+        try:
+            return store.toggle_shopping_item(
+                user_id, item_id, checked, access_token=at, refresh_token=rt
+            )
+        except Exception as exc:
+            if _shopping_table_missing(exc):
+                _mark_shopping_sqlite_fallback(exc)
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return toggle_shopping_item(
+                    user_id, item_id, checked, path=_shopping_sqlite_path()
+                )
+            raise
     now = utc_now() if checked else None
     with get_conn(path) as conn:
         conn.execute(

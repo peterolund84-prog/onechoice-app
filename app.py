@@ -128,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "shopping-works-pills-nav-v23-20260720"
+BUILD_ID = "shop-select-no-ica-sqlite-fallback-v24-20260720"
 
 I18N = {
     "sv": {
@@ -154,14 +154,15 @@ I18N = {
         "shop_title": "Inköpslista",
         "list_nav": "Lista",
         "list_title": "Inköpslista",
-        "list_empty": "Listan är tom. Bestäm middag och tryck Handla & laga — då fylls listan.",
+        "list_empty": "Listan är tom. Bestäm middag, bocka i vad du behöver och tryck Skapa lista.",
         "list_add_placeholder": "Lägg till...",
         "list_added_badge": "Tillagt i din lista ✓",
         "list_go": "Öppna listan",
         "list_create": "Skapa lista",
-        "list_create_hint": "Varorna läggs i din inköpslista. Bocka av dem under Lista när du handlat.",
+        "list_create_hint": "Bocka i det du behöver — vanliga varor som finns på de stora matkedjorna.",
         "list_created": "Inköpslistan är uppdaterad.",
-        "list_error": "Kunde inte spara listan. Kör SQL-migrationen shopping_items i Supabase.",
+        "list_error": "Kunde inte spara listan just nu. Försök igen.",
+        "list_local_note": "Listan sparas lokalt på den här enheten (molntabellen shopping_items saknas ännu).",
         "list_open_history": "Se dina beslut",
         "history_open": "Öppna",
         "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
@@ -300,14 +301,15 @@ I18N = {
         "shop_title": "Shopping list",
         "list_nav": "List",
         "list_title": "Shopping list",
-        "list_empty": "Your list is empty. Pick dinner and tap Shop & cook — items are added automatically.",
+        "list_empty": "Your list is empty. Pick dinner, check what you need, then Create list.",
         "list_add_placeholder": "Add...",
         "list_added_badge": "Added to your list ✓",
         "list_go": "Open list",
         "list_create": "Create list",
-        "list_create_hint": "Items go on your shopping list. Check them off under List when bought.",
+        "list_create_hint": "Check what you need — staples available at major Swedish chains.",
         "list_created": "Shopping list updated.",
-        "list_error": "Could not save the list. Run the shopping_items SQL migration in Supabase.",
+        "list_error": "Could not save the list right now. Try again.",
+        "list_local_note": "List is saved on this device (cloud table shopping_items is not set up yet).",
         "list_open_history": "See your decisions",
         "history_open": "Open",
         "history_hint": "Decisions you took — open for recipe and list.",
@@ -2037,8 +2039,8 @@ def render_shopping_card(shop: dict[str, Any] | None, language: str) -> None:
 
     sections = []
     title = "Inköpslista" if language == "sv" else "Shopping list"
-    store = shop.get("store") or "ICA"
-    sections.append(f'<div class="oc-shop-title">{html.escape(f"{title} · {store}")}</div>')
+    # Never brand a single chain — items are available at major Swedish chains
+    sections.append(f'<div class="oc-shop-title">{html.escape(title)}</div>')
     for section, items in to_buy.items():
         if not items:
             continue
@@ -2504,7 +2506,7 @@ def _merge_accepted_shopping(cur: dict[str, Any]) -> None:
 
 
 def _flush_db_accept() -> None:
-    """Best-effort persist accept + auto-fill shopping list after Handla & laga."""
+    """Best-effort persist accept — shopping list is created when user presses Skapa lista."""
     if not _session_pop("pending_db_accept", None):
         return
     cur = st.session_state.get("current")
@@ -2515,12 +2517,49 @@ def _flush_db_accept() -> None:
         if st.session_state.get("guest_mode"):
             db.clear_auth()
         pipeline.try_accept_decision(did, route_log_id=rid)
-        # Handla & laga → listan fylls automatiskt (en lista per användare)
-        _merge_accepted_shopping(cur)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
         log.exception("deferred DB accept failed (UI already open): %s", exc)
+
+
+def _selected_to_buy_from_checks(
+    shop: dict[str, Any],
+    decision_id: int | None,
+) -> dict[str, list[str]]:
+    """Build to_buy from shopping_checks toggles (default: all checked)."""
+    to_buy = shop.get("to_buy") if isinstance(shop.get("to_buy"), dict) else {}
+    if not to_buy:
+        return {}
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
+    did = decision_id if decision_id is not None else "x"
+    selected: dict[str, list[str]] = {}
+    idx = 0
+    for section, items in to_buy.items():
+        if not items:
+            continue
+        if isinstance(items, str):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            continue
+        for item in items:
+            ckey = f"{did}:{idx}"
+            idx += 1
+            if checks.get(ckey, True):
+                selected.setdefault(str(section), []).append(str(item))
+    return selected
+
+
+def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
+    did = decision_id if decision_id is not None else "x"
+    ckey = f"{did}:{idx}"
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
+        st.session_state.shopping_checks = checks
+    checks[ckey] = not bool(checks.get(ckey, True))
 
 
 def _history_status_label(status: str) -> str:
@@ -2721,7 +2760,7 @@ def render_persistent_shopping_list() -> None:
 def render_decision_shopping_added(
     shop: dict[str, Any] | None, language: str
 ) -> None:
-    """Execute shopping preview — Handla auto-merges into Lista; open list here."""
+    """Execute: bocka varor → Skapa lista → persistent Inköpslista."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -2735,7 +2774,6 @@ def render_decision_shopping_added(
 
     if err:
         st.warning(t("list_error"))
-        st.caption(html.escape(str(err)[:160]))
     elif already:
         st.markdown(
             f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
@@ -2747,19 +2785,90 @@ def render_decision_shopping_added(
             unsafe_allow_html=True,
         )
 
-    render_shopping_card(shop, language)
+    if getattr(db, "_SHOPPING_FORCE_SQLITE", False):
+        st.caption(t("list_local_note"))
 
-    if st.button(
-        t("list_go"),
-        type="primary",
-        use_container_width=True,
-        key="exec_open_list",
-    ):
-        # Ensure merge happened even if flush raced
-        if not already:
-            _merge_to_buy_into_list(to_buy, did)
-        st.session_state.page = "lista"
-        st.rerun()
+    render_checkable_shopping(shop, did)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        if st.button(
+            t("list_create"),
+            type="primary",
+            use_container_width=True,
+            key="exec_create_list",
+        ):
+            selected = _selected_to_buy_from_checks(shop, did)
+            n = _merge_to_buy_into_list(selected or to_buy, did)
+            if n:
+                try:
+                    safe_toast(t("list_created"))
+                except Exception:
+                    pass
+                st.session_state.page = "lista"
+            st.rerun()
+    with c2:
+        if st.button(
+            t("list_go"),
+            type="secondary",
+            use_container_width=True,
+            key="exec_open_list",
+        ):
+            st.session_state.page = "lista"
+            st.rerun()
+
+
+def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
+    """Toggleable shopping items — choose what goes on the list."""
+    if not shop or not isinstance(shop, dict):
+        return
+    to_buy = shop.get("to_buy") or {}
+    if not isinstance(to_buy, dict) or not to_buy:
+        return
+    import shopping as shopping_mod
+
+    language = st.session_state.get("language", "sv")
+    st.markdown(
+        f'<div class="oc-shop-title" style="margin:0.4rem 0 0.6rem">'
+        f'{html.escape(t("shop_title"))}</div>',
+        unsafe_allow_html=True,
+    )
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
+        st.session_state.shopping_checks = checks
+    did = decision_id if decision_id is not None else "x"
+    idx = 0
+    for section, items in to_buy.items():
+        if not items:
+            continue
+        if isinstance(items, str):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            continue
+        st.markdown(
+            f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
+            unsafe_allow_html=True,
+        )
+        for item in items:
+            ckey = f"{did}:{idx}"
+            checked = bool(checks.get(ckey, True))
+            mark = "✓ " if checked else ""
+            if st.button(
+                f"{mark}{item}",
+                key=f"shop_tog_{did}_{idx}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                _toggle_shop_check(decision_id, idx)
+                st.rerun()
+            idx += 1
+
+    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+    if not isinstance(assumed, (list, tuple)):
+        assumed = ["salt", "peppar", "olja"]
+    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
+    st.caption(assumed_line)
 
 
 def _profile_show_nutrition() -> bool:

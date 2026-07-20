@@ -183,7 +183,7 @@ def build_shopping(
     suggestion: str,
     *,
     meta: dict[str, Any] | None = None,
-    store: str = "ICA",
+    store: str = "",
     recipe: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """
@@ -226,7 +226,7 @@ def _build_shopping_from_names(
     suggestion: str,
     full: list[str] | None,
     *,
-    store: str = "ICA",
+    store: str = "",
     meal_type: str = "middag",
 ) -> dict[str, Any] | None:
     """Legacy name-list path — used when recipe materialization fails."""
@@ -308,7 +308,7 @@ def shopping_from_recipe(
     recipe: dict[str, Any],
     *,
     suggestion: str = "",
-    store: str = "ICA",
+    store: str = "",
 ) -> dict[str, Any] | None:
     """
     Smart shopping list: split recipe ingredients into to_buy vs assumed_at_home.
@@ -371,7 +371,7 @@ def build_meal_bundle(
     *,
     meta: dict[str, Any] | None = None,
     meal_type: str = "middag",
-    store: str = "ICA",
+    store: str = "",
     language: str = "sv",
     grok_api_key: str = "",
     include_shopping: bool = True,

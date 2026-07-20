@@ -25,7 +25,7 @@ class PersistentShoppingListTests(unittest.TestCase):
 
     def _dinner_shop(self, protein: str) -> dict:
         return {
-            "store": "ICA",
+            "store": "",
             "to_buy": {
                 "kött & fisk": [protein],
                 "frukt & grönt": ["gul lök", "tomat"],
@@ -38,7 +38,7 @@ class PersistentShoppingListTests(unittest.TestCase):
         uid = self.user["id"]
         shop1 = self._dinner_shop("kycklingfilé")
         shop2 = {
-            "store": "ICA",
+            "store": "",
             "to_buy": {
                 "kött & fisk": ["nötfärs"],
                 "frukt & grönt": ["gul lök", "morot"],

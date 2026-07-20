@@ -555,7 +555,7 @@ Rules:
 - NEVER use placeholder steps like "Ta fram det du behöver" or "Gör i ordning och ät"
 - The dish title must NOT appear as an ingredient name
 - nutrition: per ONE portion, reasonable estimates from ingredient amounts
-- Swedish supermarket basics only (ICA/Coop)
+- Swedish supermarket basics only (major chains — no specialty imports)
 """
     resp = requests.post(
         "https://api.x.ai/v1/chat/completions",
