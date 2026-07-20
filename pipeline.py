@@ -25,6 +25,8 @@ from urllib.parse import quote_plus
 
 import requests
 
+import llm_config
+
 import db
 import feasibility
 import shopping
@@ -992,7 +994,7 @@ Rules:
         "https://api.x.ai/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         json={
-            "model": "grok-2-latest",
+            "model": llm_config.text_model(),
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

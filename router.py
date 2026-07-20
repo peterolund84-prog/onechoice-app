@@ -16,6 +16,8 @@ from typing import Any
 
 import requests
 
+import llm_config
+
 log = logging.getLogger("onechoice.router")
 
 MAX_INPUT_CHARS = 200
@@ -197,7 +199,7 @@ def _llm_route(text: str, *, language: str, api_key: str) -> RouteResult:
         "https://api.x.ai/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
         json={
-            "model": "grok-2-latest",
+            "model": llm_config.text_model(),
             "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},

@@ -62,11 +62,9 @@ class WorkoutPlayerUiTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
+        # Domain entry is now HTML chips (?domain=...) — navigate via query params
+        at.query_params["domain"] = "workout"
         at.run()
-        for b in at.button:
-            if b.label == "Träning":
-                b.click().run()
-                break
         self.assertEqual(at.session_state["page"], "result")
         for b in at.button:
             if "Starta" in (b.label or ""):
@@ -104,11 +102,8 @@ class WorkoutPlayerUiTests(unittest.TestCase):
         app_mod.accept_current_decision = _hanging_accept  # type: ignore[assignment]
         try:
             at = AppTest.from_file("app.py", default_timeout=30)
+            at.query_params["domain"] = "workout"
             at.run()
-            for b in at.button:
-                if b.label == "Träning":
-                    b.click().run()
-                    break
             self.assertEqual(at.session_state["page"], "result")
             for b in at.button:
                 if "Starta" in (b.label or ""):

@@ -161,11 +161,8 @@ class ShareLandingUiTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
+        at.query_params["domain"] = "workout"
         at.run()
-        for b in at.button:
-            if b.label == "Träning":
-                b.click().run()
-                break
         for b in at.button:
             if "Starta" in (b.label or ""):
                 b.click().run()

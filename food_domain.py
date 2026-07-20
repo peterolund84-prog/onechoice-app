@@ -271,6 +271,27 @@ def apply_meal_execution(
     """Adjust execution payload for meal type (shopping / labels)."""
     out = dict(execution or {})
     out["meal_type"] = meal_type
+    # Some decisions legitimately have NO recipe: reheating leftovers, honest
+    # empty-fridge fallbacks. Forcing a recipe here used to raise ValueError
+    # and kill the whole decide() call. Explicit flag-based skip — not a
+    # silent fallback: the execute view shows the instruction text instead.
+    meta = execution.get("meta") if isinstance(execution, dict) else {}
+    meta = meta if isinstance(meta, dict) else {}
+    no_recipe = bool(meta.get("leftover") or meta.get("no_recipe")) or (
+        bool(meta.get("fridge_fallback")) and not (ingredients or meta.get("ingredients"))
+    )
+    if no_recipe:
+        out["recipe"] = None
+        out["shopping"] = None
+        out["shopping_list"] = None
+        out["type"] = "simple"
+        out["label"] = "Ät nu" if language == "sv" else "Eat now"
+        out["detail"] = out.get("detail") or (
+            "Inget recept behövs — värm och ät."
+            if language == "sv"
+            else "No recipe needed — heat and eat."
+        )
+        return out
     if meal_type == "frukost" or meal_type == "kvallsmal":
         out["shopping"] = None
         out["shopping_list"] = None
