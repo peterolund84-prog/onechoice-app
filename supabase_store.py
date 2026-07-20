@@ -403,6 +403,13 @@ def export_user_data(
         .eq("user_id", user_id)
         .execute()
     )
+    shopping = (
+        client.table("shopping_items")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
     share_rows = list(shares.data or [])
     opens: list[dict[str, Any]] = []
     for s in share_rows:
@@ -429,6 +436,7 @@ def export_user_data(
         "public_shares": share_rows,
         "share_opens": opens,
         "user_photos": list(photos.data or []),
+        "shopping_items": list(shopping.data or []),
     }
 
 
@@ -439,7 +447,7 @@ def delete_all_user_rows(
 ) -> None:
     """Fallback wipe when delete_own_account RPC is unavailable."""
     client = _client(access_token, refresh_token)
-    for table in ("user_photos", "routed_queries", "preferences", "decisions"):
+    for table in ("shopping_items", "user_photos", "routed_queries", "preferences", "decisions"):
         try:
             client.table(table).delete().eq("user_id", user_id).execute()
         except Exception:
@@ -544,3 +552,134 @@ def delete_photo_path(
         client.table("user_photos").delete().eq("path", path).execute()
     except Exception:
         pass
+
+
+def _shopping_row(row: dict[str, Any]) -> dict[str, Any]:
+    out = dict(row)
+    out["checked"] = bool(out.get("checked"))
+    return out
+
+
+def list_shopping_items(
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+) -> list[dict[str, Any]]:
+    client = _client(access_token, refresh_token)
+    res = (
+        client.table("shopping_items")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("checked")
+        .order("category")
+        .order("name")
+        .execute()
+    )
+    return [_shopping_row(r) for r in (res.data or [])]
+
+
+def purge_stale_checked_shopping_items(
+    user_id: str,
+    access_token: str,
+    refresh_token: str,
+    *,
+    hours: int = 24,
+) -> int:
+    client = _client(access_token, refresh_token)
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(hours=int(hours))
+    ).isoformat()
+    try:
+        stale = (
+            client.table("shopping_items")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("checked", True)
+            .lt("checked_at", cutoff)
+            .execute()
+        )
+        ids = [r["id"] for r in (stale.data or []) if r.get("id") is not None]
+        if not ids:
+            return 0
+        client.table("shopping_items").delete().in_("id", ids).execute()
+        return len(ids)
+    except Exception:
+        return 0
+
+
+def upsert_shopping_item(
+    user_id: str,
+    name: str,
+    category: str,
+    *,
+    source_decision_id: int | None = None,
+    access_token: str,
+    refresh_token: str,
+) -> dict[str, Any] | None:
+    import shopping_items as si
+
+    clean = si.normalize_name(name)
+    if not clean:
+        return None
+    cat = category if category in si.CATEGORIES else si.categorize_item(clean)
+    client = _client(access_token, refresh_token)
+    existing = (
+        client.table("shopping_items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("checked", False)
+        .execute()
+    )
+    for row in existing.data or []:
+        if si.normalize_name(str(row.get("name") or "")) == clean:
+            return _shopping_row(row)
+    payload: dict[str, Any] = {
+        "user_id": user_id,
+        "name": clean,
+        "category": cat,
+        "checked": False,
+        "source_decision_id": source_decision_id,
+    }
+    ins = client.table("shopping_items").insert(payload).execute()
+    rows = ins.data or []
+    if rows:
+        return _shopping_row(rows[0])
+    fetched = (
+        client.table("shopping_items")
+        .select("*")
+        .eq("user_id", user_id)
+        .eq("name", clean)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    frows = fetched.data or []
+    return _shopping_row(frows[0]) if frows else None
+
+
+def toggle_shopping_item(
+    user_id: str,
+    item_id: int,
+    checked: bool,
+    *,
+    access_token: str,
+    refresh_token: str,
+) -> dict[str, Any] | None:
+    client = _client(access_token, refresh_token)
+    updates: dict[str, Any] = {
+        "checked": bool(checked),
+        "checked_at": _utc_now() if checked else None,
+    }
+    client.table("shopping_items").update(updates).eq("id", item_id).eq(
+        "user_id", user_id
+    ).execute()
+    res = (
+        client.table("shopping_items")
+        .select("*")
+        .eq("id", item_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    return _shopping_row(rows[0]) if rows else None

@@ -127,6 +127,18 @@ def export_user_data(
                     (uid,),
                 ).fetchall()
             ]
+        shopping_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(shopping_items)").fetchall()
+        }
+        shopping: list[dict[str, Any]] = []
+        if shopping_cols:
+            shopping = [
+                dict(r)
+                for r in conn.execute(
+                    "SELECT * FROM shopping_items WHERE user_id = ? ORDER BY created_at DESC",
+                    (uid,),
+                ).fetchall()
+            ]
 
     # Parse JSON fields for readability
     out_profile = dict(profile)
@@ -148,6 +160,7 @@ def export_user_data(
         "public_shares": shares,
         "share_opens": opens,
         "user_photos": photos,
+        "shopping_items": shopping,
     }
 
 
@@ -236,6 +249,14 @@ def delete_user_account(
         n_pref = conn.execute(
             "DELETE FROM preferences WHERE user_id = ?", (uid,)
         ).rowcount
+        shop_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(shopping_items)").fetchall()
+        }
+        n_shop = 0
+        if shop_cols:
+            n_shop = conn.execute(
+                "DELETE FROM shopping_items WHERE user_id = ?", (uid,)
+            ).rowcount
         n_dec = conn.execute(
             "DELETE FROM decisions WHERE user_id = ?", (uid,)
         ).rowcount
@@ -247,6 +268,7 @@ def delete_user_account(
                     "users": n_user,
                     "decisions": n_dec,
                     "preferences": n_pref,
+                    "shopping_items": n_shop,
                     "routed_queries": n_rq,
                     "user_photos": n_photos,
                     "public_shares": len(tokens),
@@ -307,6 +329,17 @@ def assert_user_gone(user_id: str, *, path: Path | str | None = None) -> None:
                 (
                     "user_photos",
                     "SELECT COUNT(*) FROM user_photos WHERE user_id = ?",
+                    (uid,),
+                )
+            )
+        shop_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(shopping_items)").fetchall()
+        }
+        if shop_cols:
+            checks.append(
+                (
+                    "shopping_items",
+                    "SELECT COUNT(*) FROM shopping_items WHERE user_id = ?",
                     (uid,),
                 )
             )

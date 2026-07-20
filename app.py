@@ -15,7 +15,7 @@ Pages:
   not_a_decision    → soft refuse (not a decision question)
   result            → ONE decision card (food / other domains)
   execute           → food: shopping+recipe OR fridge recipe-only; workout player
-  history | profile
+  history | profile | lista
 
 Session keys (all set via setdefault in init_state):
   page                  str   current page name
@@ -111,6 +111,12 @@ ICON_USER = (
     'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
     '<circle cx="12" cy="8" r="3.5"/><path d="M5.5 20a6.5 6.5 0 0 1 13 0"/></svg>'
 )
+ICON_LIST = (
+    '<svg class="oc-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+    'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    '<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/>'
+    '<path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg>'
+)
 
 # Server-side only — never render in the consumer UI
 BUILD_ID = "home-premium-minimal-v16-20260719"
@@ -137,6 +143,12 @@ I18N = {
         "recipe_mins": "Ca {mins} min",
         "locked_title": "Låst: {suggestion}",
         "shop_title": "Inköpslista",
+        "list_nav": "Lista",
+        "list_title": "Inköpslista",
+        "list_empty": "Listan är tom. Acceptera ett matbeslut så fylls den på.",
+        "list_add_placeholder": "Lägg till...",
+        "list_added_badge": "Tillagt i din lista ✓",
+        "list_go": "Öppna listan",
         "recipe_title": "Recept",
         "ingredients_title": "Ingredienser",
         "steps_title": "Gör så här",
@@ -266,6 +278,12 @@ I18N = {
         "recipe_mins": "About {mins} min",
         "locked_title": "Locked: {suggestion}",
         "shop_title": "Shopping list",
+        "list_nav": "List",
+        "list_title": "Shopping list",
+        "list_empty": "Your list is empty. Accept a meal decision to fill it.",
+        "list_add_placeholder": "Add...",
+        "list_added_badge": "Added to your list ✓",
+        "list_go": "Open list",
         "recipe_title": "Recipe",
         "ingredients_title": "Ingredients",
         "steps_title": "Steps",
@@ -789,7 +807,7 @@ div[data-testid="stCheckbox"] label {{
     bottom: 0 !important;
     width: 100% !important; max-width: none !important;
     z-index: 1100 !important;
-    display: grid !important; grid-template-columns: 1fr 1fr 1fr !important;
+    display: grid !important; grid-template-columns: repeat(4, 1fr) !important;
     gap: 0 !important;
     background: #fff !important;
     border-radius: 0 !important;
@@ -871,6 +889,57 @@ div[data-baseweb="input"] {{
     box-shadow: none !important;
     background: transparent !important;
 }}
+.oc-shop-list {{
+    margin: 0.5rem 0 1rem;
+}}
+.oc-shop-row {{
+    display: flex !important;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    min-height: 3rem;
+    padding: 0.85rem 1rem;
+    margin: 0.35rem 0;
+    border: 1px solid var(--oc-border);
+    border-radius: 12px;
+    background: #fff !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    font-size: 1rem;
+    line-height: 1.3;
+    box-sizing: border-box;
+}}
+.oc-shop-row.checked {{
+    color: var(--oc-muted) !important;
+    text-decoration: line-through;
+    opacity: 0.72;
+}}
+.oc-shop-row .oc-chk {{
+    width: 1.35rem;
+    height: 1.35rem;
+    border: 2px solid var(--oc-border);
+    border-radius: 6px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    line-height: 1;
+}}
+.oc-shop-row.checked .oc-chk {{
+    border-color: var(--oc-accent);
+    color: var(--oc-accent);
+}}
+.oc-list-badge {{
+    display: inline-block;
+    margin: 0.25rem 0 0.75rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: 999px;
+    background: var(--oc-primary-soft);
+    color: var(--oc-ink);
+    font-size: 0.82rem;
+    font-weight: 600;
+}}
 </style>
         """,
         unsafe_allow_html=True,
@@ -920,6 +989,8 @@ def init_state() -> None:
         "fridge_inventory": [],  # [{name, confidence}]
         "fridge_photos": [],  # unused mirror; widgets hold bytes
         "fridge_mode": False,
+        "shopping_list_cache": None,  # optimistic mirror of db.list_shopping_items
+        "shopping_pending_writes": [],  # [{id, checked}] write-behind queue
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
@@ -1445,6 +1516,7 @@ def nav() -> None:
     page = st.session_state.page
     items = (
         ("home", ICON_HOME, t("home"), page in ("home", "result")),
+        ("lista", ICON_LIST, t("list_nav"), page == "lista"),
         ("history", ICON_CLOCK, t("history"), page == "history"),
         ("profile", ICON_USER, t("profile"), page == "profile"),
     )
@@ -1892,6 +1964,26 @@ def open_execute_now(cur: dict[str, Any] | None = None) -> None:
     st.rerun()
 
 
+def _merge_accepted_shopping(cur: dict[str, Any]) -> None:
+    """Upsert to_buy items into the persistent shopping list on accept."""
+    uid = _shopping_list_user_id()
+    if not uid:
+        return
+    ctx = _as_dict(cur.get("context"))
+    shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+    if not shop:
+        return
+    to_buy = shop.get("to_buy")
+    if not isinstance(to_buy, dict) or not to_buy:
+        return
+    did = cur.get("decision_id") or st.session_state.get("decision_id")
+    try:
+        db.merge_shopping_from_decision(uid, did, to_buy)
+        st.session_state.shopping_list_cache = None
+    except Exception as exc:
+        log.warning("merge shopping from decision failed: %s", exc)
+
+
 def _flush_db_accept() -> None:
     """Best-effort persist accept — sync, only after UI is already visible."""
     if not _session_pop("pending_db_accept", None):
@@ -1904,6 +1996,7 @@ def _flush_db_accept() -> None:
         if st.session_state.get("guest_mode"):
             db.clear_auth()
         pipeline.try_accept_decision(did, route_log_id=rid)
+        _merge_accepted_shopping(cur)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
@@ -1948,6 +2041,127 @@ def raise_ui_error(where: str, exc: BaseException | None = None) -> None:
         log.error("ui error at %s", where)
     st.session_state.ui_error = True
     st.rerun()
+
+
+def _shopping_list_user_id() -> str | None:
+    uid = st.session_state.get("user_id")
+    return str(uid) if uid else None
+
+
+def _load_shopping_items(*, force: bool = False) -> list[dict[str, Any]]:
+    cached = st.session_state.get("shopping_list_cache")
+    if not force and isinstance(cached, list):
+        return cached
+    uid = _shopping_list_user_id()
+    if not uid:
+        return []
+    try:
+        db.purge_stale_checked_shopping_items(uid)
+        items = db.list_shopping_items(uid)
+    except Exception as exc:
+        log.warning("load shopping items failed: %s", exc)
+        items = list(cached) if isinstance(cached, list) else []
+    st.session_state.shopping_list_cache = items
+    return items
+
+
+def _flush_shopping_pending_writes() -> None:
+    pending = list(st.session_state.get("shopping_pending_writes") or [])
+    if not pending:
+        return
+    uid = _shopping_list_user_id()
+    if not uid:
+        st.session_state.shopping_pending_writes = []
+        return
+    remaining: list[dict[str, Any]] = []
+    for op in pending:
+        try:
+            db.toggle_shopping_item(uid, int(op["id"]), bool(op["checked"]))
+        except Exception as exc:
+            log.warning("shopping write-behind failed id=%s: %s", op.get("id"), exc)
+            remaining.append(op)
+    st.session_state.shopping_pending_writes = remaining
+
+
+def _optimistic_toggle_shopping_item(item_id: int) -> None:
+    items = _load_shopping_items()
+    target: dict[str, Any] | None = None
+    for row in items:
+        if int(row.get("id") or 0) == int(item_id):
+            target = dict(row)
+            break
+    if not target:
+        return
+    new_checked = not bool(target.get("checked"))
+    target["checked"] = new_checked
+    if new_checked:
+        from datetime import datetime, timezone
+
+        target["checked_at"] = (
+            datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+        )
+    else:
+        target["checked_at"] = None
+    updated: list[dict[str, Any]] = []
+    for row in items:
+        if int(row.get("id") or 0) == int(item_id):
+            updated.append(target)
+        else:
+            updated.append(row)
+    st.session_state.shopping_list_cache = updated
+    queue = list(st.session_state.get("shopping_pending_writes") or [])
+    queue = [q for q in queue if int(q.get("id") or 0) != int(item_id)]
+    queue.append({"id": int(item_id), "checked": new_checked})
+    st.session_state.shopping_pending_writes = queue
+    _flush_shopping_pending_writes()
+
+
+def render_persistent_shopping_list() -> None:
+    _flush_shopping_pending_writes()
+    items = _load_shopping_items()
+    if not items:
+        st.markdown(
+            f'<p class="oc-meta">{html.escape(t("list_empty"))}</p>',
+            unsafe_allow_html=True,
+        )
+        return
+    import shopping_items as si
+
+    grouped = si.group_items(items)
+    parts: list[str] = ['<div class="oc-shop-list">']
+    for section, rows in grouped.items():
+        parts.append(f'<div class="oc-sec-label">{html.escape(section)}</div>')
+        for row in rows:
+            iid = int(row.get("id") or 0)
+            name = html.escape(str(row.get("name") or ""))
+            checked = bool(row.get("checked"))
+            cls = "oc-shop-row checked" if checked else "oc-shop-row"
+            mark = "✓" if checked else ""
+            parts.append(
+                f'<a class="{cls}" href="?shop_toggle={iid}">'
+                f'<span class="oc-chk">{mark}</span><span>{name}</span></a>'
+            )
+    parts.append("</div>")
+    st.markdown("".join(parts), unsafe_allow_html=True)
+
+
+def render_decision_shopping_added(
+    shop: dict[str, Any] | None, language: str
+) -> None:
+    """Per-decision recipe view — items for reference + persistent-list badge."""
+    if not shop or not isinstance(shop, dict):
+        return
+    to_buy = shop.get("to_buy") or {}
+    if not isinstance(to_buy, dict) or not to_buy:
+        return
+    st.markdown(
+        f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
+        unsafe_allow_html=True,
+    )
+    render_shopping_card(shop, language)
+    if st.button(t("list_go"), type="secondary", use_container_width=True, key="exec_open_list"):
+        st.session_state.page = "lista"
+        st.rerun()
 
 
 def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
@@ -3455,7 +3669,7 @@ def page_execute() -> None:
 
     did = _active_decision_id(cur)
     try:
-        render_checkable_shopping(shop, did)
+        render_decision_shopping_added(shop, language)
     except Exception as exc:
         log.warning("shopping list render failed: %s", exc)
 
@@ -3498,6 +3712,36 @@ def page_execute() -> None:
         _flush_db_accept()
     except Exception as exc:
         log.warning("post-paint accept failed: %s", exc)
+
+
+def page_lista() -> None:
+    lang_bar()
+    require_auth_context()
+    st.markdown(
+        f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("list_title"))}</p>',
+        unsafe_allow_html=True,
+    )
+    with st.form("shop_add_form", clear_on_submit=True):
+        added = st.text_input(
+            t("list_add_placeholder"),
+            label_visibility="collapsed",
+            key="shop_add_input",
+        )
+        if st.form_submit_button("＋", use_container_width=True):
+            uid = _shopping_list_user_id()
+            if uid and str(added or "").strip():
+                try:
+                    db.add_manual_shopping_item(
+                        uid,
+                        str(added).strip(),
+                        grok_api_key=resolve_grok_api_key(),
+                    )
+                    st.session_state.shopping_list_cache = None
+                except Exception as exc:
+                    log.warning("manual shopping add failed: %s", exc)
+                st.rerun()
+    render_persistent_shopping_list()
+    nav()
 
 
 def page_history() -> None:
@@ -3828,10 +4072,22 @@ def handle_query_params() -> None:
         return
 
     nav_q = _qp_one(qp.get("nav"))
-    if nav_q in ("home", "history", "profile"):
+    if nav_q in ("home", "lista", "history", "profile"):
         st.session_state.page = nav_q
         try:
             del st.query_params["nav"]
+        except Exception:
+            pass
+        st.rerun()
+
+    shop_toggle = _qp_one(qp.get("shop_toggle"))
+    if shop_toggle:
+        try:
+            _optimistic_toggle_shopping_item(int(shop_toggle))
+        except (TypeError, ValueError) as exc:
+            log.warning("invalid shop_toggle %r: %s", shop_toggle, exc)
+        try:
+            del st.query_params["shop_toggle"]
         except Exception:
             pass
         st.rerun()
@@ -4110,6 +4366,7 @@ def main() -> None:
         "auth": page_auth,
         "result": page_result,
         "execute": page_execute,
+        "lista": page_lista,
         "history": page_history,
         "profile": page_profile,
         "privacy": page_privacy,

@@ -288,6 +288,27 @@ def init_db(path: Path | str | None = None) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS shopping_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                checked INTEGER NOT NULL DEFAULT 0,
+                source_decision_id INTEGER,
+                created_at TEXT NOT NULL,
+                checked_at TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_shopping_items_user_checked
+                ON shopping_items(user_id, checked, created_at DESC)
+            """
+        )
 
 
 def ensure_public_share(
@@ -1002,3 +1023,196 @@ def near_domain_demand(*, path: Path | str | None = None) -> list[dict[str, Any]
             "SELECT * FROM near_domain_demand"
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Persistent shopping list
+# ---------------------------------------------------------------------------
+def _shopping_item_row(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    d = dict(row)
+    d["checked"] = bool(d.get("checked"))
+    return d
+
+
+def list_shopping_items(
+    user_id: str,
+    *,
+    path: Path | str | None = None,
+) -> list[dict[str, Any]]:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.list_shopping_items(user_id, at, rt)
+    with get_conn(path) as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM shopping_items
+            WHERE user_id = ?
+            ORDER BY checked ASC, category ASC, name ASC
+            """,
+            (user_id,),
+        ).fetchall()
+        return [_shopping_item_row(r) for r in rows]
+
+
+def purge_stale_checked_shopping_items(
+    user_id: str,
+    *,
+    hours: int = 24,
+    path: Path | str | None = None,
+) -> int:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.purge_stale_checked_shopping_items(
+            user_id, at, rt, hours=hours
+        )
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            """
+            DELETE FROM shopping_items
+            WHERE user_id = ?
+              AND checked = 1
+              AND checked_at IS NOT NULL
+              AND datetime(checked_at) < datetime('now', ?)
+            """,
+            (user_id, f"-{int(hours)} hours"),
+        )
+        return int(cur.rowcount or 0)
+
+
+def _find_open_shopping_item(
+    conn: sqlite3.Connection, user_id: str, name: str
+) -> sqlite3.Row | None:
+    import shopping_items as si
+
+    norm = si.normalize_name(name)
+    rows = conn.execute(
+        """
+        SELECT * FROM shopping_items
+        WHERE user_id = ? AND checked = 0
+        """,
+        (user_id,),
+    ).fetchall()
+    for row in rows:
+        if si.normalize_name(row["name"]) == norm:
+            return row
+    return None
+
+
+def upsert_shopping_item(
+    user_id: str,
+    name: str,
+    category: str,
+    *,
+    source_decision_id: int | None = None,
+    path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    """Insert if no matching unchecked row exists; otherwise no-op."""
+    import shopping_items as si
+
+    clean = si.normalize_name(name)
+    if not clean:
+        return None
+    cat = category if category in si.CATEGORIES else si.categorize_item(clean)
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.upsert_shopping_item(
+            user_id,
+            clean,
+            cat,
+            source_decision_id=source_decision_id,
+            access_token=at,
+            refresh_token=rt,
+        )
+    with get_conn(path) as conn:
+        existing = _find_open_shopping_item(conn, user_id, clean)
+        if existing:
+            return _shopping_item_row(existing)
+        cur = conn.execute(
+            """
+            INSERT INTO shopping_items (
+                user_id, name, category, checked, source_decision_id,
+                created_at, checked_at
+            ) VALUES (?, ?, ?, 0, ?, ?, NULL)
+            """,
+            (user_id, clean, cat, source_decision_id, utc_now()),
+        )
+        row = conn.execute(
+            "SELECT * FROM shopping_items WHERE id = ?", (cur.lastrowid,)
+        ).fetchone()
+        return _shopping_item_row(row) if row else None
+
+
+def merge_shopping_from_decision(
+    user_id: str,
+    decision_id: int | None,
+    to_buy: dict[str, Any] | None,
+    *,
+    path: Path | str | None = None,
+) -> list[dict[str, Any]]:
+    import shopping_items as si
+
+    added: list[dict[str, Any]] = []
+    for name, category in si.flatten_to_buy(to_buy):
+        row = upsert_shopping_item(
+            user_id,
+            name,
+            category,
+            source_decision_id=decision_id,
+            path=path,
+        )
+        if row:
+            added.append(row)
+    return added
+
+
+def toggle_shopping_item(
+    user_id: str,
+    item_id: int,
+    checked: bool,
+    *,
+    path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.toggle_shopping_item(
+            user_id, item_id, checked, access_token=at, refresh_token=rt
+        )
+    now = utc_now() if checked else None
+    with get_conn(path) as conn:
+        conn.execute(
+            """
+            UPDATE shopping_items
+            SET checked = ?, checked_at = ?
+            WHERE id = ? AND user_id = ?
+            """,
+            (1 if checked else 0, now, item_id, user_id),
+        )
+        row = conn.execute(
+            "SELECT * FROM shopping_items WHERE id = ? AND user_id = ?",
+            (item_id, user_id),
+        ).fetchone()
+        return _shopping_item_row(row) if row else None
+
+
+def add_manual_shopping_item(
+    user_id: str,
+    name: str,
+    *,
+    grok_api_key: str = "",
+    path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    import shopping_items as si
+
+    clean = si.normalize_name(name)
+    if not clean:
+        return None
+    cat = si.categorize_item(clean, grok_api_key=grok_api_key)
+    return upsert_shopping_item(user_id, clean, cat, path=path)
