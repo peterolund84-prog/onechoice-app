@@ -51,7 +51,7 @@ class UiLeakTests(unittest.TestCase):
             with mock.patch.object(shopping, "ensure_recipe_nutrition", None, create=True):
                 with mock.patch.object(app_mod.st, "session_state", {"language": "sv"}):
                     line, has_vals = app_mod._nutrition_display_line(recipe)
-        self.assertIn("≈", line)
+        self.assertIn("Ca ", line)
         self.assertIn("kcal", line.lower())
         self.assertTrue(has_vals)
 

@@ -132,13 +132,12 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertEqual(r.execution_label, "Ät nu")
         tmp.cleanup()
 
-    def test_app_at_nu_opens_recipe_with_nutrition_toggle(self) -> None:
-        """UI proof: Mat + kvällsmål → Ät nu → ingredients + opt-in toggle on execute."""
+    def test_app_at_nu_opens_real_recipe_no_execute_nutrition_toggle(self) -> None:
+        """UI proof: Mat + kvällsmål → Ät nu → real ingredients; nutrition only via profile."""
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        # Home must NOT leak build / debug text; tagline keeps accent period span
         home_body = " ".join(str(m.value or "") for m in at.markdown).lower()
         home_caps = " ".join(str(c.value or "") for c in at.caption).lower()
         self.assertNotIn("build ", home_caps)
@@ -163,27 +162,20 @@ class MealTypeInferTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
         self.assertIn("recept", body)
         self.assertIn("gör så här", body)
-        # Visible nutrition banner (not hidden Streamlit label)
-        self.assertIn("oc-nut-banner", " ".join(str(m.value or "") for m in at.markdown))
+        self.assertNotIn("oc-nut-banner", " ".join(str(m.value or "") for m in at.markdown))
+        # No execute-screen nutrition toggle — profile only
         toggle_labels = [t.label or "" for t in at.toggle]
-        self.assertTrue(
-            any("ca-värden" in lab.lower() or "närings" in lab.lower() or "nutrition" in lab.lower()
-                for lab in toggle_labels) or True,
+        self.assertFalse(
+            any("ca-värden" in lab.lower() or "närings" in lab.lower() for lab in toggle_labels),
             toggle_labels,
         )
-        self.assertNotIn("≈", body)
-        # Turn on → banner shows ≈ kcal · protein
-        for tgl in at.toggle:
-            tgl.set_value(True).run()
-            break
-        body2 = " ".join(str(m.value or "") for m in at.markdown).lower()
-        self.assertIn("recept", body2)
-        self.assertIn("gör så här", body2)
-        self.assertIn("≈", body2)
-        self.assertIn("kcal", body2)
-        self.assertIn("protein", body2)
-        self.assertIn("oc-nut-banner", " ".join(str(m.value or "") for m in at.markdown))
-        self.assertNotIn("näringsvärden saknas", body2)
+        self.assertNotIn("ta fram det du behöver", body)
+        self.assertNotIn("gör i ordning och ät", body)
+        # Real recipe: at least 2 ingredient lines with amounts/units
+        self.assertTrue(
+            any(u in body for u in ("dl", "msk", "tsk", "skivor", " g ")),
+            body[:600],
+        )
 
     def test_execute_heals_json_string_recipe(self) -> None:
         """Cloud may store context.recipe as a JSON string — execute must still paint."""

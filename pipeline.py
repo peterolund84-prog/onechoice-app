@@ -1650,6 +1650,7 @@ def _ensure_food_shopping(
                     ings or None,
                     active_minutes=int(active) if active is not None else None,
                     servings=1 if meal_type in ("frukost", "kvallsmal") else None,
+                    meal_type=meal_type,
                 )
             return out
     except Exception:

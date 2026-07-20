@@ -282,20 +282,23 @@ def apply_meal_execution(
             if language == "sv"
             else "Assumed at home — no shopping trip."
         )
-        # Keep / build recipe so execute view has ingredients + ca-värden
-        if not isinstance(out.get("recipe"), dict):
-            import shopping as shopping_mod
+        # Always attach a validated structured recipe for execute view
+        import recipe_engine as reng
 
-            ings = list(ingredients or [])
-            mins = active_minutes
-            if mins is None and isinstance(execution, dict):
-                mins = (execution.get("meta") or {}).get("active_minutes")
-            out["recipe"] = shopping_mod.build_recipe(
-                suggestion,
-                ings or None,
-                active_minutes=int(mins) if mins is not None else None,
-                servings=1,
-            )
+        ings = list(ingredients or [])
+        mins = active_minutes
+        if mins is None and isinstance(execution, dict):
+            mins = (execution.get("meta") or {}).get("active_minutes")
+        out["recipe"] = reng.ensure_valid_recipe(
+            out.get("recipe") if isinstance(out.get("recipe"), dict) else None,
+            suggestion,
+            meal_type=meal_type,
+            ingredient_hints=ings or None,
+            active_minutes=int(mins) if mins is not None else None,
+            portions=1,
+            language=language,
+            grok_api_key="",
+        )
         return out
     if meal_type == "lunch":
         if out.get("type") == "map" or (execution or {}).get("type") == "map":
