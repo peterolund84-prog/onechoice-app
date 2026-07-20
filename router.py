@@ -156,6 +156,16 @@ def route_question(
         )
 
     result: RouteResult | None = None
+    # Local-first when confident — skips up to ~12s LLM on obvious food/mat etc.
+    local = _local_route(raw, language=language)
+    if local.confidence >= 0.85 and local.route in (
+        "IN_DOMAIN",
+        "HIGH_STAKES",
+        "NOT_A_DECISION",
+        "AMBIGUOUS",
+    ):
+        return _apply_safety_overrides(local)
+
     if _usable_grok_key(grok_api_key):
         try:
             result = _llm_route(raw, language=language, api_key=grok_api_key)
@@ -163,7 +173,7 @@ def route_question(
             log.exception("LLM router failed: %s", exc)
 
     if result is None:
-        result = _local_route(raw, language=language)
+        result = local
 
     return _apply_safety_overrides(result)
 
@@ -206,7 +216,7 @@ def _llm_route(text: str, *, language: str, api_key: str) -> RouteResult:
             ],
             "temperature": 0.1,
         },
-        timeout=12,
+        timeout=8,
     )
     resp.raise_for_status()
     choices = (resp.json().get("choices") or [])
@@ -296,10 +306,11 @@ def _local_route(text: str, *, language: str) -> RouteResult:
     best_domain, best_score = max(scores.items(), key=lambda x: x[1])
     if best_score > 0:
         # Lunch + quit already caught above; pure food/etc.
+        # One clear domain keyword is enough for local-first (≥0.85).
         return RouteResult(
             route="IN_DOMAIN",
             domain=best_domain,
-            confidence=min(0.95, 0.55 + 0.15 * best_score),
+            confidence=min(0.95, 0.80 + 0.10 * best_score),
             category_guess=best_domain,
             normalized_question=_strip_personal(text),
             raw_text=text,

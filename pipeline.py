@@ -285,6 +285,14 @@ def decide(
     )
 
     explore = (not locked) and (random.random() > SAFE_RATIO)
+    # Fast path: Mat chip / first food decide uses local packs (instant).
+    # Grok only on reroll, fridge mode, or non-food domains — cuts ~5–18s.
+    food_local_first = (
+        domain == "food"
+        and not fridge_mode
+        and not reroll
+        and effective_reroll == 0
+    )
     candidates = _generate_candidates(
         question=q,
         domain=domain,
@@ -294,7 +302,7 @@ def decide(
         preferences=prefs,
         recent=recent,
         language=language,
-        grok_api_key=grok_api_key,
+        grok_api_key="" if food_local_first else grok_api_key,
     )
 
     # Occasion is the primary clothes constraint — pin a matching outfit first
@@ -1068,9 +1076,9 @@ Rules:
             ],
             "temperature": 0.7,
             # Cap completion size — everyday decisions don't need long essays
-            "max_tokens": 900,
+            "max_tokens": 600,
         },
-        timeout=18,
+        timeout=12,
     )
     resp.raise_for_status()
     payload = resp.json()
