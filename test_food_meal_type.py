@@ -101,6 +101,67 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertTrue(cands)
         self.assertTrue(all((c.get("meta") or {}).get("no_cook") or (c.get("meta") or {}).get("active_minutes", 99) <= 5 for c in cands))
 
+    def test_lunch_no_ungrounded_leftover_for_fresh_user(self) -> None:
+        """Fresh user: leftover candidates must not reach display without dinner evidence."""
+        tmp = tempfile.TemporaryDirectory()
+        path = str(Path(tmp.name) / "t.db")
+        db.init_db(path)
+        user = db.ensure_user(language="sv", path=path)
+        self.assertIsNone(db.has_recent_cooked_dinner(user["id"], path=path))
+        gated = fd.filter_leftover_candidates(
+            fd.meal_candidates("lunch", "sv"),
+            None,
+            meal_type="lunch",
+            language="sv",
+        )
+        self.assertFalse(any((c.get("meta") or {}).get("leftover") for c in gated))
+        r = pipeline.decide(
+            user["id"],
+            "Vad ska jag äta till lunch?",
+            domain_hint="food",
+            language="sv",
+            db_path=path,
+            context_extra={"meal_type": "lunch"},
+        )
+        self.assertTrue(r.ok)
+        sug = (r.suggestion or "").lower()
+        for phrase in (
+            "matlåda från gårdagens",
+            "leftover lunchbox",
+            "värm en rest",
+            "reheat leftovers",
+        ):
+            self.assertNotIn(phrase, sug, r.suggestion)
+        tmp.cleanup()
+
+    def test_lunch_leftover_names_accepted_dinner(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        path = str(Path(tmp.name) / "t.db")
+        db.init_db(path)
+        user = db.ensure_user(language="sv", path=path)
+        dinner = pipeline.decide(
+            user["id"],
+            "middag",
+            domain_hint="food",
+            language="sv",
+            db_path=path,
+            context_extra={"meal_type": "middag"},
+        )
+        pipeline.accept_decision(dinner.decision_id, db_path=path)
+        evidence = db.has_recent_cooked_dinner(user["id"], path=path)
+        self.assertIsNotNone(evidence)
+        self.assertEqual(evidence["suggestion"], dinner.suggestion)
+        grounded = fd.filter_leftover_candidates(
+            fd.meal_candidates("lunch", "sv"),
+            evidence,
+            meal_type="lunch",
+            language="sv",
+        )
+        leftovers = [c for c in grounded if (c.get("meta") or {}).get("leftover")]
+        self.assertTrue(leftovers)
+        self.assertIn(dinner.suggestion.lower(), leftovers[0]["suggestion"].lower())
+        tmp.cleanup()
+
     def test_kvallsmal_sandwich_has_recipe_no_shopping(self) -> None:
         """Ät nu must open a recipe view — ingredients + steps (+ nutrition JSON)."""
         tmp = tempfile.TemporaryDirectory()

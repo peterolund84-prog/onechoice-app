@@ -258,6 +258,79 @@ def meal_candidates(meal_type: str, language: str = "sv") -> list[dict[str, Any]
     return []
 
 
+def grounded_leftover_candidate(
+    template: dict[str, Any],
+    recent_dinner: dict[str, Any],
+    *,
+    meal_type: str,
+    language: str = "sv",
+) -> dict[str, Any]:
+    """Rewrite a leftover template to name the actual accepted dinner dish."""
+    dish = str(recent_dinner.get("suggestion") or "").strip()
+    mins = int(
+        (template.get("meta") or {}).get("active_minutes")
+        or recent_dinner.get("active_minutes")
+        or 5
+    )
+    sv = language == "sv"
+    out = dict(template)
+    meta = dict(out.get("meta") or {})
+    meta["leftover"] = True
+    meta["leftover_from"] = dish
+    meta["meal_type"] = meal_type
+    meta["active_minutes"] = mins
+    meta["no_recipe"] = True
+    out["meta"] = meta
+    dish_l = dish.lower()
+    if meal_type == "lunch":
+        out["suggestion"] = (
+            f"Värm gårdagens {dish_l} — klar på {mins} min"
+            if sv
+            else f"Reheat yesterday's {dish_l} — ready in {mins} min"
+        )
+        out["justification"] = (
+            f"Det du lagade igår — klart på {mins} min."
+            if sv
+            else f"What you cooked yesterday — ready in {mins} min."
+        )
+    else:
+        out["suggestion"] = (
+            f"Värm gårdagens {dish_l} — klar på {mins} min"
+            if sv
+            else f"Reheat yesterday's {dish_l} — ready in {mins} min"
+        )
+        out["justification"] = (
+            f"Ingen ny matlagning — {dish_l} från igår."
+            if sv
+            else f"No new cooking — yesterday's {dish_l}."
+        )
+    return out
+
+
+def filter_leftover_candidates(
+    candidates: list[dict[str, Any]],
+    recent_dinner: dict[str, Any] | None,
+    *,
+    meal_type: str,
+    language: str = "sv",
+) -> list[dict[str, Any]]:
+    """Drop ungrounded leftover candidates; ground survivors to named dish."""
+    out: list[dict[str, Any]] = []
+    for c in candidates:
+        meta = c.get("meta") if isinstance(c.get("meta"), dict) else {}
+        if not meta.get("leftover"):
+            out.append(c)
+            continue
+        if not recent_dinner:
+            continue
+        out.append(
+            grounded_leftover_candidate(
+                c, recent_dinner, meal_type=meal_type, language=language
+            )
+        )
+    return out
+
+
 def apply_meal_execution(
     meal_type: str,
     suggestion: str,
@@ -286,11 +359,19 @@ def apply_meal_execution(
         out["shopping_list"] = None
         out["type"] = "simple"
         out["label"] = "Ät nu" if language == "sv" else "Eat now"
-        out["detail"] = out.get("detail") or (
-            "Inget recept behövs — värm och ät."
-            if language == "sv"
-            else "No recipe needed — heat and eat."
-        )
+        leftover_from = meta.get("leftover_from")
+        if leftover_from:
+            out["detail"] = out.get("detail") or (
+                f"Värm {leftover_from} — klart på några minuter."
+                if language == "sv"
+                else f"Reheat {leftover_from} — ready in minutes."
+            )
+        else:
+            out["detail"] = out.get("detail") or (
+                "Inget recept behövs — värm och ät."
+                if language == "sv"
+                else "No recipe needed — heat and eat."
+            )
         return out
     if meal_type == "frukost" or meal_type == "kvallsmal":
         out["shopping"] = None

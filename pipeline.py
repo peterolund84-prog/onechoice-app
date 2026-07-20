@@ -19,7 +19,7 @@ import logging
 import random
 import re
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -315,8 +315,12 @@ def decide(
             candidates = [pin] + [c for c in candidates if c.get("suggestion") != pin["suggestion"]]
 
     # Meal type drives food generation (not just a filter)
+    recent_dinner: dict[str, Any] | None = None
     if domain == "food" and meal_type and not fridge_mode:
         import food_domain as fd
+
+        if meal_type in ("lunch", "kvallsmal"):
+            recent_dinner = db.has_recent_cooked_dinner(user_id, path=db_path)
 
         pinned = fd.meal_candidates(meal_type, language)
         if pinned:
@@ -330,6 +334,13 @@ def decide(
                 candidates = pinned + candidates
             else:
                 candidates = pinned + typed
+        if meal_type in ("lunch", "kvallsmal"):
+            candidates = fd.filter_leftover_candidates(
+                candidates,
+                recent_dinner,
+                meal_type=meal_type,
+                language=language,
+            )
 
     # Fridge: pin cook-from-inventory dishes; NEVER meal-type canned packs
     if domain == "food" and fridge_mode:
@@ -941,6 +952,18 @@ def _grok_candidates(
     safe_prefs = gdpr_mod.llm_safe_preferences(preferences)
     pos = [p for p in safe_prefs if (p.get("score") or 0) > 0][:8]
     neg = [p for p in safe_prefs if (p.get("score") or 0) < 0][:8]
+    meal_type = str(safe_context.get("meal_type") or "")
+    recent_dinners = _recent_cooked_dinners_from_history(history)
+    leftover_rules = ""
+    if domain == "food" and meal_type in ("lunch", "kvallsmal"):
+        leftover_rules = (
+            "\nLeftover / matlåda rule (STRICT):\n"
+            f"- Accepted cooked dinners within 48h: {json.dumps(recent_dinners, ensure_ascii=False)}\n"
+            "- Only suggest leftovers/matlåda/reheating if that list is NON-EMPTY — "
+            "and name the exact dish from the list in the suggestion.\n"
+            "- If the list is empty, NEVER suggest leftovers, matlåda, reheating yesterday's food, "
+            "or set meta.leftover=true.\n"
+        )
 
     system = (
         "You are OneChoice. You make exactly one everyday decision the user can execute TODAY. "
@@ -969,6 +992,7 @@ Negative prefs: {json.dumps(neg, ensure_ascii=False)}
 
 Domain feasibility rules:
 {domain_rules}
+{leftover_rules}
 
 Internally invent 5 strong candidate decisions. Mark ~1 as wildcard=true (adventure in flavor/genre, NEVER in sourcing or unavailable services).
 Return ONLY JSON:
@@ -1035,6 +1059,36 @@ Rules:
     if len(out) < 3:
         raise ValueError("not enough candidates from grok")
     return out[:5]
+
+
+def _recent_cooked_dinners_from_history(
+    history: list[dict[str, Any]],
+    *,
+    hours: int = 48,
+) -> list[str]:
+    """Accepted/locked middag titles within the last `hours` (for LLM grounding)."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=int(hours))
+    out: list[str] = []
+    seen: set[str] = set()
+    for h in history:
+        if h.get("status") not in ("accepted", "locked"):
+            continue
+        ctx = h.get("context") if isinstance(h.get("context"), dict) else {}
+        if ctx.get("meal_type") != "middag":
+            continue
+        created = db._parse_utc(h.get("created_at"))
+        if created is None or created < cutoff:
+            continue
+        if h.get("execution_type") == "map":
+            continue
+        if ctx.get("eating_out") or ctx.get("leftover_from"):
+            continue
+        title = str(h.get("suggestion") or "").strip()
+        key = title.lower()
+        if title and key not in seen:
+            seen.add(key)
+            out.append(title)
+    return out
 
 
 def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:

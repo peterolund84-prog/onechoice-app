@@ -12,7 +12,7 @@ import json
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -682,6 +682,55 @@ def recent_suggestions(
                 (user_id, domain, f"-{int(days)} days"),
             ).fetchall()
         return [r["suggestion"] for r in rows]
+
+
+def _parse_utc(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+
+
+def has_recent_cooked_dinner(
+    user_id: str,
+    *,
+    hours: int = 48,
+    path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    """Most recent accepted/locked middag within `hours`, or None.
+
+    Excludes eating-out and leftover-only entries — only real cooked dinners
+    count as evidence for lunch/kvällsmål leftover suggestions.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=int(hours))
+    for d in list_decisions(user_id, domain="food", limit=40, path=path):
+        if d.get("status") not in ("accepted", "locked"):
+            continue
+        ctx = d.get("context") if isinstance(d.get("context"), dict) else {}
+        if ctx.get("meal_type") != "middag":
+            continue
+        created = _parse_utc(d.get("created_at"))
+        if created is None or created < cutoff:
+            continue
+        if d.get("execution_type") == "map":
+            continue
+        if ctx.get("eating_out") or ctx.get("leftover_from"):
+            continue
+        suggestion = str(d.get("suggestion") or "").strip()
+        if not suggestion:
+            continue
+        active = ctx.get("active_minutes")
+        if active is None and isinstance(ctx.get("recipe"), dict):
+            active = ctx["recipe"].get("active_minutes")
+        return {
+            "suggestion": suggestion,
+            "active_minutes": active,
+            "decision_id": d.get("id"),
+            "created_at": d.get("created_at"),
+        }
+    return None
 
 
 def upsert_preference(
