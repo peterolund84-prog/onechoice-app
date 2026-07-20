@@ -119,7 +119,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-premium-minimal-v16-20260719"
+BUILD_ID = "home-premium-minimal-v17-20260720"
 
 I18N = {
     "sv": {
@@ -903,19 +903,57 @@ div[data-testid="stHorizontalBlock"] div.stButton {{
 }}
 .oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
 .oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"],
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
     background: transparent !important;
     color: var(--oc-muted) !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
+    outline: none !important;
     font-family: "Inter", sans-serif !important;
     font-size: 0.68rem !important;
     font-weight: 500 !important;
     min-height: 2.6rem !important;
     padding: 0.35rem 0.15rem !important;
 }}
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"],
+.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
+.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
+    width: auto !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    min-height: 0 !important;
+    height: auto !important;
+    padding: 8px 20px !important;
+}}
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.78rem !important;
+    font-weight: 500 !important;
+    min-height: 1.6rem !important;
+    padding: 0.15rem 0.35rem !important;
+    width: auto !important;
+}}
+.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
 }}
