@@ -128,7 +128,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "movie-format-mood-chips-v26-20260720"
+BUILD_ID = "food-kcal-chrome-v27-20260720"
 
 I18N = {
     "sv": {
@@ -175,7 +175,7 @@ I18N = {
         "steps_title": "Gör så här",
         "nutrition_section": "Näringsvärden",
         "nutrition_title": "Visa näringsvärden",
-        "nutrition_hint": "Ca-värden per portion under receptet — aldrig på beslutskortet. Av som standard.",
+        "nutrition_hint": "Ca-värden (kcal / protein) under receptet på alla matsidor — aldrig på beslutskortet. På som standard.",
         "nutrition_recipe_toggle": "Visa ca-värden (kcal / protein)",
         "nutrition_missing": "Näringsvärden saknas",
         "nutrition_saved": "Sparat.",
@@ -322,7 +322,7 @@ I18N = {
         "steps_title": "Steps",
         "nutrition_section": "Nutrition",
         "nutrition_title": "Show nutrition estimates",
-        "nutrition_hint": "Approx. per serving under the recipe — never on the decision card. Off by default.",
+        "nutrition_hint": "Approx. kcal / protein under the recipe on all food pages — never on the decision card. On by default.",
         "nutrition_recipe_toggle": "Show approx. nutrition (kcal / protein)",
         "nutrition_missing": "Nutrition unavailable",
         "nutrition_saved": "Saved.",
@@ -666,6 +666,31 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
     font-weight: 600 !important;
     border-color: var(--oc-ink) !important;
 }}
+/* Lang + bottom nav are NOT domain chips — strip oval chrome (st.pills = ButtonGroup) */
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
+div[data-testid="element-container"]:has(.oc-lang-pills) ~ div[data-testid="element-container"] [data-testid="stPills"] [data-testid="stButtonGroup"] button,
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
+div[data-testid="element-container"]:has(.oc-nav-pills) ~ div[data-testid="element-container"] [data-testid="stPills"] [data-testid="stButtonGroup"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-lang-pills) ~ div [data-testid="stButtonGroup"] button {{
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    min-height: 1.6rem !important;
+}}
+/* Sticky top chrome — brand stays visible while scrolling (premium app pattern) */
+.oc-topbar {{
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1050 !important;
+    background: var(--oc-bg) !important;
+    padding: 0.35rem 0 0.55rem !important;
+    margin: 0 0 0.15rem !important;
+}}
+.oc-topbar .oc-logo {{
+    margin: 0.15rem 0 0 !important;
+}}
 .oc-decision {{
     background: #fff; border-radius: 24px;
     padding: 2.2rem 1.5rem 2rem;
@@ -767,10 +792,13 @@ div[data-testid="stButtonGroup"] button[aria-checked="true"],
 }}
 .oc-recipe .oc-nutrition,
 .oc-nutrition {{
-    margin: 0.65rem 0 0.15rem; padding: 0;
-    font-size: 0.92rem; color: var(--oc-muted) !important; line-height: 1.35;
-    font-weight: 500; letter-spacing: 0; text-transform: none;
+    margin: 0.65rem 0 0.15rem; padding: 0.55rem 0.75rem;
+    font-size: 0.95rem; color: var(--oc-ink) !important; line-height: 1.35;
+    font-weight: 600; letter-spacing: 0; text-transform: none;
     font-family: "Inter", sans-serif !important;
+    background: #fff !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 12px !important;
 }}
 .oc-nutrition.missing {{
     color: var(--oc-muted) !important; font-weight: 400 !important;
@@ -1056,7 +1084,10 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[dat
     box-sizing: border-box !important;
 }}
 .oc-nav-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button {{
     flex: 1 1 0 !important;
     background: transparent !important;
     border: none !important;
@@ -1069,29 +1100,56 @@ div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="eleme
     padding: 0.35rem 0.2rem !important;
 }}
 .oc-nav-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"] {{
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
+    border: none !important;
+    background: transparent !important;
 }}
 .oc-lang-pills + div[data-testid="stPills"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] {{
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] {{
+    position: fixed !important;
+    top: max(0.55rem, env(safe-area-inset-top)) !important;
+    right: 0.75rem !important;
+    left: auto !important;
+    z-index: 1200 !important;
     display: flex !important;
     justify-content: flex-end !important;
-    gap: 0.25rem !important;
-    margin: 0 0 0.35rem !important;
+    align-items: center !important;
+    gap: 0.15rem !important;
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+    background: transparent !important;
+}}
+div[data-testid="element-container"]:has(.oc-lang-pills) {{
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
 }}
 .oc-lang-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button {{
     background: transparent !important;
     border: none !important;
+    border-radius: 0 !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
     font-size: 0.78rem !important;
+    font-weight: 500 !important;
     min-height: 1.6rem !important;
+    height: auto !important;
     padding: 0.15rem 0.4rem !important;
+    width: auto !important;
 }}
 .oc-lang-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"] {{
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
 }}
@@ -1382,7 +1440,9 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
 /* Nav / lang pills must win over global domain-chip pill chrome */
 .oc-nav-pills + div[data-testid="stPills"] button,
 div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button {{
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button {{
     background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
@@ -1395,14 +1455,17 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[dat
 }}
 .oc-nav-pills + div[data-testid="stPills"] button[aria-checked="true"],
 div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button[aria-checked="true"] {{
+div[data-testid="element-container"]:has(.oc-nav-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-nav-pills) ~ div [data-testid="stButtonGroup"] button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
     border: none !important;
     background: transparent !important;
 }}
 .oc-lang-pills + div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button {{
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button,
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button {{
     background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
@@ -1413,7 +1476,8 @@ div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="elem
     padding: 0.15rem 0.4rem !important;
 }}
 .oc-lang-pills + div[data-testid="stPills"] button[aria-checked="true"],
-div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"] {{
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-lang-pills) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
     border: none !important;
@@ -1862,7 +1926,7 @@ def require_auth_context() -> None:
 def page_auth() -> None:
     _clear_action_query_params()
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("auth_hint"))}</p>',
         unsafe_allow_html=True,
@@ -2138,11 +2202,8 @@ def render_domain_chips(*, key_prefix: str = "home") -> None:
 
 
 def render_logo() -> None:
-    """Solid black wordmark — one word, no two-tone."""
-    st.markdown(
-        '<div class="oc-logo">OneChoice</div>',
-        unsafe_allow_html=True,
-    )
+    """Solid black wordmark — sticky top chrome (premium app pattern)."""
+    render_brand_header()
 
 
 def render_tagline(text: str | None = None) -> None:
@@ -3115,13 +3176,13 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
 
 
 def _profile_show_nutrition() -> bool:
-    """Opt-in only — default OFF. Never drives decision-card UI."""
+    """Recipe-only nutrition — ON by default. Never drives decision-card UI."""
     import json
 
     try:
         uid = st.session_state.get("user_id")
         if not uid:
-            return False
+            return True
         user = db.ensure_user(uid)
         raw = user.get("profile_json") or {}
         if isinstance(raw, str):
@@ -3130,13 +3191,15 @@ def _profile_show_nutrition() -> bool:
             except json.JSONDecodeError:
                 raw = {}
         food = (raw if isinstance(raw, dict) else {}).get("food") or {}
+        if "show_nutrition" not in food:
+            return True
         return bool(food.get("show_nutrition"))
     except Exception:
-        return False
+        return True
 
 
 def _set_profile_show_nutrition(enabled: bool) -> None:
-    """Persist opt-in to profile_json.food.show_nutrition."""
+    """Persist preference to profile_json.food.show_nutrition."""
     import json
 
     uid = st.session_state.get("user_id")
@@ -3218,6 +3281,41 @@ def _format_nutrition_fallback(
     return f"Ca {k_i} kcal · {p_i} g protein / portion"
 
 
+def render_brand_header(*, extra_class: str = "") -> None:
+    """Sticky OneChoice wordmark — stays visible while content scrolls."""
+    cls = "oc-logo" + (f" {extra_class}" if extra_class else "")
+    st.markdown(
+        f'<div class="oc-topbar"><div class="{cls}">OneChoice</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_food_recipe(
+    recipe: dict[str, Any] | None,
+    fallback_ings: list[str] | None = None,
+    *,
+    show_nutrition: bool | None = None,
+) -> None:
+    """Single entry for food recipe cards — same kcal line on every matsida."""
+    import shopping as shopping_mod
+
+    if show_nutrition is None:
+        show_nutrition = _profile_show_nutrition()
+    healed = recipe
+    if isinstance(recipe, dict):
+        try:
+            ensure = getattr(shopping_mod, "ensure_recipe_nutrition", None)
+            if callable(ensure):
+                healed = ensure(
+                    recipe,
+                    suggestion=str(recipe.get("title") or ""),
+                    allow_estimate=True,
+                )
+        except Exception:
+            healed = recipe
+    render_recipe_block(healed, fallback_ings, show_nutrition=show_nutrition)
+
+
 def render_recipe_block(
     recipe: dict[str, Any] | None,
     fallback_ings: list[str] | None = None,
@@ -3254,7 +3352,7 @@ def render_recipe_block(
 def render_error_boundary() -> None:
     """Friendly Swedish error — never show a traceback to the user."""
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     st.markdown(
         f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
         unsafe_allow_html=True,
@@ -3430,7 +3528,7 @@ def page_fridge() -> None:
 
     debug = _fridge_debug_ui()
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("fridge_title"))}</p>',
         unsafe_allow_html=True,
@@ -3714,7 +3812,7 @@ def page_clothes_occasion() -> None:
     from datetime import datetime
 
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("occasion_title"))}</p>',
         unsafe_allow_html=True,
@@ -3767,7 +3865,7 @@ def page_clothes_occasion() -> None:
 
 def page_ambiguous() -> None:
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("ambiguous"))}</p>',
         unsafe_allow_html=True,
@@ -3951,7 +4049,7 @@ def page_not_a_decision() -> None:
 
 def page_result() -> None:
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict):
         cur = {}
@@ -4483,7 +4581,7 @@ def page_execute() -> None:
     st.session_state.ui_error = None
 
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict) or not cur.get("suggestion"):
         st.session_state.page = "home"
@@ -4615,7 +4713,7 @@ def page_execute() -> None:
             recipe = fd.reheat_execution_recipe(
                 suggestion, language=st.session_state.get("language", "sv")
             )
-            render_recipe_block(recipe, show_nutrition=False)
+            render_food_recipe(recipe)
             if st.button(
                 t("back_to_decision"),
                 type="secondary",
@@ -4749,10 +4847,9 @@ def page_execute() -> None:
         else []
     )
     try:
-        render_recipe_block(
+        render_food_recipe(
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
-            show_nutrition=_profile_show_nutrition(),
         )
     except Exception as exc:
         log.warning("recipe render failed: %s", exc)
@@ -4993,7 +5090,7 @@ def page_profile() -> None:
         unsafe_allow_html=True,
     )
     food_prof = dict((ensured if isinstance(ensured, dict) else {}).get("food") or {})
-    show_nut = bool(food_prof.get("show_nutrition", False))
+    show_nut = bool(food_prof.get("show_nutrition", True))
     st.caption(t("nutrition_hint"))
     if hasattr(st, "toggle"):
         new_show_nut = st.toggle(
@@ -5108,7 +5205,7 @@ def page_profile() -> None:
 def page_privacy() -> None:
     """In-app privacy policy (Swedish). Override with PRIVACY_URL secret if hosted elsewhere."""
     lang_bar()
-    st.markdown('<div class="oc-logo">OneChoice</div>', unsafe_allow_html=True)
+    render_brand_header()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("privacy_link"))}</p>',
         unsafe_allow_html=True,
@@ -5318,10 +5415,7 @@ def handle_query_params() -> None:
 def page_shared() -> None:
     """Public read-only decision landing — what recipients see from every share."""
     lang_bar()
-    st.markdown(
-        '<div class="oc-logo oc-share-landing">OneChoice</div>',
-        unsafe_allow_html=True,
-    )
+    render_brand_header(extra_class="oc-share-landing")
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("share_landing_sub"))}</p>',
         unsafe_allow_html=True,
@@ -5372,7 +5466,7 @@ def page_shared() -> None:
         if isinstance(recipe, dict):
             if recipe.get("active_minutes") is not None:
                 st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
-            render_recipe_block(
+            render_food_recipe(
                 recipe, list(shop.get("ingredients") or []) if shop else None
             )
     elif domain == "workout" or payload.get("execution_type") == "workout":
