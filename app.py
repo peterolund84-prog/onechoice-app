@@ -119,7 +119,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-premium-minimal-v17-20260720"
+BUILD_ID = "home-premium-minimal-v18-20260720"
 
 I18N = {
     "sv": {
@@ -816,7 +816,7 @@ div[data-testid="stCheckbox"] label {{
     border: none !important;
     border-top: 1px solid var(--oc-border) !important;
 }}
-.oc-nav a {{
+.oc-nav a, .oc-nav .oc-nav-item {{
     display: flex !important; flex-direction: column; align-items: center; justify-content: center;
     gap: 0.2rem; text-decoration: none; color: var(--oc-muted) !important;
     font-size: 0.68rem; font-weight: 500;
@@ -824,12 +824,118 @@ div[data-testid="stCheckbox"] label {{
     background: transparent !important;
     font-family: "Inter", sans-serif !important;
 }}
-.oc-nav a.active {{
+.oc-nav a.active, .oc-nav .oc-nav-item.active {{
     background: transparent !important;
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
 }}
 .oc-nav .oc-ico {{ width: 1.15rem; height: 1.15rem; display: block; }}
+/* Bottom nav buttons — fixed bar, icon+label, no pill chrome */
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] {{
+    position: fixed !important;
+    left: 0 !important; right: 0 !important; bottom: 0 !important;
+    z-index: 1100 !important;
+    background: #fff !important;
+    border-top: 1px solid var(--oc-border) !important;
+    padding: 0.45rem 0.35rem max(0.45rem, env(safe-area-inset-bottom)) !important;
+    margin: 0 !important;
+}}
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] div[data-testid="stHorizontalBlock"] {{
+    gap: 0 !important;
+}}
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] div.stButton > button,
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] button[data-testid="baseButton-secondary"],
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"] {{
+    background: transparent !important;
+    color: var(--oc-muted) !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 0.68rem !important;
+    font-weight: 500 !important;
+    min-height: 2.85rem !important;
+    padding: 0.25rem 0.1rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.15rem !important;
+    white-space: normal !important;
+    line-height: 1.15 !important;
+}}
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"],
+div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] div.stButton > button[kind="primary"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+}}
+/* Fallback if :has() unavailable — still kill borders on bottom-looking buttons */
+.oc-nav-btns-marker {{ display: none !important; }}
+/* Domain pills — match ghost chip look */
+div[data-testid="stPills"] {{
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    margin: 0 0 1.25rem !important;
+}}
+div[data-testid="stPills"] button {{
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    padding: 8px 20px !important;
+    min-height: 0 !important;
+    height: auto !important;
+}}
+div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="stPills"] button[kind="primary"] {{
+    background: transparent !important;
+    border-color: var(--oc-ink) !important;
+    color: var(--oc-ink) !important;
+}}
+/* Space so content clears fixed nav */
+.block-container {{
+    padding-bottom: 5.5rem !important;
+}}
+/* Home domain chips — HTML flex row */
+.oc-chip-row {{
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin: 0 0 0.25rem !important;
+    min-height: 0 !important;
+}}
+a.oc-chip {{
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    text-decoration: none !important;
+    padding: 8px 20px !important;
+}}
+a.oc-chip:hover, a.oc-chip:focus {{
+    border-color: var(--oc-ink) !important;
+    color: var(--oc-ink) !important;
+}}
 [data-testid="stWidgetLabel"] {{ display: none !important; }}
 div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
 div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
@@ -1651,40 +1757,18 @@ def _clear_action_query_params() -> None:
 
 
 def lang_bar() -> None:
+    """Compact SV · EN — original HTML look."""
     lang = st.session_state.language
-    st.markdown('<div class="oc-lang-btns-marker"></div>', unsafe_allow_html=True)
-    # Spacer + SV + EN — keep session-safe buttons, compact text look via CSS
-    _, c1, c2 = st.columns([8, 1, 1])
-    with c1:
-        if st.button(
-            "SV",
-            key="lang_sv_btn",
-            type="primary" if lang == "sv" else "secondary",
-            use_container_width=False,
-        ):
-            if lang != "sv":
-                st.session_state.language = "sv"
-                if st.session_state.user_id and not st.session_state.get("guest_mode"):
-                    try:
-                        db.update_user(st.session_state.user_id, language="sv")
-                    except Exception:
-                        pass
-                st.rerun()
-    with c2:
-        if st.button(
-            "EN",
-            key="lang_en_btn",
-            type="primary" if lang == "en" else "secondary",
-            use_container_width=False,
-        ):
-            if lang != "en":
-                st.session_state.language = "en"
-                if st.session_state.user_id and not st.session_state.get("guest_mode"):
-                    try:
-                        db.update_user(st.session_state.user_id, language="en")
-                    except Exception:
-                        pass
-                st.rerun()
+    sv_cls = "active" if lang == "sv" else ""
+    en_cls = "active" if lang == "en" else ""
+    st.markdown(
+        f'<div class="oc-lang">'
+        f'<a class="{sv_cls}" href="?lang=sv">SV</a>'
+        f'<span class="oc-lang-sep">·</span>'
+        f'<a class="{en_cls}" href="?lang=en">EN</a>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _start_domain_decision(domain: str) -> None:
@@ -1726,22 +1810,32 @@ def _pick_ambiguous_domain(pick: str) -> None:
 
 
 def render_domain_chips(*, key_prefix: str = "home") -> None:
-    """Ghost domain chips — Streamlit buttons styled like the original HTML chips."""
+    """Ghost domain chips via st.pills — original chip look, keeps login session."""
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    # Marker + class for CSS + design tests that look for oc-chip-row
+    labels = " · ".join(domain_label(d) for d in domains)
     st.markdown(
-        '<div class="oc-chip-btns-marker"></div><div class="oc-chip-row" aria-hidden="true"></div>',
+        f'<div class="oc-chip-row" aria-label="{html.escape(labels)}"></div>',
         unsafe_allow_html=True,
     )
-    cols = st.columns(len(domains))
-    for col, d in zip(cols, domains):
-        with col:
-            if st.button(
-                domain_label(d),
-                key=f"{key_prefix}_domain_{d}",
-                use_container_width=False,
-            ):
-                _start_domain_decision(d)
+    pill_key = f"{key_prefix}_domain_pills"
+    if st.session_state.get("_clear_domain_pills"):
+        st.session_state.pop(pill_key, None)
+        st.session_state.pop(f"_{pill_key}_prev", None)
+        st.session_state._clear_domain_pills = False
+
+    choice = st.pills(
+        "domain_chips",
+        options=list(domains),
+        format_func=lambda d: domain_label(d),
+        selection_mode="single",
+        key=pill_key,
+        label_visibility="collapsed",
+    )
+    prev = st.session_state.get(f"_{pill_key}_prev")
+    if choice and choice != prev:
+        st.session_state[f"_{pill_key}_prev"] = choice
+        st.session_state._clear_domain_pills = True
+        _start_domain_decision(str(choice))
 
 
 def render_logo() -> None:
@@ -1764,25 +1858,25 @@ def render_tagline(text: str | None = None) -> None:
 
 
 def nav() -> None:
+    """Fixed bottom nav — original icon+label HTML (session kept via guest=1 / Streamlit session)."""
     page = st.session_state.page
     items = (
-        ("home", t("home"), page in ("home", "result")),
-        ("lista", t("list_nav"), page == "lista"),
-        ("history", t("history"), page == "history"),
-        ("profile", t("profile"), page == "profile"),
+        ("home", ICON_HOME, t("home"), page in ("home", "result")),
+        ("lista", ICON_LIST, t("list_nav"), page == "lista"),
+        ("history", ICON_CLOCK, t("history"), page == "history"),
+        ("profile", ICON_USER, t("profile"), page == "profile"),
     )
-    st.markdown('<div class="oc-nav-btns-marker"></div>', unsafe_allow_html=True)
-    cols = st.columns(len(items))
-    for col, (key, name, active) in zip(cols, items):
-        with col:
-            if st.button(
-                name,
-                key=f"nav_btn_{key}",
-                type="primary" if active else "secondary",
-                use_container_width=True,
-            ):
-                st.session_state.page = "home" if key == "home" else key
-                st.rerun()
+    links = []
+    for key, icon, name, active in items:
+        cls = "active" if active else ""
+        href = _qp_href(nav=key)
+        links.append(
+            f'<a class="{cls}" href="{href}">{icon}<span>{html.escape(name)}</span></a>'
+        )
+    st.markdown(
+        f'<nav class="oc-nav" aria-label="Navigation">{"".join(links)}</nav>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_reroll_dots(reroll_index: int) -> None:
@@ -3121,23 +3215,20 @@ def page_ambiguous() -> None:
         f'<p class="oc-tagline">{html.escape(t("ambiguous"))}</p>',
         unsafe_allow_html=True,
     )
-    domains = ("food", "clothes", "movie", "workout", "weekend")
-    st.markdown(
-        '<div class="oc-chip-btns-marker"></div><div class="oc-chip-row" aria-hidden="true"></div>',
-        unsafe_allow_html=True,
+    domains = ("food", "clothes", "movie", "workout", "weekend", "other")
+    st.markdown('<div class="oc-chip-row" aria-hidden="true"></div>', unsafe_allow_html=True)
+    choice = st.pills(
+        "ambiguous_pick",
+        options=list(domains),
+        format_func=lambda d: t("other") if d == "other" else domain_label(d),
+        selection_mode="single",
+        key="ambig_domain_pills",
+        label_visibility="collapsed",
     )
-    cols = st.columns(len(domains) + 1)
-    for i, d in enumerate(domains):
-        with cols[i]:
-            if st.button(
-                domain_label(d),
-                key=f"ambig_{d}",
-                use_container_width=False,
-            ):
-                _pick_ambiguous_domain(d)
-    with cols[-1]:
-        if st.button(t("other"), key="ambig_other", use_container_width=False):
-            _pick_ambiguous_domain("other")
+    prev = st.session_state.get("_ambig_domain_pills_prev")
+    if choice and choice != prev:
+        st.session_state._ambig_domain_pills_prev = choice
+        _pick_ambiguous_domain(str(choice))
     if st.button(t("home"), use_container_width=True):
         st.session_state.page = "home"
         st.session_state.pending_free_text = None
