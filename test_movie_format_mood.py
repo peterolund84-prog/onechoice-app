@@ -206,6 +206,37 @@ class MovieDecideLoggingTests(unittest.TestCase):
         ctx = r.context or {}
         self.assertTrue(ctx.get("movie_poster_url") or ctx.get("movie_tmdb_vote_average"))
 
+    def test_lar_mig_reroll_changes_suggestion(self) -> None:
+        first = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            context_extra={"format": "avsnitt", "mood": "lar_mig"},
+        )
+        self.assertTrue(first.ok)
+        second = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            reroll=True,
+            reroll_index=1,
+            previous_decision_id=first.decision_id,
+            context_extra={
+                "format": "avsnitt",
+                "mood": "lar_mig",
+                "previous_suggestion": first.suggestion,
+            },
+        )
+        self.assertTrue(second.ok)
+        self.assertNotEqual(
+            str(second.suggestion or "").strip().lower(),
+            str(first.suggestion or "").strip().lower(),
+        )
+
     def test_ui_has_format_mood_chip_renderer(self) -> None:
         import inspect
 

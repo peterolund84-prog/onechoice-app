@@ -170,6 +170,11 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "meta": {"title": "our planet", "kind": "series", "genres": ["documentary"]},
             },
             {
+                "suggestion": "Explained",
+                "justification": "Kort och klokt — ett ämne, en kväll.",
+                "meta": {"title": "explained", "kind": "series", "genres": ["documentary"]},
+            },
+            {
                 "suggestion": "Det sista kapitlet",
                 "justification": "Svenskt och tankeväckande — perfekt för en nyfiken kväll.",
                 "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
@@ -185,6 +190,11 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Our Planet",
                 "justification": "Learn about the natural world — one episode, easy pace.",
                 "meta": {"title": "our planet", "kind": "series", "genres": ["documentary"]},
+            },
+            {
+                "suggestion": "Explained",
+                "justification": "Short and smart — one topic, one evening.",
+                "meta": {"title": "explained", "kind": "series", "genres": ["documentary"]},
             },
             {
                 "suggestion": "Det sista kapitlet",

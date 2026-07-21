@@ -62,6 +62,7 @@ _OFFLINE_TMDB: dict[str, dict[str, Any]] = {
     "my octopus teacher": {"tmdb_id": 202, "year": 2020, "vote_average": 8.1, "poster_path": "/octopus.jpg"},
     "hilda": {"tmdb_id": 203, "year": 2018, "vote_average": 8.0, "poster_path": "/hilda.jpg"},
     "kung fu panda": {"tmdb_id": 204, "year": 2008, "vote_average": 7.6, "poster_path": "/kfp.jpg"},
+    "explained": {"tmdb_id": 205, "year": 2018, "vote_average": 7.9, "poster_path": "/explained.jpg"},
 }
 
 

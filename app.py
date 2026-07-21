@@ -774,23 +774,28 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     box-shadow: none !important;
 }}
 /* Domain/meal chips keep oval chrome via scoped rules below — NOT global ButtonGroup */
-/* Sticky top chrome — brand stays visible while scrolling (premium app pattern) */
+/* Fixed top chrome — OneChoice + SV/EN stay visible while scrolling */
 .oc-topbar {{
-    position: sticky !important;
+    position: fixed !important;
     top: 0 !important;
-    z-index: 1050 !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1100 !important;
     background: var(--oc-bg) !important;
-    padding: 0.35rem 0 0.55rem !important;
-    margin: 0 0 0.15rem !important;
+    border-bottom: 1px solid var(--oc-border) !important;
+    padding: max(0.3rem, env(safe-area-inset-top)) 4.75rem 0.35rem 1rem !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
 }}
 .oc-topbar .oc-logo {{
-    margin: 0.15rem 0 0 !important;
+    margin: 0 !important;
+    font-size: 1.35rem !important;
 }}
-/* Language — keyed container, fixed top-right SV · EN (no oval pills) */
+/* Language — inside fixed header row, top-right SV · EN */
 .st-key-oc_lang_bar {{
     position: fixed !important;
-    top: max(0.45rem, env(safe-area-inset-top)) !important;
-    right: 0.65rem !important;
+    top: max(0.42rem, env(safe-area-inset-top)) !important;
+    right: 0.55rem !important;
     left: auto !important;
     z-index: 1200 !important;
     width: auto !important;
@@ -841,7 +846,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     z-index: 1200 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 0.35rem 0.25rem max(0.45rem, env(safe-area-inset-bottom)) !important;
+    padding: 0.18rem 0.15rem max(0.3rem, env(safe-area-inset-bottom)) !important;
     background: #fff !important;
     border-top: 1px solid var(--oc-border) !important;
     box-sizing: border-box !important;
@@ -867,10 +872,10 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     box-shadow: none !important;
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 0.72rem !important;
+    font-size: 0.64rem !important;
     font-weight: 500 !important;
-    min-height: 2.6rem !important;
-    padding: 0.35rem 0.15rem !important;
+    min-height: 2rem !important;
+    padding: 0.15rem 0.08rem !important;
 }}
 .st-key-oc_nav_bar button[aria-checked="true"],
 .st-key-oc_nav_pills button[aria-checked="true"] {{
@@ -1206,9 +1211,10 @@ div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="elemen
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
 }}
-/* Space so content clears fixed nav */
+/* Space so content clears fixed header + slimmer bottom nav */
 .block-container {{
-    padding-bottom: 5.5rem !important;
+    padding-top: max(3.15rem, calc(env(safe-area-inset-top) + 2.55rem)) !important;
+    padding-bottom: 3.75rem !important;
 }}
 /* Home domain chips — HTML flex row */
 .oc-chip-row {{
@@ -2052,8 +2058,7 @@ def require_auth_context() -> None:
 
 def page_auth() -> None:
     _clear_action_query_params()
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("auth_hint"))}</p>',
         unsafe_allow_html=True,
@@ -2328,8 +2333,8 @@ def render_domain_chips(*, key_prefix: str = "home") -> None:
 
 
 def render_logo() -> None:
-    """Solid black wordmark — sticky top chrome (premium app pattern)."""
-    render_brand_header()
+    """Solid black wordmark — fixed top chrome (premium app pattern)."""
+    render_top_chrome()
 
 
 def render_tagline(text: str | None = None) -> None:
@@ -2473,6 +2478,8 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         context_extra["mood"] = md.normalize_mood(st.session_state.get("movie_mood"))
         if st.session_state.get("movie_in_progress_series"):
             context_extra["in_progress_series"] = st.session_state.movie_in_progress_series
+    if reroll and isinstance(cur, dict) and cur.get("suggestion"):
+        context_extra["previous_suggestion"] = str(cur.get("suggestion") or "")
     if st.session_state.get("fridge_mode"):
         import fridge_domain as fr
 
@@ -3407,8 +3414,14 @@ def _format_nutrition_fallback(
     return f"Ca {k_i} kcal · {p_i} g protein / portion"
 
 
+def render_top_chrome(*, extra_class: str = "") -> None:
+    """Fixed top bar: OneChoice wordmark + SV/EN language toggle."""
+    lang_bar()
+    render_brand_header(extra_class=extra_class)
+
+
 def render_brand_header(*, extra_class: str = "") -> None:
-    """Sticky OneChoice wordmark — stays visible while content scrolls."""
+    """OneChoice wordmark inside the fixed top chrome bar."""
     cls = "oc-logo" + (f" {extra_class}" if extra_class else "")
     st.markdown(
         f'<div class="oc-topbar"><div class="{cls}">OneChoice</div></div>',
@@ -3480,8 +3493,7 @@ def render_recipe_block(
 
 def render_error_boundary() -> None:
     """Friendly Swedish error — never show a traceback to the user."""
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     st.markdown(
         f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
         unsafe_allow_html=True,
@@ -3569,7 +3581,6 @@ def _clear_guest_query_param() -> None:
 def page_home() -> None:
     import router as rt
 
-    lang_bar()
     render_logo()
     render_tagline()
 
@@ -3656,8 +3667,7 @@ def page_fridge() -> None:
     import fridge_domain as fr
 
     debug = _fridge_debug_ui()
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("fridge_title"))}</p>',
         unsafe_allow_html=True,
@@ -3940,8 +3950,7 @@ def page_clothes_occasion() -> None:
     import clothes_domain as cd
     from datetime import datetime
 
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("occasion_title"))}</p>',
         unsafe_allow_html=True,
@@ -3993,8 +4002,7 @@ def page_clothes_occasion() -> None:
 
 
 def page_ambiguous() -> None:
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("ambiguous"))}</p>',
         unsafe_allow_html=True,
@@ -4166,7 +4174,7 @@ def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
 
 
 def page_not_a_decision() -> None:
-    lang_bar()
+    render_top_chrome()
     cur = st.session_state.current or {}
     msg = cur.get("ui_message") or t("not_a_decision")
     st.markdown(f'<div class="oc-refuse">{html.escape(msg)}</div>', unsafe_allow_html=True)
@@ -4177,8 +4185,7 @@ def page_not_a_decision() -> None:
 
 
 def page_result() -> None:
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict):
         cur = {}
@@ -4740,8 +4747,7 @@ def page_execute() -> None:
     # Clear sticky error so Handla always gets a clean paint
     st.session_state.ui_error = None
 
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict) or not cur.get("suggestion"):
         st.session_state.page = "home"
@@ -5042,7 +5048,7 @@ def page_execute() -> None:
 
 
 def page_lista() -> None:
-    lang_bar()
+    render_top_chrome()
     require_auth_context()
     st.markdown(
         f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("list_title"))}</p>',
@@ -5095,7 +5101,7 @@ def page_lista() -> None:
 
 
 def page_history() -> None:
-    lang_bar()
+    render_top_chrome()
     require_auth_context()
     st.markdown(
         f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("history_title"))}</p>',
@@ -5141,7 +5147,7 @@ def page_profile() -> None:
 
     import clothes_domain as cd
 
-    lang_bar()
+    render_top_chrome()
     require_auth_context()
     st.markdown(
         f'<div class="oc-pro"><h2>{html.escape(t("pro_title"))}</h2>'
@@ -5369,8 +5375,7 @@ def page_profile() -> None:
 
 def page_privacy() -> None:
     """In-app privacy policy (Swedish). Override with PRIVACY_URL secret if hosted elsewhere."""
-    lang_bar()
-    render_brand_header()
+    render_top_chrome()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("privacy_link"))}</p>',
         unsafe_allow_html=True,
@@ -5579,8 +5584,7 @@ def handle_query_params() -> None:
 
 def page_shared() -> None:
     """Public read-only decision landing — what recipients see from every share."""
-    lang_bar()
-    render_brand_header(extra_class="oc-share-landing")
+    render_top_chrome(extra_class="oc-share-landing")
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("share_landing_sub"))}</p>',
         unsafe_allow_html=True,

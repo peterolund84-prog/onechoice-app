@@ -547,6 +547,16 @@ def decide(
         explore=explore,
     )
     top = ranked[0] if ranked else survivors[0]
+    prev_suggestion = str((context_extra or {}).get("previous_suggestion") or "").strip()
+    if reroll and prev_suggestion and ranked:
+        prev_l = prev_suggestion.lower()
+        alt = [
+            c
+            for c in ranked
+            if str(c.get("suggestion") or "").strip().lower() != prev_l
+        ]
+        if alt:
+            top = alt[0]
 
     # Final leftover gate — catches LLM phrases that slipped through ranking
     if domain == "food" and not fridge_mode:
@@ -1654,11 +1664,22 @@ def _guaranteed_feasible(
             language=language,
             in_progress_series=context.get("in_progress_series"),
         )
-        c = pack[0] if pack else {
+        recent_l = set()
+        if isinstance(context.get("recent_suggestions"), list):
+            recent_l = {str(r).strip().lower() for r in context["recent_suggestions"] if r}
+        picked = None
+        for row in pack:
+            if str(row.get("suggestion") or "").strip().lower() in recent_l:
+                continue
+            survivors = feasibility.filter_feasible([row], domain=domain, profile=profile, context=context)
+            if survivors:
+                picked = survivors[0]
+                break
+        c = picked or (pack[0] if pack else {
             "suggestion": "Seinfeld",
             "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
             "meta": {"title": "seinfeld", "kind": "series", "format": fmt, "mood": mood},
-        }
+        })
     elif domain == "workout":
         import workout_domain as wd
 
