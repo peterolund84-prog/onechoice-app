@@ -374,7 +374,7 @@ class FridgeUiTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("kylen", body.lower())
+        self.assertIn("Fota kylen", body)
         self.assertIn("fridge=1", body)
 
     def test_confirm_inventory_then_decide(self) -> None:
