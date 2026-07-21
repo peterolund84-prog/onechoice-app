@@ -798,7 +798,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    padding: calc(12px + env(safe-area-inset-top)) 88px 12px 20px !important;
+    padding: calc(12px + env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left)) !important;
     margin: 0 !important;
     box-sizing: border-box !important;
     min-height: 52px !important;
@@ -809,6 +809,9 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     pointer-events: none !important;
 }}
 .oc-header-wordmark, .oc-header .oc-logo {{
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     margin: 0 !important;
     padding: 0 !important;
     font-family: "Sora", "Inter", sans-serif !important;
@@ -818,6 +821,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     color: var(--oc-ink) !important;
     text-align: center !important;
     line-height: 1.1 !important;
+    width: max-content !important;
     pointer-events: none !important;
 }}
 /* Home hero — tight group: headline + 24px + CTA */

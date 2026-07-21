@@ -35,6 +35,7 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-shop-tog-marker", css)
         # Fixed frosted chrome — header + lang/nav overlays
         self.assertIn("oc-header", css)
+        self.assertIn("translateX(-50%)", css)
         self.assertIn("position: fixed", css)
         self.assertIn("padding: 76px", css)
         self.assertIn("backdrop-filter", css)
