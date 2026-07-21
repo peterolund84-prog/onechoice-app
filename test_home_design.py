@@ -40,6 +40,8 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("st-key-oc_nav_bar", css)
         self.assertIn("st-key-oc_lang_pills", css)
         self.assertIn("st-key-oc_nav_pills", css)
+        self.assertIn("st-key-home_domain_pills", css)
+        self.assertIn("justify-content: center", css)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
         from streamlit.testing.v1 import AppTest

@@ -1181,22 +1181,47 @@ div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid=
 /* Fallback if :has() unavailable — still kill borders on bottom-looking buttons */
 .oc-nav-btns-marker {{ display: none !important; }}
 /* Domain / meal pills — ghost chip look (scoped; never style nav/lang) */
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"],
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] {{
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+}}
 .oc-chip-row + div[data-testid="stPills"],
+.oc-chip-row + [data-testid="stButtonGroup"],
 div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] [data-testid="stButtonGroup"],
 .oc-sec-label + div[data-testid="stPills"],
-div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] {{
+.oc-sec-label + [data-testid="stButtonGroup"],
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"],
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"],
+.st-key-home_domain_pills [data-testid="stButtonGroup"],
+.st-key-meal_pills [data-testid="stButtonGroup"],
+.st-key-movie_format_pills [data-testid="stButtonGroup"],
+.st-key-movie_mood_pills [data-testid="stButtonGroup"],
+.st-key-ambig_domain_pills [data-testid="stButtonGroup"] {{
     display: flex !important;
     flex-wrap: wrap !important;
     justify-content: center !important;
+    align-items: center !important;
     gap: 8px !important;
-    margin: 0 0 1.25rem !important;
+    margin: 0 auto 1.25rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
 }}
 .oc-chip-row + div[data-testid="stPills"] button,
+.oc-chip-row + [data-testid="stButtonGroup"] button,
 div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button,
 div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
 .oc-sec-label + div[data-testid="stPills"] button,
+.oc-sec-label + [data-testid="stButtonGroup"] button,
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button,
-div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button {{
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
+.st-key-home_domain_pills [data-testid="stButtonGroup"] button,
+.st-key-meal_pills [data-testid="stButtonGroup"] button,
+.st-key-movie_format_pills [data-testid="stButtonGroup"] button,
+.st-key-movie_mood_pills [data-testid="stButtonGroup"] button,
+.st-key-ambig_domain_pills [data-testid="stButtonGroup"] button {{
     background: transparent !important;
     color: var(--oc-ink) !important;
     border: 1px solid var(--oc-border) !important;
@@ -1210,13 +1235,21 @@ div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="eleme
     padding: 8px 20px !important;
     min-height: 0 !important;
     height: auto !important;
+    width: auto !important;
+    flex: 0 0 auto !important;
 }}
 .oc-chip-row + div[data-testid="stPills"] button[aria-checked="true"],
+.oc-chip-row + [data-testid="stButtonGroup"] button[aria-checked="true"],
 div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"],
 .oc-sec-label + div[data-testid="stPills"] button[aria-checked="true"],
+.oc-sec-label + [data-testid="stButtonGroup"] button[aria-checked="true"],
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button[aria-checked="true"],
+div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[aria-checked="true"],
 .oc-chip-row + div[data-testid="stPills"] button[kind="primary"],
-div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button[kind="primary"] {{
+.oc-chip-row + [data-testid="stButtonGroup"] button[kind="primary"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] div[data-testid="stPills"] button[kind="primary"],
+div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button[kind="primary"] {{
     background: transparent !important;
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
