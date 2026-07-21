@@ -373,18 +373,17 @@ class FridgeUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
-        labels = [b.label or "" for b in at.button]
-        self.assertTrue(any("kylen" in lab.lower() for lab in labels), labels)
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("kylen", body.lower())
+        self.assertIn("fridge=1", body)
 
     def test_confirm_inventory_then_decide(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        for b in at.button:
-            if b.label and "kylen" in b.label.lower():
-                b.click().run()
-                break
+        at.query_params["fridge"] = "1"
+        at.run()
         self.assertEqual(at.session_state["page"], "fridge")
         # Jump to confirm with known inventory (skip vision)
         at.session_state["fridge_step"] = "confirm"
