@@ -614,11 +614,20 @@ section.main, [data-testid="stAppViewContainer"] > .main {{
 }}
 .block-container {{
     max-width: 420px !important;
-    padding: 76px 1.25rem 96px !important;
+    padding: 76px 20px calc(88px + env(safe-area-inset-bottom)) !important;
     margin: 0 auto !important;
 }}
 @media (max-width: 768px) {{
-    .block-container {{ padding: 76px 1rem 96px !important; }}
+    .block-container {{ padding: 76px 20px calc(88px + env(safe-area-inset-bottom)) !important; }}
+}}
+/* Collapse in-flow chrome wrappers — fixed header/lang must not reserve vertical space */
+div[data-testid="element-container"]:has(.oc-header),
+div[data-testid="element-container"]:has(.st-key-oc_lang_bar) {{
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    height: 0 !important;
+    overflow: visible !important;
 }}
 /* Fridge camera */
 .block-container:has([data-testid="stCameraInput"]) {{
@@ -824,25 +833,31 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     width: max-content !important;
     pointer-events: none !important;
 }}
-/* Home hero — tight group: headline + 24px + CTA */
+/* Home hero — compact centered group (headline + 20px + CTA) */
+.st-key-home_hero,
+.st-key-home_hero [data-testid="stVerticalBlock"],
+.st-key-home_hero [data-testid="stVerticalBlockBorderWrapper"] {{
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
 .st-key-home_hero {{
     position: relative !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    padding: 40px 0 32px !important;
-    max-height: 40vh !important;
-    margin: 0 0 8px !important;
-    overflow: hidden !important;
+    width: 100% !important;
+    padding: 40px 0 0 !important;
+    margin: 0 0 40px !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
     box-sizing: border-box !important;
 }}
 .oc-hero {{
     position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    display: block;
     width: 100%;
     margin: 0;
     padding: 0;
@@ -850,42 +865,55 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
 }}
 .st-key-home_hero .oc-hero-orb {{
     position: absolute;
-    top: -52%;
-    right: -38%;
-    width: 72vw;
-    height: 72vw;
-    max-width: 340px;
-    max-height: 340px;
-    background: radial-gradient(circle, rgba(79, 70, 229, 0.95) 0%, rgba(79, 70, 229, 0) 62%);
-    filter: blur(52px);
+    left: 50%;
+    top: 0;
+    width: 55vw;
+    height: 55vw;
+    max-width: 280px;
+    max-height: 280px;
+    margin-left: 0;
+    background: radial-gradient(circle, rgba(79, 70, 229, 0.9) 0%, rgba(79, 70, 229, 0) 68%);
+    filter: blur(60px);
     opacity: 0.12;
     pointer-events: none;
     z-index: 0;
+    transform: translateX(-50%) translateY(-42%);
     animation: oc-orb-breathe 8s ease-in-out infinite alternate;
 }}
 @keyframes oc-orb-breathe {{
-    from {{ transform: scale(1); }}
-    to {{ transform: scale(1.06); }}
+    from {{ transform: translateX(-50%) translateY(-42%) scale(1); }}
+    to {{ transform: translateX(-50%) translateY(-42%) scale(1.06); }}
 }}
 .oc-hero-title {{
     position: relative;
     z-index: 1;
     font-family: "Sora", "Inter", sans-serif !important;
-    font-size: clamp(44px, 12vw, 64px) !important;
+    font-size: clamp(38px, 10vw, 52px) !important;
     font-weight: 700 !important;
     letter-spacing: -0.02em !important;
     line-height: 1.05 !important;
     color: var(--oc-ink) !important;
-    margin: 0 0 24px !important;
+    text-align: center !important;
+    margin: 0 0 20px !important;
+    padding: 0 !important;
+    width: 100% !important;
 }}
 .st-key-home_hero_cta {{
     position: relative;
     z-index: 1;
-    width: 100% !important;
-    margin: 0 !important;
+    width: calc(100% - 40px) !important;
+    max-width: 100% !important;
+    margin: 0 20px !important;
+    padding: 0 !important;
 }}
 .st-key-home_hero_cta div.stButton {{
     margin: 0 !important;
+    width: 100% !important;
+}}
+.st-key-home_weekend_alt {{
+    margin: 8px 0 0 !important;
+    text-align: center !important;
+    width: 100% !important;
 }}
 .oc-section-label {{
     font-size: 11px !important;
@@ -894,30 +922,41 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     color: var(--oc-muted) !important;
     font-weight: 600 !important;
     text-align: center !important;
-    margin: 32px 0 16px !important;
+    margin: 0 0 12px !important;
+    padding: 0 !important;
     font-family: "Inter", sans-serif !important;
+}}
+.st-key-home_domains {{
+    margin: 0 0 20px !important;
+    padding: 0 !important;
+    width: 100% !important;
 }}
 .oc-domain-grid {{
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 12px !important;
-    margin: 0 0 24px !important;
+    gap: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
 }}
 a.oc-domain-card {{
     display: flex !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 12px !important;
-    padding: 16px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 10px !important;
+    padding: 14px 16px !important;
     background: #fff !important;
-    border-radius: 16px !important;
+    border-radius: 14px !important;
     border: 1px solid rgba(0, 0, 0, 0.06) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     text-decoration: none !important;
     color: var(--oc-ink) !important;
     transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
-    min-height: 88px !important;
+    min-height: 52px !important;
+    height: 52px !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
 }}
 a.oc-domain-card:hover,
 a.oc-domain-card:focus {{
@@ -932,6 +971,7 @@ a.oc-domain-card:focus {{
     justify-content: center !important;
     width: 20px !important;
     height: 20px !important;
+    flex: 0 0 20px !important;
     color: var(--oc-ink) !important;
 }}
 .oc-domain-card-icon svg {{
@@ -946,6 +986,29 @@ a.oc-domain-card:focus {{
     font-size: 16px !important;
     font-weight: 500 !important;
     line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}}
+.st-key-home_free_form {{
+    margin: 0 !important;
+    padding: 0 0 20px !important;
+    width: 100% !important;
+}}
+.st-key-home_free_form [data-testid="stTextInput"] input {{
+    border-radius: 12px !important;
+    min-height: 48px !important;
+    font-size: 16px !important;
+    padding: 12px 14px !important;
+    border: 1px solid var(--oc-border) !important;
+    transition: border-color 150ms ease !important;
+}}
+.st-key-home_free_form [data-testid="stTextInput"] input:focus {{
+    border-color: var(--oc-accent) !important;
+    box-shadow: none !important;
+}}
+.st-key-home_free_form [data-testid="stFormSubmitButton"] {{
+    display: none !important;
 }}
 .st-key-home_weekend_alt div.stButton > button {{
     background: transparent !important;
@@ -2699,8 +2762,8 @@ def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
 def render_home_hero(inferred: dict[str, Any]) -> None:
     headline = html.escape(str(inferred.get("headline") or ""))
     st.markdown(
+        '<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<section class="oc-hero" aria-label="{headline}">'
-        f'<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<h1 class="oc-hero-title">{headline}</h1>'
         f"</section>",
         unsafe_allow_html=True,
@@ -2728,15 +2791,16 @@ def _render_domain_card(domain: str, *, href_params: dict[str, str] | None = Non
 
 
 def render_home_domain_grid() -> None:
-    """Secondary tier — icon cards in a 2-column grid (query-param navigation)."""
+    """Secondary tier — compact icon cards in a 2-column grid (query-param navigation)."""
     domains = ("food", "clothes", "movie", "workout", "weekend")
     cards = "".join(_render_domain_card(d) for d in domains)
     cards += _render_domain_card("fridge", href_params={"fridge": "1"})
-    st.markdown(
-        f'<p class="oc-section-label">{html.escape(t("home_or_choose"))}</p>'
-        f'<div class="oc-domain-grid">{cards}</div>',
-        unsafe_allow_html=True,
-    )
+    with st.container(key="home_domains"):
+        st.markdown(
+            f'<p class="oc-section-label">{html.escape(t("home_or_choose"))}</p>'
+            f'<div class="oc-domain-grid">{cards}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def render_logo() -> None:
@@ -3983,6 +4047,8 @@ def _clear_guest_query_param() -> None:
 
 
 def page_home() -> None:
+    import router as rt
+
     render_logo()
     inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
 
@@ -4009,6 +4075,24 @@ def page_home() -> None:
                 )
 
     render_home_domain_grid()
+
+    with st.container(key="home_free_form"):
+        with st.form("home_free_form", clear_on_submit=False, border=False):
+            q = st.text_input(
+                "home_free_input",
+                label_visibility="collapsed",
+                placeholder=t("home_free_placeholder"),
+                max_chars=rt.MAX_INPUT_CHARS,
+            )
+            submitted = st.form_submit_button(t("home_free_submit"))
+    if submitted:
+        question = (q or "").strip()
+        if not question:
+            st.warning(t("empty"))
+        elif len(question) > rt.MAX_INPUT_CHARS:
+            st.warning(t("too_long"))
+        else:
+            run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
     nav()
 
 

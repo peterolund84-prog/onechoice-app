@@ -133,6 +133,48 @@ class HomeHeroTests(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "result")
 
+    def test_all_six_domain_cards_navigate(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        cases = [
+            ("food", "result"),
+            ("clothes", "clothes_occasion"),
+            ("movie", "result"),
+            ("workout", "result"),
+            ("weekend", "result"),
+        ]
+        for domain, expected_page in cases:
+            with self.subTest(domain=domain):
+                at = AppTest.from_file("app.py", default_timeout=60)
+                at.run()
+                at.query_params["domain"] = domain
+                at.run()
+                self.assertFalse(at.exception)
+                self.assertEqual(at.session_state["page"], expected_page)
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        at.query_params["fridge"] = "1"
+        at.run()
+        self.assertFalse(at.exception)
+        self.assertEqual(at.session_state["page"], "fridge")
+
+    def test_home_has_free_text_placeholder_not_label(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        placeholders = [
+            str(getattr(inp, "placeholder", "") or "")
+            for inp in getattr(at, "text_input", [])
+        ]
+        self.assertTrue(
+            any("Eller skriv" in p for p in placeholders),
+            placeholders,
+        )
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertNotIn("home_free_input", body.lower())
+
 
 if __name__ == "__main__":
     unittest.main()
