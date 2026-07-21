@@ -103,6 +103,8 @@ class HomeHeroTests(unittest.TestCase):
         # Valid inline SVG icons — no broken glyph placeholders
         self.assertGreaterEqual(body.count('xmlns="http://www.w3.org/2000/svg"'), 6)
         self.assertNotIn("▯", body)
+        self.assertEqual(body.count('class="oc-header"'), 1)
+        self.assertNotIn("oc-topbar", body)
 
     def test_hero_decide_runs_food_decision(self) -> None:
         from streamlit.testing.v1 import AppTest
