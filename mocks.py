@@ -136,7 +136,7 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
     },
     "det sista kapitlet": {
         "services": {"svt_play"},
-        "runtime_min": 60,
+        "runtime_min": 45,
         "kind": "series",
         "links": {"svt_play": "https://www.svtplay.se/sok?q=det%20sista%20kapitlet"},
     },
@@ -201,6 +201,12 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "runtime_min": 92,
         "kind": "film",
         "links": {"netflix": "https://www.netflix.com/search?q=Kung%20Fu%20Panda"},
+    },
+    "explained": {
+        "services": {"netflix"},
+        "runtime_min": 20,
+        "kind": "series",
+        "links": {"netflix": "https://www.netflix.com/search?q=Explained"},
     },
 }
 

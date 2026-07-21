@@ -33,9 +33,9 @@ class HomeDesignTests(unittest.TestCase):
         # Premium shopping pick card (execute) stays in design system
         self.assertIn("oc-shop-pick-marker", css)
         self.assertIn("oc-shop-tog-marker", css)
-        # Locked chrome: sticky brand header + keyed fixed lang/nav
+        # Locked chrome: fixed brand header + keyed fixed lang/nav
         self.assertIn("oc-topbar", css)
-        self.assertIn("position: sticky", css)
+        self.assertIn("position: fixed", css)
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
         self.assertIn("st-key-oc_lang_pills", css)
