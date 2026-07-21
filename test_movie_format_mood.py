@@ -163,7 +163,8 @@ class MovieDecideLoggingTests(unittest.TestCase):
         good = {
             "suggestion": "En familjevänlig animationsfilm",
             "justification": "Med barnen — lagom äventyr.",
-            "meta": {"kind": "film", "kids_ok": True, "max_age_rating": 7},
+            # TMDB validation requires a catalog-like meta.title.
+            "meta": {"title": "beck", "kind": "film", "kids_ok": True, "max_age_rating": 7},
         }
         r2 = feasibility.feasibility_check(
             good,
@@ -202,6 +203,9 @@ class MovieUiChipTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Format", body)
         self.assertIn("Läge", body)
+        # Card header must reflect movie suggestion format, not static domain label.
+        self.assertIn("AVSNITT", body)
+        self.assertNotIn("FILM", body)
         cur = at.session_state["current"] or {}
         ctx = cur.get("context") if isinstance(cur, dict) else {}
         ctx = ctx or {}

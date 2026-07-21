@@ -640,6 +640,52 @@ def _check_movie(
             break
     title = title.strip(" .")
 
+    # TMDB: verify the title (poster + rating) for movie decisions.
+    # No match => reject hallucinated titles (regenerate once upstream).
+    tmdb_meta: dict[str, Any] = {}
+    try:
+        import tmdb as tmdb_mod
+
+        meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+        local_pack = bool(meta.get("local_pack"))
+
+        # Prefer candidate meta.kind, else fall back to context format kind.
+        meta_kind = str(meta.get("kind") or "").lower()
+        if meta_kind not in ("series", "film"):
+            meta_kind = None
+        if not meta_kind:
+            # fmt -> series/film
+            import movie_domain as md
+
+            meta_kind = md.format_kind(fmt or "avsnitt")
+
+        tmdb_row = tmdb_mod.lookup_title(title, kind=meta_kind)
+        if not tmdb_row:
+            return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+
+        vote_raw = tmdb_row.get("vote_average")
+        vote_f: float | None = None
+        try:
+            if vote_raw is not None:
+                vote_f = float(vote_raw)
+        except (TypeError, ValueError):
+            vote_f = None
+
+        # Quality floor: reject LLM candidates with low TMDB vote.
+        if vote_f is not None and vote_f < 6.5 and not local_pack:
+            return FeasibilityResult(ok=False, reasons=["low_rating"])
+
+        tmdb_meta = {
+            "tmdb_id": tmdb_row.get("tmdb_id"),
+            "poster_url": tmdb_row.get("poster_url"),
+            "vote_average": tmdb_row.get("vote_average"),
+            "year": tmdb_row.get("year"),
+        }
+    except FeasibilityResult:
+        raise
+    except Exception:
+        return FeasibilityResult(ok=False, reasons=["tmdb_error"])
+
     match = mocks.streaming_availability(
         title,
         user_services=services,
@@ -666,7 +712,7 @@ def _check_movie(
                 "url": match.get("url"),
                 "detail": f"{match['runtime_min']} min · {_service_label(match['service'])}",
             },
-            enriched={"meta": {**(candidate.get("meta") or {}), **match}},
+            enriched={"meta": {**(candidate.get("meta") or {}), **match, **tmdb_meta}},
         )
 
     # Generic suggestions without a catalog title: only OK if they don't name a paywalled title
@@ -680,6 +726,8 @@ def _check_movie(
             return FeasibilityResult(ok=False, reasons=[f"unavailable:{known}"])
 
     # Vague "watch a thriller" — pass with search on first service
+    import movie_domain as md
+
     svc = services[0] if services else "netflix"
     return FeasibilityResult(
         ok=True,
@@ -688,6 +736,15 @@ def _check_movie(
             "label": f"Öppna {_service_label(svc)}",
             "url": _service_home(svc),
             "detail": f"Inom ~{minutes} min på dina tjänster",
+        },
+        enriched={
+            "meta": {
+                **(candidate.get("meta") or {}),
+                **tmdb_meta,
+                "service": svc,
+                "runtime_min": None,
+                "kind": md.format_kind(fmt or "avsnitt") if fmt else None,
+            }
         },
     )
 

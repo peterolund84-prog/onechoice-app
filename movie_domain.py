@@ -573,6 +573,7 @@ def local_candidates(
                         "kind": "series",
                         "series_title": name,
                         "in_progress": True,
+                        "local_pack": True,
                     },
                 },
             )
@@ -587,6 +588,7 @@ def local_candidates(
                         "kind": "series",
                         "series_title": name,
                         "in_progress": True,
+                        "local_pack": True,
                     },
                 },
             )
@@ -604,6 +606,7 @@ def local_candidates(
         meta.setdefault("kind", want_kind)
         meta["format"] = fmt_n
         meta["mood"] = mood_n
+        meta["local_pack"] = True
         out.append({**c, "meta": meta})
 
     if not out:
@@ -617,7 +620,12 @@ def local_candidates(
                         else "En film under två timmar"
                     ),
                     "justification": mood_guidance(mood_n, "sv").split("Ton: ")[-1][:80],
-                    "meta": {"kind": want_kind, "format": fmt_n, "mood": mood_n},
+                    "meta": {
+                        "kind": want_kind,
+                        "format": fmt_n,
+                        "mood": mood_n,
+                        "local_pack": True,
+                    },
                 }
             ]
         else:
@@ -629,7 +637,12 @@ def local_candidates(
                         else "A film under two hours"
                     ),
                     "justification": "Right mood for tonight.",
-                    "meta": {"kind": want_kind, "format": fmt_n, "mood": mood_n},
+                    "meta": {
+                        "kind": want_kind,
+                        "format": fmt_n,
+                        "mood": mood_n,
+                        "local_pack": True,
+                    },
                 }
             ]
     return out[:5]
