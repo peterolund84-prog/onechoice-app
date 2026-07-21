@@ -171,7 +171,6 @@ class MealTypeInferTests(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(bool(at.session_state["ui_error"]))
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
-        self.assertIn("recept", body)
         self.assertIn("gör så här", body)
         self.assertNotIn("oc-nut-banner", " ".join(str(m.value or "") for m in at.markdown))
         # No execute-screen nutrition toggle — profile only
@@ -214,7 +213,7 @@ class MealTypeInferTests(unittest.TestCase):
         at.run()
         self.assertEqual(at.session_state["page"], "execute")
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
-        self.assertIn("recept", body)
+        self.assertIn("gör så här", body)
         self.assertTrue("bröd" in body or "ost" in body, body[:800])
 
 

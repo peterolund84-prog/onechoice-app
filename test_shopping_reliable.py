@@ -228,19 +228,31 @@ class ReliableShoppingUiTests(unittest.TestCase):
         # Must choose items — no auto-merge on Handla
         self.assertIsNone(at.session_state["shopping_merged_for"])
         labels = [b.label or "" for b in at.button]
-        self.assertTrue(any("Skapa lista" in lab for lab in labels), labels)
-        self.assertTrue(any("Öppna listan" in lab for lab in labels), labels)
+        self.assertTrue(
+            any("Lägg till i listan" in lab for lab in labels),
+            labels,
+        )
+        self.assertFalse(any("Skapa lista" in lab for lab in labels), labels)
+        self.assertFalse(any(lab == "Öppna listan" for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-shop-pick-marker", body)
-        self.assertIn("oc-shop-tog-marker", body)
+        self.assertIn("oc-shop-row", body)
+        self.assertIn("Bocka i det du behöver", body)
+        # No duplicate ingredient section on execute
+        self.assertNotIn("Ingredienser", body)
+        self.assertIn("Gör så här", body)
+        self.assertIn("per portion", body.lower())
 
         for b in at.button:
-            if b.label and "Skapa lista" in b.label:
+            if b.label and "Lägg till i listan" in b.label:
                 b.click().run()
                 break
-        self.assertEqual(at.session_state["page"], "lista")
+        # Stay on execute; CTA morphs to confirmation with open-list link
+        self.assertEqual(at.session_state["page"], "execute")
         self.assertIsNotNone(at.session_state["shopping_merged_for"])
         self.assertFalse(bool(at.session_state["shopping_list_error"]))
+        body2 = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("Öppna listan", body2)
         cache = at.session_state["shopping_list_cache"]
         self.assertIsInstance(cache, list)
         self.assertGreaterEqual(len(cache), 1)
@@ -256,9 +268,10 @@ class ReliableShoppingUiTests(unittest.TestCase):
 
         src = inspect.getsource(app_mod.inject_css)
         self.assertIn("oc-shop-pick-marker", src)
-        self.assertIn("oc-shop-tog-marker", src)
         self.assertIn("oc-shop-row", src)
         self.assertIn("oc-shop-pick", src)
+        self.assertIn("exec_sticky_cta", src)
+        self.assertIn("oc-exec-lock", src)
 
 
 if __name__ == "__main__":

@@ -160,6 +160,16 @@ def _finalize_recipe(raw: dict[str, Any], *, source: str) -> dict[str, Any]:
     portions = max(1, int(raw.get("portions") or raw.get("portioner") or 1))
     nut_raw = raw.get("nutrition") if isinstance(raw.get("nutrition"), dict) else {}
     rounded = _round_nutrition_block(nut_raw)
+    # Catalog stores per-portion; LLM sometimes returns whole-pot totals.
+    # Values ≥900 with portions≥2 are treated as totals and divided.
+    per_flag = str(nut_raw.get("per") or "").lower()
+    if portions > 1 and rounded["kcal"] >= 900 and per_flag not in ("portion", "serving", "per_portion"):
+        rounded = shopping.round_nutrition(
+            rounded["kcal"] / portions,
+            rounded["protein_g"] / portions,
+            rounded["fat_g"] / portions,
+            rounded["carbs_g"] / portions,
+        )
     mins = raw.get("total_minutes", raw.get("active_minutes"))
     out: dict[str, Any] = {
         "title": title,

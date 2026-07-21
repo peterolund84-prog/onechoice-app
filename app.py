@@ -70,6 +70,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 import traceback
 import uuid
 from datetime import datetime
@@ -167,7 +168,10 @@ I18N = {
         "list_added_badge": "Tillagt i din lista ✓",
         "list_go": "Öppna listan",
         "list_create": "Skapa lista",
-        "list_create_hint": "Bocka i det du behöver — vanliga varor som finns på de stora matkedjorna.",
+        "list_create_hint": "Bocka i det du behöver",
+        "list_add_n": "Lägg till i listan ({n})",
+        "list_added_open": "Tillagt ✓ · Öppna listan",
+        "list_skip_hint": "hoppa över om du har",
         "list_created": "Inköpslistan är uppdaterad.",
         "list_error": "Kunde inte spara listan just nu. Försök igen.",
         "list_local_note": "Listan sparas lokalt på den här enheten (molntabellen shopping_items saknas ännu).",
@@ -318,7 +322,10 @@ I18N = {
         "list_added_badge": "Added to your list ✓",
         "list_go": "Open list",
         "list_create": "Create list",
-        "list_create_hint": "Check what you need — staples available at major Swedish chains.",
+        "list_create_hint": "Check what you need",
+        "list_add_n": "Add to list ({n})",
+        "list_added_open": "Added ✓ · Open list",
+        "list_skip_hint": "skip if you have it",
         "list_created": "Shopping list updated.",
         "list_error": "Could not save the list right now. Try again.",
         "list_local_note": "List is saved on this device (cloud table shopping_items is not set up yet).",
@@ -805,7 +812,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    z-index: 999 !important;
+    z-index: 1100 !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -880,6 +887,14 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     z-index: 0;
     transform: translateX(-50%) translateY(-42%);
     animation: oc-orb-breathe 8s ease-in-out infinite alternate;
+    overflow: hidden;
+    clip-path: inset(-40% -20% 20% -20%);
+}}
+.oc-hero-orb {{
+    z-index: 0 !important;
+}}
+.oc-header, .st-key-oc_lang_bar {{
+    z-index: 1100 !important;
 }}
 @keyframes oc-orb-breathe {{
     from {{ transform: translateX(-50%) translateY(-42%) scale(1); }}
@@ -1916,56 +1931,141 @@ div[data-baseweb="input"] {{
     border-color: var(--oc-accent);
     color: var(--oc-accent);
 }}
-/* Executable shopping picks — same card as preview, not bare Streamlit buttons */
+/* Executable shopping — quiet checklist rows (indigo reserved for ONE CTA) */
 .oc-shop-pick {{
     background: #fff;
-    border-radius: 20px;
-    border: 1px solid var(--oc-border);
-    padding: 1.15rem 1.1rem 1rem;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    padding: 12px 0 8px;
     margin: 0 0 1.1rem;
     text-align: left;
+    overflow: hidden;
 }}
 .oc-shop-pick .oc-shop-title {{
-    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--oc-muted); font-weight: 600; margin: 0 0 0.75rem;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600; margin: 0 16px 8px;
     font-family: "Inter", sans-serif !important;
 }}
 .oc-shop-pick .oc-sec-label {{
-    margin: 0.85rem 0 0.3rem;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600;
+    margin: 14px 16px 4px;
+    font-family: "Inter", sans-serif !important;
 }}
 .oc-shop-pick .oc-sec-label:first-of-type {{
-    margin-top: 0.15rem;
+    margin-top: 4px;
 }}
 .oc-shop-pick .oc-assumed {{
-    margin: 0.85rem 0 0; padding-top: 0.7rem;
-    border-top: 1px solid var(--oc-border);
-    font-size: 0.92rem; color: var(--oc-muted); line-height: 1.4;
+    margin: 10px 16px 8px; padding-top: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    font-size: 13px; color: var(--oc-muted); line-height: 1.4;
+}}
+a.oc-shop-row {{
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    padding: 0 16px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    background: #fff !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    font-family: "Inter", sans-serif !important;
+}}
+a.oc-shop-row:last-of-type {{
+    border-bottom: none !important;
+}}
+a.oc-shop-row .oc-chk {{
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(0, 0, 0, 0.18);
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: transparent;
+    font-size: 12px;
+    line-height: 1;
+}}
+a.oc-shop-row.checked .oc-chk {{
+    background: {ACCENT};
+    border-color: {ACCENT};
+    color: #fff;
+}}
+a.oc-shop-row .oc-shop-name {{
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--oc-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}}
+a.oc-shop-row .oc-shop-amt {{
+    flex: 0 0 auto;
+    font-size: 14px;
+    font-weight: 400;
+    color: var(--oc-muted);
+    white-space: nowrap;
+}}
+a.oc-shop-row .oc-shop-hint {{
+    display: block;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--oc-muted);
+    line-height: 1.2;
+    margin-top: 2px;
+}}
+a.oc-shop-row.checked {{
+    opacity: 0.5;
+}}
+a.oc-shop-row.checked .oc-shop-name {{
+    text-decoration: line-through;
 }}
 /* Streamlit bordered container used as premium shop card */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) {{
     background: #fff !important;
-    border: 1px solid var(--oc-border) !important;
-    border-radius: 20px !important;
-    box-shadow: none !important;
-    padding: 0.85rem 0.85rem 0.65rem !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    padding: 4px 0 2px !important;
     margin: 0 0 1.1rem !important;
 }}
 .oc-shop-pick-marker {{ display: none !important; height: 0 !important; margin: 0 !important; }}
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-shop-title {{
-    font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase;
-    color: var(--oc-muted); font-weight: 600; margin: 0 0 0.55rem;
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600; margin: 8px 16px 4px;
     font-family: "Inter", sans-serif !important;
 }}
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-assumed {{
-    margin: 0.75rem 0 0.15rem; padding-top: 0.65rem;
-    border-top: 1px solid var(--oc-border);
-    font-size: 0.92rem; color: var(--oc-muted); line-height: 1.4;
+    margin: 8px 16px 10px; padding-top: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    font-size: 13px; color: var(--oc-muted); line-height: 1.4;
 }}
-/* Toggle rows — kill Streamlit chrome, mimic oc-shop-row */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-sec-label {{
+    font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600;
+    margin: 12px 16px 2px;
+}}
+/* Legacy toggle markers kept for persistent lista page */
 .oc-shop-tog-marker {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
 .oc-shop-tog-marker + div[data-testid="stHorizontalBlock"],
 div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] {{
-    margin: 0.28rem 0 !important;
+    margin: 0 !important;
 }}
 .oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
 .oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
@@ -1977,40 +2077,111 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    gap: 0.65rem !important;
-    min-height: 3rem !important;
-    height: auto !important;
-    padding: 0.85rem 1rem !important;
+    gap: 12px !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 0 16px !important;
     margin: 0 !important;
-    border: 1px solid var(--oc-border) !important;
-    border-radius: 12px !important;
+    border: none !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 0 !important;
     background: #fff !important;
+    background-color: #fff !important;
+    background-image: none !important;
     color: var(--oc-ink) !important;
     box-shadow: none !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 1rem !important;
+    font-size: 16px !important;
     font-weight: 500 !important;
-    line-height: 1.3 !important;
+    line-height: 1.2 !important;
     text-align: left !important;
 }}
 .oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[kind="primary"],
 .oc-shop-tog-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"],
 div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] button[kind="primary"],
 div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"] {{
+    background: #fff !important;
+    background-color: #fff !important;
     color: var(--oc-muted) !important;
     text-decoration: line-through !important;
-    opacity: 0.72 !important;
-    border-color: var(--oc-accent) !important;
+    opacity: 0.5 !important;
+    border-color: transparent !important;
 }}
 .oc-list-badge {{
-    display: inline-block;
-    margin: 0.25rem 0 0.75rem;
-    padding: 0.35rem 0.65rem;
-    border-radius: 999px;
-    background: {PRIMARY_SOFT};
+    display: none;
+}}
+.oc-decision.oc-exec-lock {{
+    max-height: 160px;
+    overflow: hidden;
+    padding: 1rem 1.1rem 0.9rem !important;
+    margin: 0 0 0.75rem !important;
+}}
+.oc-decision.oc-exec-lock h1 {{
+    font-size: 1.35rem !important;
+    margin: 0.35rem 0 0.5rem !important;
+    line-height: 1.15 !important;
+}}
+.oc-exec-meta {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    align-items: center;
+    margin: 0 0 1rem;
+    font-family: "Inter", sans-serif !important;
+    font-size: 14px;
+    color: var(--oc-muted);
+    line-height: 1.35;
+}}
+.oc-exec-meta .oc-nutrition {{
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    color: var(--oc-muted) !important;
+}}
+.oc-recipe.oc-recipe-steps-only .oc-sec:first-of-type {{
+    margin-top: 0;
+}}
+.st-key-exec_sticky_cta {{
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(58px + env(safe-area-inset-bottom)) !important;
+    z-index: 998 !important;
+    width: 100% !important;
+    max-width: 420px !important;
+    margin: 0 auto !important;
+    padding: 10px 20px !important;
+    box-sizing: border-box !important;
+    background: rgba(250, 250, 247, 0.92) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
+}}
+.st-key-exec_sticky_cta div.stButton {{
+    margin: 0 !important;
+    width: 100% !important;
+}}
+.st-key-exec_sticky_cta .oc-list-confirm {{
+    text-align: center;
+    margin: 0;
+    padding: 12px 8px;
+    font-family: "Inter", sans-serif !important;
+    font-size: 15px;
+    font-weight: 500;
     color: var(--oc-ink);
-    font-size: 0.82rem;
-    font-weight: 600;
+}}
+.st-key-exec_sticky_cta .oc-list-confirm a {{
+    color: var(--oc-accent);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}}
+.block-container:has(.oc-shop-pick-marker),
+.block-container:has(.st-key-exec_sticky_cta) {{
+    padding-bottom: calc(160px + env(safe-area-inset-bottom)) !important;
 }}
 /* Final win: keyed lang/nav over any leftover chip chrome */
 .st-key-oc_lang_bar button,
@@ -2603,7 +2774,7 @@ def page_auth() -> None:
 
 def _clear_action_query_params() -> None:
     """Drop ?domain= / ?nav= params that cause reload loops after auth loss."""
-    for key in ("domain", "pick", "nav", "shop_toggle", "occasion", "meal", "lang"):
+    for key in ("domain", "pick", "nav", "shop_toggle", "shop_check", "occasion", "meal", "lang"):
         try:
             del st.query_params[key]
         except Exception:
@@ -3525,6 +3696,11 @@ def _selected_to_buy_from_checks(
     return selected
 
 
+def _count_checked_shop_items(shop: dict[str, Any], decision_id: int | None) -> int:
+    selected = _selected_to_buy_from_checks(shop, decision_id)
+    return sum(len(v) for v in selected.values())
+
+
 def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
     did = decision_id if decision_id is not None else "x"
     ckey = f"{did}:{idx}"
@@ -3533,6 +3709,78 @@ def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
         checks = {}
         st.session_state.shopping_checks = checks
     checks[ckey] = not bool(checks.get(ckey, True))
+
+
+def _split_shop_item_label(raw: str) -> tuple[str, bool]:
+    """Return (clean name, has skip-if-you-have hint)."""
+    text = str(raw or "").strip()
+    if not text:
+        return "", False
+    low = text.lower()
+    has_hint = "hoppa över" in low or "skip if" in low
+    parts = re.split(r"\s*[—–-]\s*", text, maxsplit=1)
+    name = (parts[0] if parts else text).strip()
+    return name, has_hint
+
+
+def _recipe_amount_map(recipe: dict[str, Any] | None) -> dict[str, str]:
+    """Map normalized ingredient name → amount string like '2 dl'."""
+    out: dict[str, str] = {}
+    if not isinstance(recipe, dict):
+        return out
+    import shopping as shopping_mod
+
+    structured = recipe.get("ingredients_structured")
+    if isinstance(structured, list):
+        for ing in structured:
+            if not isinstance(ing, dict):
+                continue
+            name = shopping_mod._norm_item(str(ing.get("name") or ""))
+            if not name:
+                continue
+            amount = str(ing.get("amount") or "").strip()
+            unit = str(ing.get("unit") or "").strip()
+            if amount and unit:
+                out[name] = f"{amount} {unit}".strip()
+            elif amount:
+                out[name] = amount
+    units = r"dl|msk|tsk|krm|g|kg|ml|cl|st|skivor|näve"
+    amt_trailing = re.compile(
+        rf"^(?P<name>.+?)\s+(?P<amt>\d+[.,]?\d*)\s*(?P<unit>{units})?\s*$",
+        re.IGNORECASE,
+    )
+    amt_leading = re.compile(
+        rf"^(?P<amt>\d+[.,]?\d*)\s*(?P<unit>{units})\s+(?P<name>.+)$",
+        re.IGNORECASE,
+    )
+    for line in list(recipe.get("ingredient_lines") or recipe.get("ingredients") or []):
+        if isinstance(line, dict):
+            continue
+        raw = str(line).strip()
+        if not raw:
+            continue
+        m = amt_leading.match(raw) or amt_trailing.match(raw)
+        if not m:
+            continue
+        name = shopping_mod._norm_item(m.group("name"))
+        if not name or name in out:
+            continue
+        amt = (m.group("amt") or "").replace(",", ".")
+        unit = (m.group("unit") or "").strip()
+        out[name] = f"{amt} {unit}".strip() if unit else amt
+    return out
+
+
+def _lookup_amount(amount_map: dict[str, str], name: str) -> str:
+    import shopping as shopping_mod
+
+    key = shopping_mod._norm_item(name)
+    if key in amount_map:
+        return amount_map[key]
+    for k, v in amount_map.items():
+        if key in k or k in key:
+            return v
+    return ""
 
 
 def _history_status_label(status: str) -> str:
@@ -3761,73 +4009,80 @@ def render_persistent_shopping_list() -> None:
 
 
 def render_decision_shopping_added(
-    shop: dict[str, Any] | None, language: str
+    shop: dict[str, Any] | None,
+    language: str,
+    *,
+    recipe: dict[str, Any] | None = None,
 ) -> None:
-    """Execute: bocka varor → Skapa lista → persistent Inköpslista."""
+    """Execute: quiet checklist card (CTA rendered separately as sticky)."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
     if not isinstance(to_buy, dict) or not to_buy:
         return
 
-    did = _active_decision_id()
-    merged_for = st.session_state.get("shopping_merged_for")
-    already = did is not None and merged_for is not None and int(merged_for) == int(did)
     err = st.session_state.get("shopping_list_error")
-
     if err:
         st.warning(t("list_error"))
         st.caption(html.escape(str(err)[:160]))
-    elif already:
-        st.markdown(
-            f'<div class="oc-list-badge">{html.escape(t("list_added_badge"))}</div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            f'<p class="oc-meta">{html.escape(t("list_create_hint"))}</p>',
-            unsafe_allow_html=True,
-        )
 
     if getattr(db, "_SHOPPING_FORCE_SQLITE", False):
         st.caption(t("list_local_note"))
 
-    render_checkable_shopping(shop, did)
-
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button(
-            t("list_create"),
-            type="primary",
-            use_container_width=True,
-            key="exec_create_list",
-        ):
-            selected = _selected_to_buy_from_checks(shop, did)
-            payload = selected if selected else to_buy
-            n = _merge_to_buy_into_list(payload, did)
-            if n:
-                try:
-                    safe_toast(t("list_created"))
-                except Exception:
-                    pass
-                st.session_state.page = "lista"
-                st.session_state.shopping_list_error = None
-            elif not st.session_state.get("shopping_list_error"):
-                st.session_state.shopping_list_error = t("list_error")
-            st.rerun()
-    with c2:
-        if st.button(
-            t("list_go"),
-            type="secondary",
-            use_container_width=True,
-            key="exec_open_list",
-        ):
-            st.session_state.page = "lista"
-            st.rerun()
+    did = _active_decision_id()
+    render_checkable_shopping(shop, did, recipe=recipe)
 
 
-def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | None) -> None:
-    """Toggleable shopping items — premium card matching the decision preview."""
+def render_execute_sticky_cta(shop: dict[str, Any] | None) -> None:
+    """Single indigo CTA above nav — indigo reserved for this one action."""
+    if not shop or not isinstance(shop, dict):
+        return
+    to_buy = shop.get("to_buy") or {}
+    if not isinstance(to_buy, dict) or not to_buy:
+        return
+    did = _active_decision_id()
+    merged_for = st.session_state.get("shopping_merged_for")
+    already = did is not None and merged_for is not None and int(merged_for) == int(did)
+    checked_n = _count_checked_shop_items(shop, did)
+    with st.container(key="exec_sticky_cta"):
+        if already:
+            href = html.escape(_qp_href(nav="lista"), quote=True)
+            st.markdown(
+                f'<p class="oc-list-confirm">'
+                f'{html.escape(t("list_added_badge").replace("✓", "").strip())} ✓'
+                f' · <a href="{href}">{html.escape(t("list_go"))}</a></p>',
+                unsafe_allow_html=True,
+            )
+        else:
+            label = t("list_add_n").format(n=checked_n)
+            if st.button(
+                label,
+                type="primary",
+                use_container_width=True,
+                key="exec_create_list",
+                disabled=checked_n <= 0,
+            ):
+                selected = _selected_to_buy_from_checks(shop, did)
+                payload = selected if selected else to_buy
+                n = _merge_to_buy_into_list(payload, did)
+                if n:
+                    try:
+                        safe_toast(t("list_created"))
+                    except Exception:
+                        pass
+                    st.session_state.shopping_list_error = None
+                elif not st.session_state.get("shopping_list_error"):
+                    st.session_state.shopping_list_error = t("list_error")
+                st.rerun()
+
+
+def render_checkable_shopping(
+    shop: dict[str, Any] | None,
+    decision_id: int | None,
+    *,
+    recipe: dict[str, Any] | None = None,
+) -> None:
+    """Quiet checkbox rows — one card, amounts right-aligned, tap toggles."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -3841,49 +4096,59 @@ def render_checkable_shopping(shop: dict[str, Any] | None, decision_id: int | No
         checks = {}
         st.session_state.shopping_checks = checks
     did = decision_id if decision_id is not None else "x"
+    recipe_src = recipe if isinstance(recipe, dict) else None
+    if recipe_src is None and isinstance(shop.get("recipe"), dict):
+        recipe_src = shop.get("recipe")
+    amount_map = _recipe_amount_map(recipe_src)
+
+    rows_html: list[str] = [
+        '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
+        f'<div class="oc-shop-title">{html.escape(t("list_create_hint"))}</div>',
+    ]
+    idx = 0
+    for section, items in to_buy.items():
+        if not items:
+            continue
+        if isinstance(items, str):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            continue
+        rows_html.append(
+            f'<div class="oc-sec-label">{html.escape(str(section))}</div>'
+        )
+        for item in items:
+            ckey = f"{did}:{idx}"
+            checked = bool(checks.get(ckey, True))
+            name, has_hint = _split_shop_item_label(str(item))
+            amt = _lookup_amount(amount_map, name)
+            href = html.escape(_qp_href(shop_check=str(idx)), quote=True)
+            cls = "oc-shop-row checked" if checked else "oc-shop-row"
+            chk = "✓" if checked else ""
+            name_html = html.escape(name)
+            if has_hint:
+                name_html += (
+                    f'<span class="oc-shop-hint">{html.escape(t("list_skip_hint"))}</span>'
+                )
+            amt_html = (
+                f'<span class="oc-shop-amt">{html.escape(amt)}</span>' if amt else ""
+            )
+            rows_html.append(
+                f'<a class="{cls}" href="{href}">'
+                f'<span class="oc-chk">{chk}</span>'
+                f'<span class="oc-shop-name">{name_html}</span>'
+                f"{amt_html}"
+                f"</a>"
+            )
+            idx += 1
+
+    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+    if not isinstance(assumed, (list, tuple)):
+        assumed = ["salt", "peppar", "olja"]
+    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
+    rows_html.append(f'<p class="oc-assumed">{html.escape(assumed_line)}</p>')
 
     with st.container(border=True):
-        st.markdown(
-            '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            f'<div class="oc-shop-title">{html.escape(t("shop_title"))}</div>',
-            unsafe_allow_html=True,
-        )
-        idx = 0
-        for section, items in to_buy.items():
-            if not items:
-                continue
-            if isinstance(items, str):
-                items = [items]
-            if not isinstance(items, (list, tuple)):
-                continue
-            st.markdown(
-                f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
-                unsafe_allow_html=True,
-            )
-            for item in items:
-                ckey = f"{did}:{idx}"
-                checked = bool(checks.get(ckey, True))
-                mark = "✓  " if checked else "○  "
-                if _render_shop_toggle_button(
-                    label=f"{mark}{item}",
-                    key=f"shop_tog_{did}_{idx}",
-                    checked=checked,
-                ):
-                    _toggle_shop_check(decision_id, idx)
-                    st.rerun()
-                idx += 1
-
-        assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
-        if not isinstance(assumed, (list, tuple)):
-            assumed = ["salt", "peppar", "olja"]
-        assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
-        st.markdown(
-            f'<p class="oc-assumed">{html.escape(assumed_line)}</p>',
-            unsafe_allow_html=True,
-        )
+        st.markdown("".join(rows_html), unsafe_allow_html=True)
 
 
 def _profile_show_nutrition() -> bool:
@@ -3988,8 +4253,8 @@ def _format_nutrition_fallback(
     except (TypeError, ValueError):
         return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
     if language == "en":
-        return f"Approx. {k_i} kcal · {p_i} g protein / serving"
-    return f"Ca {k_i} kcal · {p_i} g protein / portion"
+        return f"Approx. {k_i} kcal per serving · {p_i} g protein"
+    return f"Ca {k_i} kcal per portion · {p_i} g protein"
 
 
 def render_top_chrome(*, extra_class: str = "") -> None:
@@ -4009,6 +4274,7 @@ def render_food_recipe(
     fallback_ings: list[str] | None = None,
     *,
     show_nutrition: bool | None = None,
+    include_ingredients: bool = True,
 ) -> None:
     """Single entry for food recipe cards — always show the same kcal line."""
     import shopping as shopping_mod
@@ -4029,7 +4295,12 @@ def render_food_recipe(
                 )
         except Exception:
             healed = recipe
-    render_recipe_block(healed, fallback_ings, show_nutrition=show_nutrition)
+    render_recipe_block(
+        healed,
+        fallback_ings,
+        show_nutrition=show_nutrition,
+        include_ingredients=include_ingredients,
+    )
 
 
 def render_recipe_block(
@@ -4037,6 +4308,7 @@ def render_recipe_block(
     fallback_ings: list[str] | None = None,
     *,
     show_nutrition: bool | None = None,
+    include_ingredients: bool = True,
 ) -> None:
     if not recipe or not isinstance(recipe, dict):
         if fallback_ings:
@@ -4048,18 +4320,29 @@ def render_recipe_block(
     nutrition_html = ""
     if show_nutrition is None:
         show_nutrition = True
-    if show_nutrition:
+    if show_nutrition and include_ingredients:
         line, has_vals = _nutrition_display_line(recipe)
         cls = "oc-nutrition" if has_vals else "oc-nutrition missing"
         nutrition_html = f'<p class="{cls}">{html.escape(line)}</p>'
-    # Nutrition directly under RECEPT title — visible without scrolling past steps
+    ings_html = ""
+    if include_ingredients:
+        ings_html = (
+            f'<div class="oc-sec">{html.escape(t("ingredients_title"))}</div>'
+            f'<ul>{"".join(f"<li>{html.escape(str(i))}</li>" for i in ings)}</ul>'
+        )
+        title = f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
+        steps_sec = f'<div class="oc-sec">{html.escape(t("steps_title"))}</div>'
+        card_cls = "oc-recipe"
+    else:
+        title = f'<div class="oc-shop-title">{html.escape(t("steps_title"))}</div>'
+        steps_sec = ""
+        card_cls = "oc-recipe oc-recipe-steps-only"
     st.markdown(
-        f'<div class="oc-recipe">'
-        f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
+        f'<div class="{card_cls}">'
+        f"{title}"
         f"{nutrition_html}"
-        f'<div class="oc-sec">{html.escape(t("ingredients_title"))}</div>'
-        f'<ul>{"".join(f"<li>{html.escape(str(i))}</li>" for i in ings)}</ul>'
-        f'<div class="oc-sec">{html.escape(t("steps_title"))}</div>'
+        f"{ings_html}"
+        f"{steps_sec}"
         f'<ol>{"".join(f"<li>{html.escape(str(s))}</li>" for s in steps)}</ol>'
         f"</div>",
         unsafe_allow_html=True,
@@ -5416,9 +5699,8 @@ def page_execute() -> None:
     # ----- Food shopping + recipe (minimal — never escalates to ui_error) -----
     suggestion = str(cur.get("suggestion") or "")
     st.markdown(
-        f'<div class="oc-decision" style="padding:1.4rem 1.2rem 1.2rem;margin-bottom:0.9rem">'
-        f'<div class="label">{html.escape(domain_label(domain or "food"))}</div>'
-        f'<h1 style="font-size:1.55rem">{html.escape(suggestion)}</h1>'
+        f'<div class="oc-decision oc-exec-lock">'
+        f'<h1>{html.escape(suggestion)}</h1>'
         f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
         f"</div>",
         unsafe_allow_html=True,
@@ -5581,15 +5863,51 @@ def page_execute() -> None:
                 grok_api_key="",
             )
 
-    if isinstance(recipe, dict) and recipe.get("active_minutes") is not None:
+    # Meta row: time · portions · nutrition (per portion)
+    meta_bits: list[str] = []
+    if isinstance(recipe, dict):
         try:
-            st.caption(t("recipe_mins").format(mins=int(recipe["active_minutes"])))
+            import shopping as shopping_mod
+
+            recipe = shopping_mod.ensure_recipe_nutrition(
+                recipe,
+                suggestion=suggestion,
+                allow_estimate=True,
+            )
         except Exception:
             pass
+        mins = recipe.get("active_minutes") or recipe.get("total_minutes")
+        if mins is not None:
+            try:
+                meta_bits.append(f"⏱ {t('recipe_mins').format(mins=int(mins))}")
+            except Exception:
+                pass
+        portions = recipe.get("portioner") or recipe.get("portions")
+        if portions:
+            try:
+                n = int(portions)
+                if language == "en":
+                    meta_bits.append(f"{n} servings")
+                else:
+                    meta_bits.append(f"{n} portioner")
+            except (TypeError, ValueError):
+                pass
+        nut_line, has_nut = _nutrition_display_line(recipe)
+        if has_nut:
+            meta_bits.append(nut_line)
+    if meta_bits:
+        st.markdown(
+            f'<div class="oc-exec-meta">{html.escape(" · ".join(meta_bits))}</div>',
+            unsafe_allow_html=True,
+        )
 
     did = _active_decision_id(cur)
     try:
-        render_decision_shopping_added(shop, language)
+        render_decision_shopping_added(
+            shop,
+            language,
+            recipe=recipe if isinstance(recipe, dict) else None,
+        )
     except Exception as exc:
         log.warning("shopping list render failed: %s", exc)
 
@@ -5599,22 +5917,24 @@ def page_execute() -> None:
         else []
     )
     try:
+        # Checklist IS the ingredient list — recipe card shows steps only
         render_food_recipe(
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
+            include_ingredients=False,
         )
     except Exception as exc:
         log.warning("recipe render failed: %s", exc)
-        # Last-resort plain markdown so the user is never stuck
-        if ings_fallback:
-            st.markdown("**" + t("ingredients_title") + "**")
-            for item in ings_fallback:
-                st.markdown(f"- {item}")
         steps = list((recipe or {}).get("steps") or []) if isinstance(recipe, dict) else []
         if steps:
             st.markdown("**" + t("steps_title") + "**")
             for i, step in enumerate(steps, 1):
                 st.markdown(f"{i}. {step}")
+
+    try:
+        render_execute_sticky_cta(shop if isinstance(shop, dict) else None)
+    except Exception as exc:
+        log.warning("sticky CTA render failed: %s", exc)
 
     if st.button(
         t("back_to_decision"),
@@ -6057,6 +6377,23 @@ def handle_query_params() -> None:
         except (TypeError, ValueError) as exc:
             log.warning("invalid shop_toggle %r: %s", shop_toggle, exc)
         for key in ("shop_toggle", "guest"):
+            try:
+                del st.query_params[key]
+            except Exception:
+                pass
+        if st.session_state.get("guest_mode"):
+            _set_guest_query_param()
+        st.rerun()
+
+    shop_check = _qp_one(qp.get("shop_check"))
+    if shop_check is not None:
+        try:
+            idx = int(shop_check)
+            did = _active_decision_id()
+            _toggle_shop_check(did, idx)
+        except (TypeError, ValueError) as exc:
+            log.warning("invalid shop_check %r: %s", shop_check, exc)
+        for key in ("shop_check", "guest"):
             try:
                 del st.query_params[key]
             except Exception:

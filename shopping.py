@@ -756,6 +756,10 @@ def ensure_recipe_nutrition(
 
     if nutrition_fields_valid(kcal, protein, portions):
         k_i, p_i, n_i = int(kcal), int(protein), int(portions)
+        # Guard: LLM/history sometimes stores whole-pot kcal as kcal_per_portion
+        if n_i > 1 and k_i >= 900:
+            k_i = int(round(k_i / n_i / 50.0) * 50)
+            p_i = int(round(p_i / n_i / 5.0) * 5)
         out["kcal_per_portion"] = k_i
         out["protein_g_per_portion"] = p_i
         out["portioner"] = n_i
@@ -825,11 +829,11 @@ def format_nutrition_line(
         carbs = 0
     if language == "en":
         return (
-            f"Approx. {kcal} kcal · {protein} g protein · "
+            f"Approx. {kcal} kcal per serving · {protein} g protein · "
             f"{fat} g fat · {carbs} g carbs"
         )
     return (
-        f"Ca {kcal} kcal · {protein} g protein · "
+        f"Ca {kcal} kcal per portion · {protein} g protein · "
         f"{fat} g fett · {carbs} g kolh."
     )
 

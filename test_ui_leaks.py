@@ -72,7 +72,7 @@ class UiLeakTests(unittest.TestCase):
         self.assertFalse(bool(at.session_state["ui_error"]))
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
         self.assertNotIn("attributeerror", body)
-        self.assertIn("recept", body)
+        self.assertIn("gör så här", body)
 
 
 if __name__ == "__main__":
