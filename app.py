@@ -142,6 +142,7 @@ I18N = {
         "home_or_choose": "Eller välj själv",
         "home_free_placeholder": "Eller skriv vad du behöver bestämma…",
         "home_free_submit": "Bestäm",
+        "home_fridge_card": "Fota kylen",
         "new": "Nytt förslag",
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
@@ -292,6 +293,7 @@ I18N = {
         "home_or_choose": "Or choose yourself",
         "home_free_placeholder": "Or type what you need to decide…",
         "home_free_submit": "Decide",
+        "home_fridge_card": "Snap the fridge",
         "new": "New suggestion",
         "lock_msg": "It’s {suggestion}. Go.",
         "do_it": "Do it now",
@@ -931,9 +933,14 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     padding: 0 !important;
     width: 100% !important;
 }}
+.st-key-home_domains [data-testid="stMarkdownContainer"],
+.st-key-home_domains [data-testid="stMarkdownContainer"] p {{
+    margin: 0 !important;
+    padding: 0 !important;
+}}
 .oc-domain-grid {{
     display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -955,6 +962,12 @@ a.oc-domain-card {{
     transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
     min-height: 52px !important;
     height: 52px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    transform: none !important;
+    align-self: stretch !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
 }}
@@ -989,11 +1002,21 @@ a.oc-domain-card:focus {{
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
 }}
 .st-key-home_free_form {{
     margin: 0 !important;
     padding: 0 0 20px !important;
     width: 100% !important;
+}}
+.st-key-home_free_form [data-testid="stWidgetLabel"] {{
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
 }}
 .st-key-home_free_form [data-testid="stTextInput"] input {{
     border-radius: 12px !important;
@@ -2779,7 +2802,7 @@ def _render_domain_card(domain: str, *, href_params: dict[str, str] | None = Non
     href = html.escape(_domain_card_href(**params), quote=True)
     icon = _DOMAIN_CARD_ICONS.get(domain, "")
     if domain == "fridge":
-        label = t("fridge_cta")
+        label = t("home_fridge_card")
     else:
         label = domain_label(domain)
     return (
@@ -4079,8 +4102,9 @@ def page_home() -> None:
     with st.container(key="home_free_form"):
         with st.form("home_free_form", clear_on_submit=False, border=False):
             q = st.text_input(
-                "home_free_input",
+                t("ask"),
                 label_visibility="collapsed",
+                key="home_free_input",
                 placeholder=t("home_free_placeholder"),
                 max_chars=rt.MAX_INPUT_CHARS,
             )

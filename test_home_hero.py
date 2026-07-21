@@ -99,7 +99,8 @@ class HomeHeroTests(unittest.TestCase):
         self.assertIn("oc-domain-card", body)
         for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
             self.assertIn(needle, body, f"missing domain card {needle}")
-        self.assertIn("kylen", body.lower())
+        self.assertIn("Fota kylen", body)
+        self.assertNotIn("Vad finns i kylen?", body)
         # Valid inline SVG icons — no broken glyph placeholders
         self.assertGreaterEqual(body.count('xmlns="http://www.w3.org/2000/svg"'), 6)
         self.assertNotIn("▯", body)
@@ -174,6 +175,37 @@ class HomeHeroTests(unittest.TestCase):
         )
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertNotIn("home_free_input", body.lower())
+        labels = [str(getattr(inp, "label", "") or "") for inp in getattr(at, "text_input", [])]
+        self.assertFalse(any("home_free_input" in lab.lower() for lab in labels), labels)
+
+
+    def test_home_centerline_css_rules(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        css = " ".join(str(m.value or "") for m in at.markdown)
+        for needle in (
+            "left: 50%",
+            "translateX(-50%)",
+            "text-align: center",
+            "oc-hero-title",
+            "oc-section-label",
+            "oc-header-wordmark",
+        ):
+            self.assertIn(needle, css, needle)
+
+    def test_home_domain_card_labels_fit_compact_row(self) -> None:
+        import app as app_mod
+
+        labels = [
+            app_mod.I18N["sv"]["domains"][d]
+            for d in ("food", "clothes", "movie", "workout", "weekend")
+        ]
+        labels.append(app_mod.I18N["sv"]["home_fridge_card"])
+        # ~170px card @ 390px viewport — keep labels short (no font shrink)
+        for label in labels:
+            self.assertLessEqual(len(label), 12, label)
 
 
 if __name__ == "__main__":

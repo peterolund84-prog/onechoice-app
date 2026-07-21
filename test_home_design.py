@@ -29,7 +29,9 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-orb-breathe", css)
         self.assertIn("oc-domain-grid", css)
         self.assertIn("flex-direction: row", css)
+        self.assertIn("minmax(0, 1fr)", css)
         self.assertIn("height: 52px", css)
+        self.assertIn("width: 100%", css)
         self.assertIn("clamp(38px, 10vw, 52px)", css)
         self.assertIn("translateX(-50%)", css)
         self.assertIn("translateY(-42%)", css)
@@ -56,7 +58,8 @@ class HomeDesignTests(unittest.TestCase):
         labels = [b.label or "" for b in at.button]
         self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("kylen", body.lower())
+        self.assertIn("Fota kylen", body)
+        self.assertNotIn("Vad finns i kylen?", body)
         caps = [str(c.value or "") for c in at.caption]
         self.assertFalse(any("/" in c and c[:1].isdigit() for c in caps), caps)
         self.assertIn("oc-hero-title", body)
