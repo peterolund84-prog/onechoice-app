@@ -161,6 +161,10 @@ class MealTypeInferTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         self.assertEqual(at.session_state["page"], "result")
+        for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
         hit = False
         for b in at.button:
             if b.label and "Ät nu" in b.label:

@@ -220,6 +220,10 @@ class ReliableShoppingUiTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
+        for b in at.button:
             if b.label and "Handla" in b.label:
                 b.click().run()
                 break
@@ -236,15 +240,32 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertFalse(any(lab == "Öppna listan" for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-shop-pick-marker", body)
-        self.assertIn("oc-shop-row", body)
         self.assertIn("Bocka i det du behöver", body)
+        self.assertIn("Markera alla", " ".join(labels + [body]))
         # No duplicate ingredient section on execute
         self.assertNotIn("Ingredienser", body)
         self.assertIn("Gör så här", body)
         self.assertIn("per portion", body.lower())
+        # Selection starts empty — CTA disabled at (0) or absent count
+        self.assertTrue(
+            any("Lägg till i listan (0)" in lab for lab in labels)
+            or any(getattr(b, "disabled", False) for b in at.button if b.label and "Lägg till" in b.label),
+            labels,
+        )
 
+        # Mark all then add
         for b in at.button:
-            if b.label and "Lägg till i listan" in b.label:
+            if b.label and "Markera alla" in b.label:
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "execute")
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(
+            any("Lägg till i listan" in lab and "(0)" not in lab for lab in labels),
+            labels,
+        )
+        for b in at.button:
+            if b.label and "Lägg till i listan" in b.label and "(0)" not in b.label:
                 b.click().run()
                 break
         # Stay on execute; CTA morphs to confirmation with open-list link

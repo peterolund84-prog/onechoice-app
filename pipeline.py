@@ -380,6 +380,9 @@ def decide(
             recent_dinner=ctx.get("recent_dinner_title"),
         )
         if pinned:
+            import food_categories as fcat
+
+            pinned = fcat.stamp_dish_categories(pinned)
             typed = [
                 c
                 for c in candidates
@@ -702,6 +705,15 @@ def decide(
             execution["shopping"] = shop
     status = "locked" if locked else "shown"
 
+    dish_category = None
+    if domain == "food":
+        import food_categories as fcat
+
+        dish_category = fcat.infer_dish_category(
+            suggestion,
+            meta=top.get("meta") if isinstance(top.get("meta"), dict) else {},
+        )
+
     decision = db.create_decision(
         user_id=user_id,
         domain=domain,
@@ -738,6 +750,7 @@ def decide(
             "shopping": execution.get("shopping"),
             "recipe": execution.get("recipe")
             or (execution.get("shopping") or {}).get("recipe"),
+            "dish_category": dish_category,
             "workout": workout_payload or execution.get("workout"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
         },
@@ -1197,22 +1210,35 @@ Rules:
             )
     if len(out) < 3:
         raise ValueError("not enough candidates from grok")
+    if domain == "food":
+        import food_categories as fcat
+
+        out = fcat.stamp_dish_categories(out)
     return out[:5]
 
 
 def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
+    food_rule = (
+        "Only Swedish supermarket basic assortment available at major chains "
+        "(ICA, Coop, Willys, Lidl, Hemköp) — never invent a single preferred store. "
+        "No teff, fresh lemongrass, specialty imports. Max 30 min weekday / 60 min weekend. "
+        "Wildcard = flavor adventure, never sourcing. Eating out only if open + near user. "
+        "CRITICAL shopping rule: put FULL ingredient list in meta.ingredients first. "
+        "Never assume fresh items (meat/fish/dairy/produce) are already at home — "
+        "chicken is NEVER 'always in the fridge'. "
+        "Only salt, pepper, oil, butter, sugar, flour, and common dried spices may be "
+        "assumed at home; rice, pasta, soy sauce, coconut milk, canned tomatoes = buy."
+    )
+    if domain == "food":
+        import food_categories as fcat
+
+        food_rule += (
+            " REQUIRED: set meta.dish_category to exactly one of: "
+            + fcat.dish_category_prompt_list()
+            + ". Never invent a category outside that list."
+        )
     rules = {
-        "food": (
-            "Only Swedish supermarket basic assortment available at major chains "
-            "(ICA, Coop, Willys, Lidl, Hemköp) — never invent a single preferred store. "
-            "No teff, fresh lemongrass, specialty imports. Max 30 min weekday / 60 min weekend. "
-            "Wildcard = flavor adventure, never sourcing. Eating out only if open + near user. "
-            "CRITICAL shopping rule: put FULL ingredient list in meta.ingredients first. "
-            "Never assume fresh items (meat/fish/dairy/produce) are already at home — "
-            "chicken is NEVER 'always in the fridge'. "
-            "Only salt, pepper, oil, butter, sugar, flour, and common dried spices may be "
-            "assumed at home; rice, pasta, soy sauce, coconut milk, canned tomatoes = buy."
-        ),
+        "food": food_rule,
         "clothes": (
             f"Section={profile.get('clothes', {}).get('section')}. "
             "Wear: wardrobe only if registered, else category outfit. "
@@ -1623,6 +1649,10 @@ def _local_candidates(
     # Mark one wildcard if none flagged
     if pool and not any(c.get("wildcard") for c in pool):
         pool[-1] = dict(pool[-1], wildcard=True)
+    if domain == "food":
+        import food_categories as fcat
+
+        pool = fcat.stamp_dish_categories(pool)
     return pool[:5]
 
 
@@ -1646,7 +1676,7 @@ def _guaranteed_feasible(
             c = {
                 "suggestion": "Krämig tomatsås-pasta" if sv else "Creamy tomato pasta",
                 "justification": "Varmt, enkelt och klart på 20 minuter." if sv else "Warm, simple, done in 20 minutes.",
-                "meta": {"active_minutes": 20},
+                "meta": {"active_minutes": 20, "dish_category": "pasta"},
             }
     elif domain == "clothes":
         c = {

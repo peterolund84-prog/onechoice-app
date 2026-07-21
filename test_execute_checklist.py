@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Execute view — quiet checklist, amounts, per-portion nutrition."""
+"""Execute view — quiet checklist, amounts, per-portion nutrition, stay-on-page."""
 
 from __future__ import annotations
 
@@ -52,9 +52,23 @@ class ExecuteChecklistHelpers(unittest.TestCase):
         self.assertIn("per portion", line)
         self.assertRegex(line, r"Ca\s+\d+\s*kcal per portion")
 
+    def test_selected_defaults_unchecked(self) -> None:
+        import app as app_mod
+        from types import SimpleNamespace
+        from unittest import mock
+
+        shop = {"to_buy": {"skafferi": ["ris", "linser", "curry"]}}
+        ss = {"shopping_checks": {}, "language": "sv"}
+        with mock.patch.object(app_mod, "st", SimpleNamespace(session_state=ss)):
+            self.assertEqual(app_mod._count_checked_shop_items(shop, 1), 0)
+            app_mod._set_all_shop_checks(shop, 1, checked=True)
+            self.assertEqual(app_mod._count_checked_shop_items(shop, 1), 3)
+            app_mod._toggle_shop_check(1, 0)
+            self.assertEqual(app_mod._count_checked_shop_items(shop, 1), 2)
+
 
 class ExecuteChecklistUi(unittest.TestCase):
-    def test_toggle_row_via_query_param(self) -> None:
+    def _open_execute(self):
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
@@ -63,29 +77,71 @@ class ExecuteChecklistUi(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
+        for b in at.button:
             if b.label and "Handla" in b.label:
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
-        did = at.session_state["decision_id"] or (
-            (at.session_state["current"] or {}).get("decision_id")
-        )
-        ckey = f"{did}:0"
-        checks = dict(at.session_state["shopping_checks"] or {})
-        before = bool(checks.get(ckey, True))
-        at.query_params["shop_check"] = "0"
-        at.run()
-        after = bool((at.session_state["shopping_checks"] or {}).get(ckey, True))
-        self.assertNotEqual(before, after)
+        return at
+
+    def test_toggle_checkboxes_stay_on_execute(self) -> None:
+        at = self._open_execute()
+        page_before = at.session_state["page"]
+        suggestion = (at.session_state["current"] or {}).get("suggestion")
+        boxes = list(at.checkbox)
+        self.assertGreaterEqual(len(boxes), 3, [getattr(c, "label", None) for c in boxes])
+        # All start unchecked
+        self.assertFalse(any(bool(c.value) for c in boxes[:3]))
+
+        boxes[0].check().run()
+        self.assertEqual(at.session_state["page"], page_before)
+        self.assertEqual((at.session_state["current"] or {}).get("suggestion"), suggestion)
+        boxes = list(at.checkbox)
+        boxes[1].check().run()
+        self.assertEqual(at.session_state["page"], "execute")
+        boxes = list(at.checkbox)
+        boxes[2].check().run()
+        self.assertEqual(at.session_state["page"], "execute")
+        checked = sum(1 for c in at.checkbox if bool(c.value))
+        self.assertEqual(checked, 3)
+
+        # Untoggle one
+        boxes = list(at.checkbox)
+        boxes[1].uncheck().run()
+        self.assertEqual(at.session_state["page"], "execute")
+        checked = sum(1 for c in at.checkbox if bool(c.value))
+        self.assertEqual(checked, 2)
+
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(any("Lägg till i listan (2)" in lab for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("oc-shop-row", body)
-        # Only sticky CTA should be an indigo primary among execute buttons
-        primaries = [
-            b.label
-            for b in at.button
-            if b.label and "Lägg till" in b.label
-        ]
-        self.assertEqual(len(primaries), 1)
+        self.assertIn("oc-shop-pick-marker", body)
+        self.assertNotIn('href="?shop_check=', body)
+
+    def test_add_to_list_merges_exactly_checked(self) -> None:
+        at = self._open_execute()
+        boxes = list(at.checkbox)
+        self.assertGreaterEqual(len(boxes), 2)
+        boxes[0].check().run()
+        boxes = list(at.checkbox)
+        boxes[1].check().run()
+        self.assertEqual(at.session_state["page"], "execute")
+
+        for b in at.button:
+            if b.label and "Lägg till i listan (2)" in b.label:
+                b.click().run()
+                break
+        else:
+            self.fail([b.label for b in at.button])
+
+        self.assertEqual(at.session_state["page"], "execute")
+        cache = at.session_state["shopping_list_cache"]
+        self.assertIsInstance(cache, list)
+        self.assertEqual(len(cache), 2)
+        self.assertTrue(all(not r.get("checked") for r in cache))
 
 
 if __name__ == "__main__":

@@ -156,6 +156,10 @@ class HandlaLagaUiTests(unittest.TestCase):
             at.run()
             hit = False
             for b in at.button:
+                if (b.label or "") == "Gör det":
+                    b.click().run()
+                    break
+            for b in at.button:
                 if b.label and "Handla" in b.label:
                     b.click().run()
                     hit = True
@@ -187,6 +191,16 @@ class HandlaLagaUiTests(unittest.TestCase):
         cur["context"] = json.dumps(cur.get("context") or {}, ensure_ascii=False)
         at.session_state["current"] = cur
         for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
+        # Re-apply string context after lock rerun may normalize it
+        cur = dict(at.session_state["current"] or {})
+        ctx = cur.get("context")
+        if isinstance(ctx, dict):
+            cur["context"] = json.dumps(ctx, ensure_ascii=False)
+            at.session_state["current"] = cur
+        for b in at.button:
             if b.label and "Handla" in b.label:
                 b.click().run()
                 break
@@ -206,10 +220,11 @@ class HandlaLagaUiTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
-            if b.label and "Handla" in b.label:
+            if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        self.assertEqual(at.session_state["page"], "execute")
+        self.assertEqual(at.session_state["page"], "result")
+        self.assertTrue(at.session_state["accepted"])
         # Simulate Cloud leaving context as a string, then return to lock card
         cur = dict(at.session_state["current"] or {})
         ctx = cur.get("context")
