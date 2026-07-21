@@ -95,6 +95,7 @@ class HomeHeroTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-hero", body)
         self.assertIn("oc-hero-orb", body)
+        self.assertIn('class="oc-cta"', body.replace(" ", ""))
         self.assertIn("oc-domain-grid", body)
         self.assertIn("oc-domain-card", body)
         for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
@@ -112,12 +113,11 @@ class HomeHeroTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        for b in at.button:
-            if b.label and "Bestäm åt mig" in b.label:
-                b.click().run()
-                break
-        else:
-            self.fail("home hero decide button not found")
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("oc-cta", body)
+        at.query_params["domain"] = "food"
+        at.query_params["auto"] = "1"
+        at.run()
         self.assertFalse(at.exception)
         self.assertIn(
             at.session_state["page"],
@@ -175,8 +175,33 @@ class HomeHeroTests(unittest.TestCase):
         )
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertNotIn("home_free_input", body.lower())
+        self.assertNotIn("Vad behöver du bestämma?", body)
         labels = [str(getattr(inp, "label", "") or "") for inp in getattr(at, "text_input", [])]
         self.assertFalse(any("home_free_input" in lab.lower() for lab in labels), labels)
+        self.assertFalse(any("Vad behöver du bestämma?" in lab for lab in labels), labels)
+
+    def test_free_text_form_submits_question(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=90)
+        at.run()
+        self.assertTrue(at.text_input, "home free-text input missing")
+        at.text_input[0].set_value("Vad ska jag laga till middag?").run()
+        submits = getattr(at, "form_submit_button", None) or []
+        if not submits:
+            for b in at.button:
+                if b.label and "Bestäm" in b.label:
+                    b.click().run()
+                    break
+            else:
+                self.fail("free-text submit control not found")
+        else:
+            submits[0].click().run()
+        self.assertFalse(at.exception)
+        self.assertIn(
+            at.session_state["page"],
+            ("result", "ambiguous", "clothes_occasion"),
+        )
 
 
     def test_home_centerline_css_rules(self) -> None:
@@ -190,6 +215,8 @@ class HomeHeroTests(unittest.TestCase):
             "translateX(-50%)",
             "text-align: center",
             "oc-hero-title",
+            "oc-cta",
+            "margin: 0 0 28px",
             "oc-section-label",
             "oc-header-wordmark",
         ):

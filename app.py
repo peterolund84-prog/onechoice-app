@@ -616,11 +616,11 @@ section.main, [data-testid="stAppViewContainer"] > .main {{
 }}
 .block-container {{
     max-width: 420px !important;
-    padding: 76px 20px calc(88px + env(safe-area-inset-bottom)) !important;
+    padding: calc(52px + env(safe-area-inset-top) + 40px) 20px calc(88px + env(safe-area-inset-bottom)) !important;
     margin: 0 auto !important;
 }}
 @media (max-width: 768px) {{
-    .block-container {{ padding: 76px 20px calc(88px + env(safe-area-inset-bottom)) !important; }}
+    .block-container {{ padding: calc(52px + env(safe-area-inset-top) + 40px) 20px calc(88px + env(safe-area-inset-bottom)) !important; }}
 }}
 /* Collapse in-flow chrome wrappers — fixed header/lang must not reserve vertical space */
 div[data-testid="element-container"]:has(.oc-header),
@@ -835,23 +835,20 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     width: max-content !important;
     pointer-events: none !important;
 }}
-/* Home hero — compact centered group (headline + 20px + CTA) */
+/* Home hero — single centered wrapper (headline + CTA share one axis) */
 .st-key-home_hero,
 .st-key-home_hero [data-testid="stVerticalBlock"],
-.st-key-home_hero [data-testid="stVerticalBlockBorderWrapper"] {{
+.st-key-home_hero [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-home_hero [data-testid="stMarkdownContainer"] {{
     gap: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
 }}
 .st-key-home_hero {{
     position: relative !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: flex-start !important;
     width: 100% !important;
-    padding: 40px 0 0 !important;
     margin: 0 0 40px !important;
+    padding: 0 !important;
     max-height: none !important;
     min-height: 0 !important;
     overflow: visible !important;
@@ -859,10 +856,12 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
 }}
 .oc-hero {{
     position: relative;
-    display: block;
+    z-index: 1;
     width: 100%;
-    margin: 0;
-    padding: 0;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 0 20px;
+    box-sizing: border-box;
     text-align: center;
 }}
 .st-key-home_hero .oc-hero-orb {{
@@ -873,7 +872,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     height: 55vw;
     max-width: 280px;
     max-height: 280px;
-    margin-left: 0;
+    margin: 0;
     background: radial-gradient(circle, rgba(79, 70, 229, 0.9) 0%, rgba(79, 70, 229, 0) 68%);
     filter: blur(60px);
     opacity: 0.12;
@@ -896,21 +895,34 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     line-height: 1.05 !important;
     color: var(--oc-ink) !important;
     text-align: center !important;
-    margin: 0 0 20px !important;
+    margin: 0 0 28px !important;
     padding: 0 !important;
     width: 100% !important;
 }}
-.st-key-home_hero_cta {{
-    position: relative;
-    z-index: 1;
-    width: calc(100% - 40px) !important;
-    max-width: 100% !important;
-    margin: 0 20px !important;
-    padding: 0 !important;
+a.oc-cta {{
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 16px 1.5rem;
+    background: {ACCENT} !important;
+    background-color: {ACCENT} !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 1.02rem !important;
+    line-height: 1.2 !important;
+    text-align: center !important;
+    text-decoration: none !important;
+    box-shadow: none !important;
+    transition: opacity 150ms ease !important;
 }}
-.st-key-home_hero_cta div.stButton {{
-    margin: 0 !important;
-    width: 100% !important;
+a.oc-cta:hover,
+a.oc-cta:focus {{
+    color: #fff !important;
+    opacity: 0.92 !important;
 }}
 .st-key-home_weekend_alt {{
     margin: 8px 0 0 !important;
@@ -1010,6 +1022,15 @@ a.oc-domain-card:focus {{
     padding: 0 0 20px !important;
     width: 100% !important;
 }}
+.st-key-home_free_form [data-testid="stForm"] {{
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+}}
+.st-key-home_free_form [data-testid="stHorizontalBlock"] {{
+    align-items: stretch !important;
+    gap: 8px !important;
+}}
 .st-key-home_free_form [data-testid="stWidgetLabel"] {{
     display: none !important;
     height: 0 !important;
@@ -1018,9 +1039,13 @@ a.oc-domain-card:focus {{
     overflow: hidden !important;
     visibility: hidden !important;
 }}
+.st-key-home_free_form [data-testid="stTextInput"] {{
+    margin: 0 !important;
+}}
 .st-key-home_free_form [data-testid="stTextInput"] input {{
     border-radius: 12px !important;
     min-height: 48px !important;
+    height: 48px !important;
     font-size: 16px !important;
     padding: 12px 14px !important;
     border: 1px solid var(--oc-border) !important;
@@ -1031,7 +1056,41 @@ a.oc-domain-card:focus {{
     box-shadow: none !important;
 }}
 .st-key-home_free_form [data-testid="stFormSubmitButton"] {{
-    display: none !important;
+    display: flex !important;
+    align-items: stretch !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+.st-key-home_free_form [data-testid="stFormSubmitButton"] button {{
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 48px !important;
+    width: 48px !important;
+    min-height: 48px !important;
+    height: 48px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 12px !important;
+    background: {ACCENT} !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+}}
+.st-key-home_free_form [data-testid="stFormSubmitButton"] button::before {{
+    content: "" !important;
+    display: block !important;
+    width: 20px !important;
+    height: 20px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3Cpath d='m13 6 6 6-6 6'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 20px 20px !important;
+}}
+.st-key-home_free_form [data-testid="stFormSubmitButton"] button:hover {{
+    opacity: 0.92 !important;
 }}
 .st-key-home_weekend_alt div.stButton > button {{
     background: transparent !important;
@@ -2782,13 +2841,22 @@ def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
         run_decision(question="", domain_hint="weekend", reroll=False, via_router=False)
 
 
+def _home_hero_decide_href(inferred: dict[str, Any]) -> str:
+    """Query-param CTA — auto=1 runs infer_home_hero decision (meal-aware)."""
+    domain = str(inferred.get("domain") or "food")
+    return _qp_href(domain=domain, auto="1")
+
+
 def render_home_hero(inferred: dict[str, Any]) -> None:
     headline = html.escape(str(inferred.get("headline") or ""))
+    href = html.escape(_home_hero_decide_href(inferred), quote=True)
+    cta = html.escape(t("decide"))
     st.markdown(
         '<div class="oc-hero-orb" aria-hidden="true"></div>'
-        f'<section class="oc-hero" aria-label="{headline}">'
+        f'<div class="oc-hero">'
         f'<h1 class="oc-hero-title">{headline}</h1>'
-        f"</section>",
+        f'<a class="oc-cta" href="{href}">{cta}</a>'
+        f"</div>",
         unsafe_allow_html=True,
     )
 
@@ -4077,14 +4145,6 @@ def page_home() -> None:
 
     with st.container(key="home_hero"):
         render_home_hero(inferred)
-        with st.container(key="home_hero_cta"):
-            if st.button(
-                t("decide"),
-                type="primary",
-                use_container_width=True,
-                key="home_hero_decide",
-            ):
-                _run_inferred_home_decision(inferred)
 
     if inferred.get("weekend_alternate"):
         with st.container(key="home_weekend_alt"):
@@ -4101,14 +4161,21 @@ def page_home() -> None:
 
     with st.container(key="home_free_form"):
         with st.form("home_free_form", clear_on_submit=False, border=False):
-            q = st.text_input(
-                t("ask"),
-                label_visibility="collapsed",
-                key="home_free_input",
-                placeholder=t("home_free_placeholder"),
-                max_chars=rt.MAX_INPUT_CHARS,
-            )
-            submitted = st.form_submit_button(t("home_free_submit"))
+            col_in, col_go = st.columns([5, 1], gap="small")
+            with col_in:
+                q = st.text_input(
+                    " ",
+                    label_visibility="collapsed",
+                    key="home_free_input",
+                    placeholder=t("home_free_placeholder"),
+                    max_chars=rt.MAX_INPUT_CHARS,
+                )
+            with col_go:
+                submitted = st.form_submit_button(
+                    t("home_free_submit"),
+                    use_container_width=True,
+                    help=t("home_free_submit"),
+                )
     if submitted:
         question = (q or "").strip()
         if not question:
@@ -5984,6 +6051,19 @@ def handle_query_params() -> None:
         st.rerun()
 
     domain = _qp_one(qp.get("domain"))
+    auto = _qp_one(qp.get("auto"))
+    if auto in ("1", "true", "yes") and domain in pipeline.ALLOWED_DOMAINS:
+        for key in ("auto", "domain", "meal"):
+            try:
+                del st.query_params[key]
+            except Exception:
+                pass
+        inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
+        if domain != str(inferred.get("domain") or "food"):
+            inferred = {**inferred, "domain": domain}
+        _run_inferred_home_decision(inferred)
+        return
+
     if domain in pipeline.ALLOWED_DOMAINS:
         try:
             del st.query_params["domain"]

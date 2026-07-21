@@ -44,7 +44,7 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-shop-tog-marker", css)
         self.assertIn("oc-header", css)
         self.assertIn("position: fixed", css)
-        self.assertIn("76px", css)
+        self.assertIn("52px + env(safe-area-inset-top) + 40px", css)
         self.assertIn("backdrop-filter", css)
         self.assertIn("st-key-home_hero", css)
         self.assertIn("st-key-oc_lang_bar", css)
@@ -56,8 +56,9 @@ class HomeDesignTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
         labels = [b.label or "" for b in at.button]
-        self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
+        self.assertFalse(any("Bestäm åt mig" in lab for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("Bestäm åt mig", body)
         self.assertIn("Fota kylen", body)
         self.assertNotIn("Vad finns i kylen?", body)
         caps = [str(c.value or "") for c in at.caption]
@@ -73,6 +74,7 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("EN", body)
         self.assertNotIn("build ", body.lower())
         self.assertNotIn("home_free_input", body.lower())
+        self.assertNotIn("Vad behöver du bestämma?", body)
         for c in caps:
             self.assertNotIn("build ", str(c).lower())
         self.assertIn('class="oc-header-wordmark', body.replace(" ", ""))
