@@ -5,6 +5,9 @@ from __future__ import annotations
 
 from datetime import datetime, time
 from typing import Any
+from zoneinfo import ZoneInfo
+
+LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
 # Frukost / Lunch / Middag / Kvällsmål
 MEAL_TYPES: dict[str, dict[str, Any]] = {
@@ -52,6 +55,11 @@ def meal_label(key: str, language: str = "sv") -> str:
     return str(row.get(language) or row.get("sv") or key)
 
 
+def local_now() -> datetime:
+    """App-local clock for meal windows (Sweden)."""
+    return datetime.now(LOCAL_TZ)
+
+
 def default_meal_type(
     hour: int | None = None,
     minute: int = 0,
@@ -68,9 +76,10 @@ def default_meal_type(
     if now is not None:
         hour = now.hour
         minute = now.minute
-    if hour is None:
-        hour = datetime.now().astimezone().hour
-        minute = datetime.now().astimezone().minute
+    elif hour is None:
+        local = local_now()
+        hour = local.hour
+        minute = local.minute
     t = hour * 60 + minute
     if 5 * 60 <= t < 10 * 60:
         return "frukost"

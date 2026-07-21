@@ -781,16 +781,18 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     box-shadow: none !important;
 }}
 /* Domain/meal chips keep oval chrome via scoped rules below — NOT global ButtonGroup */
-/* Fixed top chrome — OneChoice + SV/EN stay visible while scrolling */
+/* Fixed top chrome — frosted glass, OneChoice + SV/EN */
 .oc-topbar {{
-    position: fixed !important;
+    position: sticky !important;
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
     z-index: 1100 !important;
-    background: var(--oc-bg) !important;
-    border-bottom: 1px solid var(--oc-border) !important;
-    padding: max(0.3rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.35rem max(1rem, env(safe-area-inset-left)) !important;
+    background: rgba(250, 250, 247, 0.72) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+    padding: max(0.35rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.4rem max(1rem, env(safe-area-inset-left)) !important;
     margin: 0 !important;
     box-sizing: border-box !important;
     display: flex !important;
@@ -803,35 +805,46 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     left: 50% !important;
     transform: translateX(-50%) !important;
     margin: 0 !important;
-    font-size: 1.35rem !important;
+    font-size: 22px !important;
     text-align: center !important;
     width: max-content !important;
     pointer-events: none !important;
 }}
-/* Home hero — time-aware headline + breathing orb (Toss-style, no images) */
+/* Home hero — tight group: headline + 24px + CTA */
+.st-key-home_hero {{
+    position: relative !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 48px 0 !important;
+    max-height: 40vh !important;
+    margin: 0 0 8px !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}}
 .oc-hero {{
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 55vh;
-    padding: 24px 0 32px;
-    margin: 0 0 8px;
+    width: 100%;
+    margin: 0;
+    padding: 0;
     text-align: center;
-    overflow: hidden;
 }}
-.oc-hero-orb {{
+.st-key-home_hero .oc-hero-orb {{
     position: absolute;
-    top: -6%;
-    right: -18%;
-    width: 55vw;
-    height: 55vw;
-    max-width: 300px;
-    max-height: 300px;
-    background: radial-gradient(circle, rgba(79, 70, 229, 0.55) 0%, rgba(79, 70, 229, 0) 68%);
-    filter: blur(60px);
-    opacity: 0.15;
+    top: -52%;
+    right: -38%;
+    width: 72vw;
+    height: 72vw;
+    max-width: 340px;
+    max-height: 340px;
+    background: radial-gradient(circle, rgba(79, 70, 229, 0.95) 0%, rgba(79, 70, 229, 0) 62%);
+    filter: blur(52px);
+    opacity: 0.12;
     pointer-events: none;
     z-index: 0;
     animation: oc-orb-breathe 8s ease-in-out infinite alternate;
@@ -851,10 +864,14 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     color: var(--oc-ink) !important;
     margin: 0 0 24px !important;
 }}
-.oc-hero-alt-wrap {{
+.st-key-home_hero_cta {{
     position: relative;
     z-index: 1;
-    margin: 8px 0 0;
+    width: 100% !important;
+    margin: 0 !important;
+}}
+.st-key-home_hero_cta div.stButton {{
+    margin: 0 !important;
 }}
 .oc-section-label {{
     font-size: 11px !important;
@@ -916,9 +933,6 @@ a.oc-domain-card:focus {{
     font-weight: 500 !important;
     line-height: 1.2 !important;
 }}
-.st-key-home_hero_cta div.stButton {{
-    margin: 0 0 4px !important;
-}}
 .st-key-home_weekend_alt div.stButton > button {{
     background: transparent !important;
     color: var(--oc-muted) !important;
@@ -969,10 +983,10 @@ a.oc-domain-card:focus {{
     color: var(--oc-ink) !important;
     background: transparent !important;
 }}
-/* Language — inside fixed header row, top-right SV · EN */
+/* Language — frosted header row, top-right SV · EN */
 .st-key-oc_lang_bar {{
     position: fixed !important;
-    top: max(0.42rem, env(safe-area-inset-top)) !important;
+    top: max(0.35rem, env(safe-area-inset-top)) !important;
     right: 0.55rem !important;
     left: auto !important;
     z-index: 1200 !important;
@@ -988,7 +1002,7 @@ a.oc-domain-card:focus {{
 .st-key-oc_lang_pills {{
     display: flex !important;
     justify-content: flex-end !important;
-    gap: 0.1rem !important;
+    gap: 0.15rem !important;
     background: transparent !important;
 }}
 .st-key-oc_lang_bar button,
@@ -997,24 +1011,25 @@ a.oc-domain-card:focus {{
 .st-key-oc_lang_pills [data-testid="stButtonGroup"] button {{
     background: transparent !important;
     border: none !important;
-    border-radius: 0 !important;
+    border-radius: 6px !important;
     box-shadow: none !important;
     outline: none !important;
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 0.82rem !important;
+    font-size: 13px !important;
     font-weight: 500 !important;
-    min-height: 1.5rem !important;
+    min-height: 2rem !important;
     height: auto !important;
-    padding: 0.2rem 0.35rem !important;
+    padding: 0.35rem 0.55rem !important;
     width: auto !important;
+    transition: color 150ms ease, background 150ms ease !important;
 }}
 .st-key-oc_lang_bar button[aria-checked="true"],
 .st-key-oc_lang_pills button[aria-checked="true"] {{
-    color: var(--oc-accent) !important;
+    color: var(--oc-ink) !important;
     font-weight: 600 !important;
 }}
-/* Bottom nav — keyed fixed bar, text only, no oval chrome */
+/* Bottom nav — frosted glass bar */
 .st-key-oc_nav_bar,
 .st-key-oc_nav_pills {{
     position: fixed !important;
@@ -1024,9 +1039,11 @@ a.oc-domain-card:focus {{
     z-index: 1200 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 0.18rem 0.15rem max(0.3rem, env(safe-area-inset-bottom)) !important;
-    background: #fff !important;
-    border-top: 1px solid var(--oc-border) !important;
+    padding: 0.35rem 0.4rem max(0.55rem, env(safe-area-inset-bottom)) !important;
+    background: rgba(250, 250, 247, 0.72) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-sizing: border-box !important;
 }}
 .st-key-oc_nav_bar [data-testid="stPills"],
@@ -1036,7 +1053,7 @@ a.oc-domain-card:focus {{
     display: flex !important;
     justify-content: space-around !important;
     width: 100% !important;
-    gap: 0 !important;
+    gap: 0.15rem !important;
     background: transparent !important;
 }}
 .st-key-oc_nav_bar button,
@@ -1046,21 +1063,73 @@ a.oc-domain-card:focus {{
     flex: 1 1 0 !important;
     background: transparent !important;
     border: none !important;
-    border-radius: 0 !important;
+    border-radius: 999px !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 0.64rem !important;
+    font-size: 11px !important;
     font-weight: 500 !important;
-    min-height: 2rem !important;
-    padding: 0.15rem 0.08rem !important;
+    min-height: 3rem !important;
+    padding: 0.3rem 0.35rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.15rem !important;
+    line-height: 1.1 !important;
+    transition: background 150ms ease, color 150ms ease !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button::before {{
+    content: "" !important;
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    background: center / contain no-repeat !important;
+    opacity: 0.72 !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(1)::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(1)::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z'/%3E%3C/svg%3E") !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(2)::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(2)::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'/%3E%3C/svg%3E") !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(3)::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(3)::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5l3 2'/%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3C/svg%3E") !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(4)::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(4)::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
 }}
 .st-key-oc_nav_bar button[aria-checked="true"],
 .st-key-oc_nav_pills button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
+    background: rgba(59, 59, 196, 0.12) !important;
     border: none !important;
-    background: transparent !important;
+}}
+.st-key-oc_nav_bar button[aria-checked="true"]::before,
+.st-key-oc_nav_pills button[aria-checked="true"]::before {{
+    opacity: 1 !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(1)[aria-checked="true"]::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(1)[aria-checked="true"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z'/%3E%3C/svg%3E") !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(2)[aria-checked="true"]::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(2)[aria-checked="true"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'/%3E%3C/svg%3E") !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(3)[aria-checked="true"]::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(3)[aria-checked="true"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5l3 2'/%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3C/svg%3E") !important;
+}}
+.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(4)[aria-checked="true"]::before,
+.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(4)[aria-checked="true"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
 }}
 .oc-decision {{
     background: #fff; border-radius: 24px;
@@ -1810,14 +1879,14 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
 }}
 .st-key-oc_lang_bar button[aria-checked="true"],
 .st-key-oc_lang_pills button[aria-checked="true"] {{
-    color: var(--oc-accent) !important;
+    color: var(--oc-ink) !important;
     font-weight: 600 !important;
 }}
 .st-key-oc_nav_bar button,
 .st-key-oc_nav_pills button {{
     background: transparent !important;
     border: none !important;
-    border-radius: 0 !important;
+    border-radius: 999px !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
 }}
@@ -1825,6 +1894,7 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
 .st-key-oc_nav_pills button[aria-checked="true"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
+    background: rgba(59, 59, 196, 0.12) !important;
 }}
 </style>
         """,
@@ -2545,38 +2615,54 @@ def render_domain_chips(*, key_prefix: str = "home") -> None:
 
 _DOMAIN_CARD_ICONS: dict[str, str] = {
     "food": (
-        '<svg viewBox="0 0 24 24" aria-hidden="true">'
-        '<path d="M4 10h16c0 5-3 8-8 8s-8-3-8-8z"/>'
-        '<path d="M8 10V7a4 4 0 0 1 8 0v3"/>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M4 11h16"/>'
+        '<path d="M7 11V9a5 5 0 0 1 10 0v2"/>'
+        '<path d="M6 15c0 2.5 2.7 4 6 4s6-1.5 6-4"/>'
+        '<path d="M3 3v5"/><path d="M3 5.5h2"/>'
+        '<path d="M21 3v5"/><path d="M19 5.5h2"/>'
         "</svg>"
     ),
     "clothes": (
-        '<svg viewBox="0 0 24 24" aria-hidden="true">'
-        '<path d="M12 4a2 2 0 1 0 0 .01"/>'
-        '<path d="M4 8l8-4 8 4"/>'
-        '<path d="M6 8v10h12V8"/>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M12 6a2 2 0 1 0-2 2"/>'
+        '<path d="M4 9l8-4 8 4"/>'
+        '<path d="M6 9v10h12V9"/>'
         "</svg>"
     ),
     "movie": (
-        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
         '<circle cx="12" cy="12" r="9"/>'
-        '<path d="M10 8l6 4-6 4V8z"/>'
+        '<path d="m10 8 6 4-6 4V8z"/>'
         "</svg>"
     ),
     "workout": (
-        '<svg viewBox="0 0 24 24" aria-hidden="true">'
-        '<path d="M6 9v6M18 9v6"/>'
-        '<path d="M4 10h4v4H4zM16 10h4v4h-4zM10 12h4"/>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
+        '<path d="M4 10h3v4H4z"/>'
+        '<path d="M17 10h3v4h-3z"/>'
+        '<path d="M7 12h10"/>'
         "</svg>"
     ),
     "weekend": (
-        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
         '<circle cx="12" cy="12" r="9"/>'
-        '<path d="M16 8l-2.5 7.5L8 16l2.5-7.5L16 8z"/>'
+        '<path d="m16 8-4 8-4-8 8 4 8-4z"/>'
         "</svg>"
     ),
     "fridge": (
-        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
         '<path d="M4 8h3l2-2h6l2 2h3v10H4z"/>'
         '<circle cx="12" cy="13" r="3"/>'
         "</svg>"
@@ -2593,7 +2679,7 @@ def infer_home_hero(
     import food_domain as fd
 
     if now is None:
-        now = datetime.now().astimezone()
+        now = fd.local_now()
     meal_type = fd.default_meal_type(now=now)
     meal_name = fd.meal_label(meal_type, language)
     weekend_label = I18N.get(language, I18N["sv"])["domains"]["weekend"]
@@ -3915,11 +4001,17 @@ def page_home() -> None:
 
     render_logo()
     inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
-    render_home_hero(inferred)
 
-    with st.container(key="home_hero_cta"):
-        if st.button(t("decide"), type="primary", use_container_width=True, key="home_hero_decide"):
-            _run_inferred_home_decision(inferred)
+    with st.container(key="home_hero"):
+        render_home_hero(inferred)
+        with st.container(key="home_hero_cta"):
+            if st.button(
+                t("decide"),
+                type="primary",
+                use_container_width=True,
+                key="home_hero_decide",
+            ):
+                _run_inferred_home_decision(inferred)
 
     if inferred.get("weekend_alternate"):
         with st.container(key="home_weekend_alt"):
@@ -3937,7 +4029,7 @@ def page_home() -> None:
     with st.container(key="home_free_form"):
         with st.form("home_free_form", clear_on_submit=False, border=False):
             q = st.text_input(
-                t("ask"),
+                "free_text",
                 label_visibility="collapsed",
                 placeholder=t("home_free_placeholder"),
                 max_chars=rt.MAX_INPUT_CHARS,
