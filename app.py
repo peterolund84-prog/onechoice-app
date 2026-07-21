@@ -440,6 +440,133 @@ def domain_label(domain: str) -> str:
     return I18N.get(lang, I18N["sv"])["domains"].get(domain, domain)
 
 
+def _movie_kind_header_label(ctx: dict[str, Any], language: str) -> str:
+    """
+    Card header label must reflect the suggestion format:
+      - series + avsnitt  -> AVSNITT
+      - series + ny_serie -> NY SERIE
+      - film -> FILM
+    Never show FILM for series suggestions.
+    """
+    import movie_domain as md
+
+    fmt = md.normalize_format(ctx.get("format") or st.session_state.get("movie_format") or "avsnitt")
+    ctx_kind = str(ctx.get("kind") or "").lower()
+    kind = ctx_kind if ctx_kind in ("series", "film") else md.format_kind(fmt)
+
+    if kind == "series":
+        if fmt == "avsnitt":
+            return "AVSNITT" if language == "sv" else "EPISODE"
+        if fmt == "ny_serie":
+            return "NY SERIE" if language == "sv" else "NEW SERIES"
+        # Fallback for other series time windows
+        row = md.FORMATS.get(fmt) or {}
+        label = str(row.get(language) or row.get("sv") or fmt)
+        return label.upper()
+    if kind == "film":
+        return "FILM" if language == "sv" else "FILM"
+    row = md.FORMATS.get(fmt) or {}
+    label = str(row.get(language) or row.get("sv") or fmt)
+    return label.upper()
+
+
+def _movie_service_label(service: str) -> str:
+    return {
+        "netflix": "Netflix",
+        "viaplay": "Viaplay",
+        "hbo_max": "HBO Max",
+        "disney_plus": "Disney+",
+        "svt_play": "SVT Play",
+        "prime": "Prime Video",
+        "tv4_play": "TV4 Play",
+    }.get(service, service)
+
+
+def _movie_vote_line(vote_average: Any) -> str | None:
+    if vote_average is None:
+        return None
+    try:
+        v = float(vote_average)
+    except (TypeError, ValueError):
+        return None
+    # Swedish decimal comma, one decimal digit.
+    v_s = f"{v:.1f}".replace(".", ",")
+    return f"★ {v_s}"
+
+
+def _movie_rating_line(ctx: dict[str, Any]) -> str | None:
+    star = _movie_vote_line(ctx.get("movie_tmdb_vote_average"))
+    if not star:
+        return None
+    runtime = ctx.get("movie_runtime_min")
+    service = ctx.get("movie_service")
+    parts = [star]
+    if runtime is not None:
+        try:
+            parts.append(f"{int(runtime)} min")
+        except (TypeError, ValueError):
+            pass
+    if service:
+        parts.append(_movie_service_label(str(service)))
+    return " · ".join(parts)
+
+
+def _render_movie_card_html(
+    *,
+    language: str,
+    suggestion: str,
+    justification: str,
+    ctx: dict[str, Any],
+    lock_label_html: str | None = None,
+    lock_body_html: str | None = None,
+) -> str:
+    import movie_domain as md  # noqa: F401  (used for label helper)
+
+    header = _movie_kind_header_label(ctx, language)
+    poster_url = ctx.get("movie_poster_url")
+    year = ctx.get("movie_tmdb_year")
+    rating = _movie_rating_line(ctx)
+
+    poster_html = ""
+    if poster_url:
+        poster_html = (
+            f'<img class="oc-movie-poster" src="{html.escape(str(poster_url))}" alt=""/>'
+        )
+
+    year_html = ""
+    if year is not None and str(year).strip():
+        year_html = f'<div class="oc-movie-year">{html.escape(str(year))}</div>'
+
+    just_html = ""
+    if lock_body_html:
+        # lock_body_html already includes a <p>…</p> wrapper; force our class.
+        just_html = lock_body_html.replace("<p>", '<p class="oc-movie-just">', 1)
+    elif justification:
+        just_html = f'<p class="oc-movie-just">{html.escape(justification)}</p>'
+
+    rating_html = ""
+    if rating:
+        rating_html = f'<p class="oc-movie-rating">{html.escape(rating)}</p>'
+
+    lock_html = f"{lock_label_html}" if lock_label_html else ""
+
+    return (
+        '<div class="oc-decision oc-movie-decision">'
+        '<div class="oc-movie-row">'
+        f"{poster_html}"
+        '<div class="oc-movie-col">'
+        f'<div class="label oc-movie-kind">{html.escape(header)}</div>'
+        f"<h1>{html.escape(suggestion)}</h1>"
+        f"{year_html}"
+        f"{just_html}"
+        f"{rating_html}"
+        "</div>"
+        "</div>"
+        f"{lock_html}"
+        "</div>"
+    )
+
+
 def inject_css() -> None:
     st.markdown(
         f"""
@@ -773,6 +900,50 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     font-size: 1.02rem; color: var(--oc-muted); line-height: 1.45; margin: 0;
     max-width: 22rem; margin-left: auto; margin-right: auto;
     font-family: "Inter", sans-serif !important;
+}}
+.oc-movie-decision {{
+    text-align: left !important;
+    padding-left: 1.3rem !important;
+    padding-right: 1.3rem !important;
+}}
+.oc-movie-row {{
+    display: flex !important;
+    gap: 1rem !important;
+    align-items: flex-start !important;
+}}
+.oc-movie-col {{
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+}}
+.oc-movie-poster {{
+    flex: 0 0 auto !important;
+    width: 112px !important;
+    max-height: 40% !important;
+    border-radius: 14px !important;
+    object-fit: cover !important;
+    background: #fff !important;
+}}
+.oc-movie-kind {{
+    margin-bottom: 0.7rem !important;
+}}
+.oc-movie-year {{
+    color: var(--oc-muted) !important;
+    font-size: 1rem !important;
+    margin: -0.35rem 0 0.85rem !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 600 !important;
+}}
+.oc-movie-just {{
+    max-width: none !important;
+    margin: 0 !important;
+    text-align: left !important;
+}}
+.oc-movie-rating {{
+    max-width: none !important;
+    margin: 0.75rem 0 0 !important;
+    text-align: left !important;
+    color: var(--oc-muted) !important;
+    font-weight: 500 !important;
 }}
 .oc-lock {{
     display: inline-block; margin-top: 1.1rem;
@@ -4055,15 +4226,35 @@ def page_result() -> None:
             body = ""
         else:
             body = f"<p>{html.escape(t('lock_msg').format(suggestion=suggestion))}</p>"
-        st.markdown(
-            f'<div class="oc-decision">'
-            f'<div class="label">{html.escape(domain_label(domain))}</div>'
-            f"<h1>{html.escape(title)}</h1>"
-            f"{body}"
-            f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        if domain == "movie":
+            ctx_l = _as_dict(cur.get("context"))
+            lock_label_html = f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+            lock_body_html = None
+            if body:
+                lock_body_html = body
+            elif accepted and justification:
+                lock_body_html = f"<p>{html.escape(justification)}</p>"
+            st.markdown(
+                _render_movie_card_html(
+                    language=language,
+                    suggestion=title,
+                    justification=justification,
+                    ctx=ctx_l,
+                    lock_label_html=lock_label_html,
+                    lock_body_html=lock_body_html,
+                ),
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f'<div class="oc-decision">'
+                f'<div class="label">{html.escape(domain_label(domain))}</div>'
+                f"<h1>{html.escape(title)}</h1>"
+                f"{body}"
+                f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         if food_cook:
             ctx_l = _as_dict(cur.get("context"))
             fridge_locked = str(ctx_l.get("source") or "") == "fridge_photo"
@@ -4143,14 +4334,25 @@ def page_result() -> None:
     if domain == "movie" and not accepted:
         render_movie_format_mood_chips(cur)
 
-    st.markdown(
-        f'<div class="oc-decision">'
-        f'<div class="label">{html.escape(domain_label(domain))}</div>'
-        f"<h1>{html.escape(suggestion)}</h1>"
-        f"<p>{html.escape(justification)}</p>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    if domain == "movie":
+        st.markdown(
+            _render_movie_card_html(
+                language=language,
+                suggestion=suggestion,
+                justification=justification,
+                ctx=ctx,
+            ),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="oc-decision">'
+            f'<div class="label">{html.escape(domain_label(domain))}</div>'
+            f"<h1>{html.escape(suggestion)}</h1>"
+            f"<p>{html.escape(justification)}</p>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
     render_reroll_dots(reroll_index)
 
     # Preview shopping on result (read-only) for dinner only — never for fridge
@@ -5140,6 +5342,11 @@ def page_profile() -> None:
         f'<a href="{html.escape(privacy_url)}">{html.escape(t("privacy_link"))}</a></p>',
         unsafe_allow_html=True,
     )
+    st.markdown(
+        '<p class="oc-meta" style="text-align:center;margin:0 0 0.6rem">'
+        'Filmdata från TMDB</p>',
+        unsafe_allow_html=True,
+    )
 
     if st.button(t("logout"), use_container_width=True):
         import supabase_client as sb
@@ -5404,15 +5611,32 @@ def page_shared() -> None:
     justification = str(payload.get("justification") or "")
     ctx = payload.get("context") if isinstance(payload.get("context"), dict) else {}
 
-    st.markdown(
-        f'<div class="oc-decision">'
-        f'<div class="label">{html.escape(domain_label(domain))}</div>'
-        f"<h1>{html.escape(suggestion)}</h1>"
-        f"{('<p>' + html.escape(justification) + '</p>') if justification else ''}"
-        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    if domain == "movie":
+        lock_label_html = f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+        lock_body_html = (
+            f"<p>{html.escape(justification)}</p>" if justification else None
+        )
+        st.markdown(
+            _render_movie_card_html(
+                language=language,
+                suggestion=suggestion,
+                justification=justification,
+                ctx=_as_dict(ctx),
+                lock_label_html=lock_label_html,
+                lock_body_html=lock_body_html,
+            ),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div class="oc-decision">'
+            f'<div class="label">{html.escape(domain_label(domain))}</div>'
+            f"<h1>{html.escape(suggestion)}</h1>"
+            f"{('<p>' + html.escape(justification) + '</p>') if justification else ''}"
+            f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     if domain == "food":
         shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None

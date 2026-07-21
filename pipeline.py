@@ -708,6 +708,13 @@ def decide(
             "kind": ctx.get("kind"),
             "in_progress_series": in_progress_series or ctx.get("in_progress_series"),
             "series_title": ctx.get("series_title"),
+            # Movie enrichment (TMDB + streaming metadata) — surfaced on the card UI.
+            "movie_poster_url": (top.get("meta") or {}).get("poster_url"),
+            "movie_tmdb_vote_average": (top.get("meta") or {}).get("vote_average"),
+            "movie_tmdb_year": (top.get("meta") or {}).get("year"),
+            "movie_tmdb_id": (top.get("meta") or {}).get("tmdb_id"),
+            "movie_runtime_min": (top.get("meta") or {}).get("runtime_min"),
+            "movie_service": (top.get("meta") or {}).get("service"),
             "source": ctx.get("source") or ((top.get("meta") or {}).get("source")),
             "available_ingredients": available_ingredients if fridge_mode else ctx.get("available_ingredients"),
             "fridge_fallback": bool((top.get("meta") or {}).get("fridge_fallback")),
