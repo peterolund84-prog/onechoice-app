@@ -783,13 +783,23 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     z-index: 1100 !important;
     background: var(--oc-bg) !important;
     border-bottom: 1px solid var(--oc-border) !important;
-    padding: max(0.3rem, env(safe-area-inset-top)) 4.75rem 0.35rem 1rem !important;
+    padding: max(0.3rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.35rem max(1rem, env(safe-area-inset-left)) !important;
     margin: 0 !important;
     box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 2.35rem !important;
 }}
 .oc-topbar .oc-logo {{
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
     margin: 0 !important;
     font-size: 1.35rem !important;
+    text-align: center !important;
+    width: max-content !important;
+    pointer-events: none !important;
 }}
 /* Language — inside fixed header row, top-right SV · EN */
 .st-key-oc_lang_bar {{
