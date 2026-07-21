@@ -38,6 +38,7 @@ class NutritionEstimateTests(unittest.TestCase):
         line = shopping.format_nutrition_line(nut, language="sv", recipe=recipe)
         self.assertTrue(line.startswith("Ca "))
         self.assertIn("kcal", line)
+        self.assertIn("per portion", line)
         self.assertIn("protein", line)
         self.assertIn("fett", line)
         self.assertIn("kolh", line)
