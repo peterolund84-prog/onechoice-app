@@ -325,8 +325,8 @@ class AppAcceptUiTests(unittest.TestCase):
         self.assertFalse(at.exception)
         body = " ".join(str(m.value or "") for m in at.markdown)
         for needle in ("Mat", "Kläder", "Träning"):
-            self.assertIn(needle, body, f"missing domain chip {needle}")
-        self.assertIn("oc-chip", body)
+            self.assertIn(needle, body, f"missing domain card {needle}")
+        self.assertIn("oc-domain-card", body)
 
 
 if __name__ == "__main__":

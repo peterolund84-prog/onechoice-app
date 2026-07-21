@@ -25,7 +25,9 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("--oc-accent", css)
         self.assertIn("family=Sora", css)
         self.assertIn("family=Inter", css)
-        self.assertIn("oc-chip-row", css)
+        self.assertIn("oc-hero", css)
+        self.assertIn("oc-orb-breathe", css)
+        self.assertIn("oc-domain-grid", css)
         # Accent fill only on primary CTA (not soft purple theme)
         self.assertIn("var(--oc-accent)", css)
         self.assertNotIn("5A8BFF", css)
@@ -40,7 +42,6 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("st-key-oc_nav_bar", css)
         self.assertIn("st-key-oc_lang_pills", css)
         self.assertIn("st-key-oc_nav_pills", css)
-        self.assertIn("st-key-home_domain_pills", css)
         self.assertIn("justify-content: center", css)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
@@ -50,11 +51,12 @@ class HomeDesignTests(unittest.TestCase):
         at.run()
         labels = [b.label or "" for b in at.button]
         self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
-        self.assertTrue(any("kylen" in lab.lower() for lab in labels), labels)
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("kylen", body.lower())
         caps = [str(c.value or "") for c in at.caption]
         self.assertFalse(any("/" in c and c[:1].isdigit() for c in caps), caps)
-        body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("oc-chip-row", body)
+        self.assertIn("oc-hero-title", body)
+        self.assertIn("oc-domain-grid", body)
         for need in ("Mat", "Kläder", "Film", "Träning", "Helg"):
             self.assertIn(need, body)
         self.assertIn("SV", body)
@@ -66,10 +68,9 @@ class HomeDesignTests(unittest.TestCase):
             self.assertNotIn("build ", str(c).lower())
         # Wordmark is solid (no two-tone <em>)
         self.assertIn('class="oc-logo">OneChoice</', body.replace(" ", ""))
-        self.assertIn("oc-tag-dot", body)
-        # Tagline has 48px spacing token in CSS
+        # Tagline token kept for other pages
         css = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("margin: 0 0 48px", css)
+        self.assertIn("oc-tagline", css)
 
 
 if __name__ == "__main__":

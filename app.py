@@ -9,7 +9,7 @@ STATE DIAGRAM (pages / session_state / buttons) — keep code in sync
 
 Pages:
   auth              → login / signup / guest
-  home              → free text + domain chips + fridge CTA
+  home              → time-aware hero + domain cards + optional free text
   fridge            → photo capture → invent confirm → decide (source=fridge_photo)
   ambiguous         → domain pick after free-text AMBIGUOUS
   not_a_decision    → soft refuse (not a decision question)
@@ -72,6 +72,7 @@ import html
 import logging
 import traceback
 import uuid
+from datetime import datetime
 from typing import Any, Callable
 
 import streamlit as st
@@ -135,6 +136,9 @@ I18N = {
         "tagline": "Ett beslut. Klart.",
         "ask": "Vad behöver du bestämma?",
         "decide": "Bestäm åt mig",
+        "home_or_choose": "Eller välj själv",
+        "home_free_placeholder": "Eller skriv vad du behöver bestämma…",
+        "home_free_submit": "Bestäm",
         "new": "Nytt förslag",
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
@@ -282,6 +286,9 @@ I18N = {
         "tagline": "One decision. Done.",
         "ask": "What do you need decided?",
         "decide": "Decide for me",
+        "home_or_choose": "Or choose yourself",
+        "home_free_placeholder": "Or type what you need to decide…",
+        "home_free_submit": "Decide",
         "new": "New suggestion",
         "lock_msg": "It’s {suggestion}. Go.",
         "do_it": "Do it now",
@@ -800,6 +807,167 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     text-align: center !important;
     width: max-content !important;
     pointer-events: none !important;
+}}
+/* Home hero — time-aware headline + breathing orb (Toss-style, no images) */
+.oc-hero {{
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 55vh;
+    padding: 24px 0 32px;
+    margin: 0 0 8px;
+    text-align: center;
+    overflow: hidden;
+}}
+.oc-hero-orb {{
+    position: absolute;
+    top: -6%;
+    right: -18%;
+    width: 55vw;
+    height: 55vw;
+    max-width: 300px;
+    max-height: 300px;
+    background: radial-gradient(circle, rgba(79, 70, 229, 0.55) 0%, rgba(79, 70, 229, 0) 68%);
+    filter: blur(60px);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+    animation: oc-orb-breathe 8s ease-in-out infinite alternate;
+}}
+@keyframes oc-orb-breathe {{
+    from {{ transform: scale(1); }}
+    to {{ transform: scale(1.06); }}
+}}
+.oc-hero-title {{
+    position: relative;
+    z-index: 1;
+    font-family: "Sora", "Inter", sans-serif !important;
+    font-size: clamp(44px, 12vw, 64px) !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.05 !important;
+    color: var(--oc-ink) !important;
+    margin: 0 0 24px !important;
+}}
+.oc-hero-alt-wrap {{
+    position: relative;
+    z-index: 1;
+    margin: 8px 0 0;
+}}
+.oc-section-label {{
+    font-size: 11px !important;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase !important;
+    color: var(--oc-muted) !important;
+    font-weight: 600 !important;
+    text-align: center !important;
+    margin: 32px 0 16px !important;
+    font-family: "Inter", sans-serif !important;
+}}
+.oc-domain-grid {{
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+    margin: 0 0 24px !important;
+}}
+a.oc-domain-card {{
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 16px !important;
+    background: #fff !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    text-decoration: none !important;
+    color: var(--oc-ink) !important;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
+    min-height: 88px !important;
+    box-sizing: border-box !important;
+}}
+a.oc-domain-card:hover,
+a.oc-domain-card:focus {{
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    color: var(--oc-ink) !important;
+}}
+.oc-domain-card-icon {{
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 20px !important;
+    height: 20px !important;
+    color: var(--oc-ink) !important;
+}}
+.oc-domain-card-icon svg {{
+    width: 20px !important;
+    height: 20px !important;
+    stroke: currentColor !important;
+    stroke-width: 1.5 !important;
+    fill: none !important;
+}}
+.oc-domain-card-label {{
+    font-family: "Inter", sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+}}
+.st-key-home_hero_cta div.stButton {{
+    margin: 0 0 4px !important;
+}}
+.st-key-home_weekend_alt div.stButton > button {{
+    background: transparent !important;
+    color: var(--oc-muted) !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+    min-height: 2rem !important;
+    padding: 0.25rem 0.5rem !important;
+    width: auto !important;
+    transition: color 150ms ease !important;
+}}
+.st-key-home_weekend_alt div.stButton > button:hover {{
+    color: var(--oc-ink) !important;
+    background: transparent !important;
+}}
+.st-key-home_free_form {{
+    margin-top: 8px !important;
+}}
+.st-key-home_free_form [data-testid="stTextInput"] input {{
+    border-radius: 12px !important;
+    min-height: 48px !important;
+    font-size: 16px !important;
+    padding: 12px 14px !important;
+    border: 1px solid var(--oc-border) !important;
+    transition: border-color 150ms ease !important;
+}}
+.st-key-home_free_form [data-testid="stTextInput"] input:focus {{
+    border-color: var(--oc-accent) !important;
+    box-shadow: none !important;
+}}
+.st-key-home_free_form [data-testid="stFormSubmitButton"] button {{
+    background: transparent !important;
+    color: var(--oc-muted) !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+    min-height: 2.25rem !important;
+    margin-top: 4px !important;
+    transition: color 150ms ease !important;
+}}
+.st-key-home_free_form [data-testid="stFormSubmitButton"] button:hover {{
+    color: var(--oc-ink) !important;
+    background: transparent !important;
 }}
 /* Language — inside fixed header row, top-right SV · EN */
 .st-key-oc_lang_bar {{
@@ -2375,6 +2543,127 @@ def render_domain_chips(*, key_prefix: str = "home") -> None:
         _start_domain_decision(str(choice))
 
 
+_DOMAIN_CARD_ICONS: dict[str, str] = {
+    "food": (
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<path d="M4 10h16c0 5-3 8-8 8s-8-3-8-8z"/>'
+        '<path d="M8 10V7a4 4 0 0 1 8 0v3"/>'
+        "</svg>"
+    ),
+    "clothes": (
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<path d="M12 4a2 2 0 1 0 0 .01"/>'
+        '<path d="M4 8l8-4 8 4"/>'
+        '<path d="M6 8v10h12V8"/>'
+        "</svg>"
+    ),
+    "movie": (
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<circle cx="12" cy="12" r="9"/>'
+        '<path d="M10 8l6 4-6 4V8z"/>'
+        "</svg>"
+    ),
+    "workout": (
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<path d="M6 9v6M18 9v6"/>'
+        '<path d="M4 10h4v4H4zM16 10h4v4h-4zM10 12h4"/>'
+        "</svg>"
+    ),
+    "weekend": (
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<circle cx="12" cy="12" r="9"/>'
+        '<path d="M16 8l-2.5 7.5L8 16l2.5-7.5L16 8z"/>'
+        "</svg>"
+    ),
+    "fridge": (
+        '<svg viewBox="0 0 24 24" aria-hidden="true">'
+        '<path d="M4 8h3l2-2h6l2 2h3v10H4z"/>'
+        '<circle cx="12" cy="13" r="3"/>'
+        "</svg>"
+    ),
+}
+
+
+def infer_home_hero(
+    now: datetime | None = None,
+    *,
+    language: str = "sv",
+) -> dict[str, Any]:
+    """Infer proactive home headline from local clock (meal windows + weekend alt)."""
+    import food_domain as fd
+
+    if now is None:
+        now = datetime.now().astimezone()
+    meal_type = fd.default_meal_type(now=now)
+    meal_name = fd.meal_label(meal_type, language)
+    weekend_label = I18N.get(language, I18N["sv"])["domains"]["weekend"]
+    is_weekend = now.weekday() >= 5
+    return {
+        "headline": f"{meal_name}?",
+        "domain": "food",
+        "meal_type": meal_type,
+        "weekend_alternate": is_weekend,
+        "weekend_headline": f"{weekend_label}?",
+    }
+
+
+def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
+    import food_domain as fd
+
+    domain = str(inferred.get("domain") or "food")
+    if domain == "food":
+        meal = inferred.get("meal_type")
+        if meal in fd.MEAL_TYPES:
+            st.session_state.food_meal_type = meal
+        run_decision(question="", domain_hint="food", reroll=False, via_router=False)
+        return
+    if domain == "weekend":
+        run_decision(question="", domain_hint="weekend", reroll=False, via_router=False)
+
+
+def render_home_hero(inferred: dict[str, Any]) -> None:
+    headline = html.escape(str(inferred.get("headline") or ""))
+    st.markdown(
+        f'<section class="oc-hero" aria-label="{headline}">'
+        f'<div class="oc-hero-orb" aria-hidden="true"></div>'
+        f'<h1 class="oc-hero-title">{headline}</h1>'
+        f"</section>",
+        unsafe_allow_html=True,
+    )
+
+
+def _domain_card_href(**params: str) -> str:
+    return _qp_href(**params)
+
+
+def _render_domain_card(domain: str, *, href_params: dict[str, str] | None = None) -> str:
+    params = href_params or {"domain": domain}
+    href = html.escape(_domain_card_href(**params), quote=True)
+    icon = _DOMAIN_CARD_ICONS.get(domain, "")
+    if domain == "fridge":
+        label = t("fridge_cta")
+    else:
+        label = domain_label(domain)
+    return (
+        f'<a class="oc-domain-card" href="{href}">'
+        f'<span class="oc-domain-card-icon">{icon}</span>'
+        f'<span class="oc-domain-card-label">{html.escape(label)}</span>'
+        f"</a>"
+    )
+
+
+def render_home_domain_grid() -> None:
+    """Secondary tier — icon cards in a 2-column grid (query-param navigation)."""
+    domains = ("food", "clothes", "movie", "workout", "weekend")
+    cards = "".join(_render_domain_card(d) for d in domains)
+    cards += _render_domain_card("fridge", href_params={"fridge": "1"})
+    st.markdown(
+        f'<p class="oc-section-label">{html.escape(t("home_or_choose"))}</p>'
+        f'<div class="oc-domain-grid">{cards}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_logo() -> None:
     """Solid black wordmark — fixed top chrome (premium app pattern)."""
     render_top_chrome()
@@ -3625,30 +3914,36 @@ def page_home() -> None:
     import router as rt
 
     render_logo()
-    render_tagline()
+    inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
+    render_home_hero(inferred)
 
-    # Ghost chips — Streamlit buttons (HTML ?domain= links reset session on mobile)
-    render_domain_chips(key_prefix="home")
+    with st.container(key="home_hero_cta"):
+        if st.button(t("decide"), type="primary", use_container_width=True, key="home_hero_decide"):
+            _run_inferred_home_decision(inferred)
 
-    if st.button(t("fridge_cta"), use_container_width=True, key="home_fridge"):
-        st.session_state.fridge_step = "capture"
-        st.session_state.fridge_inventory = []
-        st.session_state.fridge_mode = False
-        st.session_state.page = "fridge"
-        st.rerun()
+    if inferred.get("weekend_alternate"):
+        with st.container(key="home_weekend_alt"):
+            alt = str(inferred.get("weekend_headline") or "")
+            if st.button(alt, key="home_weekend_alt_btn"):
+                run_decision(
+                    question="",
+                    domain_hint="weekend",
+                    reroll=False,
+                    via_router=False,
+                )
 
-    q = st.text_area(
-        t("ask"),
-        height=110,
-        label_visibility="collapsed",
-        key="home_input",
-        placeholder=t("ask"),
-        max_chars=rt.MAX_INPUT_CHARS,
-    )
-    nchars = len(q or "")
-    if nchars > 150:
-        st.caption(f"{nchars}/{rt.MAX_INPUT_CHARS}")
-    if st.button(t("decide"), type="primary", use_container_width=True):
+    render_home_domain_grid()
+
+    with st.container(key="home_free_form"):
+        with st.form("home_free_form", clear_on_submit=False, border=False):
+            q = st.text_input(
+                t("ask"),
+                label_visibility="collapsed",
+                placeholder=t("home_free_placeholder"),
+                max_chars=rt.MAX_INPUT_CHARS,
+            )
+            submitted = st.form_submit_button(t("home_free_submit"), use_container_width=True)
+    if submitted:
         question = (q or "").strip()
         if not question:
             st.warning(t("empty"))
@@ -5543,6 +5838,19 @@ def handle_query_params() -> None:
             if st.session_state.get("food_meal_type") not in fd.MEAL_TYPES:
                 st.session_state.food_meal_type = fd.default_meal_type()
         run_decision(question="", domain_hint=domain, reroll=False, via_router=False)
+
+    fridge_q = _qp_one(qp.get("fridge"))
+    if fridge_q in ("1", "true", "yes"):
+        try:
+            del st.query_params["fridge"]
+        except Exception:
+            pass
+        st.session_state.fridge_step = "capture"
+        st.session_state.fridge_inventory = []
+        st.session_state.fridge_mode = False
+        st.session_state.page = "fridge"
+        st.rerun()
+        return
 
     # Clothes occasion chips
     import clothes_domain as cd

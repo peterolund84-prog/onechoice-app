@@ -21,7 +21,7 @@ class UiLeakTests(unittest.TestCase):
         caps = " ".join(str(c.value or "") for c in at.caption)
         # Collapsed textarea label must not leak as a lone "q"
         self.assertNotRegex(body + caps, r"(?<![a-zA-ZåäöÅÄÖ])q(?![a-zA-ZåäöÅÄÖ])")
-        self.assertIn("oc-chip-row", body)
+        self.assertIn("oc-hero", body)
 
     def test_food_result_single_meal_label(self) -> None:
         from streamlit.testing.v1 import AppTest
