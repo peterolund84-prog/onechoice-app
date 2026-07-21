@@ -64,6 +64,10 @@ class UiLeakTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
+        for b in at.button:
             if b.label and "Ät nu" in b.label:
                 b.click().run()
                 break

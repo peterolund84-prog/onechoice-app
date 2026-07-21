@@ -230,6 +230,10 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         at.run()
         hit = False
         for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
+        for b in at.button:
             if b.label and "Ät nu" in b.label:
                 b.click().run()
                 hit = True

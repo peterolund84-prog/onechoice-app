@@ -35,10 +35,10 @@ Button → transition:
   [home] "Bestäm åt mig" / domain chip
         → run_decision → page=result  (current set, accepted=False)
 
-  [result] food primary "Handla & laga"  (accepted is False)
+  [result] food primary "Gör det"  (accepted is False)
         → accept_decision(decision_id)  # DB status=accepted
         → current.locked=True, accepted=True, disable rerolls
-        → page=execute
+        → stay on result (lock card)
 
   [result] food primary "Handla & laga"  (accepted is True / locked card)
         → page=execute only (no second DB write; lock already permanent)
@@ -49,7 +49,7 @@ Button → transition:
   [result] "Nytt förslag"  (only if not accepted and not reroll-locked)
         → run_decision(reroll=True)
 
-  [execute] food: shopping preview auto-merged into Lista on Handla
+  [execute] food: checklist selection → "Lägg till i listan (N)" merges checked items
         → badge when merged; "Öppna listan" → page=lista
         → deferred accept also merges shopping from context (after shop is stored)
 
@@ -147,8 +147,12 @@ I18N = {
         "new": "Nytt förslag",
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
+        "go_for_it": "Gör det",
         "handla_laga": "Handla & laga",
         "accepted": "Sparat — bra val.",
+        "food_meta_buy": "{n} varor att köpa",
+        "food_meta_portion_one": "1 portion",
+        "food_meta_portions": "{n} portioner",
         "workout_go": "Kör",
         "workout_next": "Nästa",
         "workout_next_set": "Nästa set",
@@ -172,6 +176,7 @@ I18N = {
         "list_add_n": "Lägg till i listan ({n})",
         "list_added_open": "Tillagt ✓ · Öppna listan",
         "list_skip_hint": "hoppa över om du har",
+        "list_mark_all": "Markera alla",
         "list_created": "Inköpslistan är uppdaterad.",
         "list_error": "Kunde inte spara listan just nu. Försök igen.",
         "list_local_note": "Listan sparas lokalt på den här enheten (molntabellen shopping_items saknas ännu).",
@@ -301,8 +306,12 @@ I18N = {
         "new": "New suggestion",
         "lock_msg": "It’s {suggestion}. Go.",
         "do_it": "Do it now",
+        "go_for_it": "Do it",
         "handla_laga": "Shop & cook",
         "accepted": "Saved — good call.",
+        "food_meta_buy": "{n} items to buy",
+        "food_meta_portion_one": "1 serving",
+        "food_meta_portions": "{n} servings",
         "workout_go": "Go",
         "workout_next": "Next",
         "workout_next_set": "Next set",
@@ -326,6 +335,7 @@ I18N = {
         "list_add_n": "Add to list ({n})",
         "list_added_open": "Added ✓ · Open list",
         "list_skip_hint": "skip if you have it",
+        "list_mark_all": "Select all",
         "list_created": "Shopping list updated.",
         "list_error": "Could not save the list right now. Try again.",
         "list_local_note": "List is saved on this device (cloud table shopping_items is not set up yet).",
@@ -582,6 +592,109 @@ def _render_movie_card_html(
         "</div>"
         "</div>"
         f"{lock_html}"
+        "</div>"
+    )
+
+
+def _food_meta_line(
+    *,
+    language: str,
+    ctx: dict[str, Any],
+    shop: dict[str, Any] | None = None,
+    recipe: dict[str, Any] | None = None,
+) -> str:
+    """One muted line: ⏱ min · portions · N varor att köpa."""
+    bits: list[str] = []
+    mins = None
+    if isinstance(recipe, dict):
+        mins = recipe.get("active_minutes") or recipe.get("total_minutes")
+    if mins is None:
+        mins = ctx.get("active_minutes")
+    if mins is None and isinstance(ctx.get("recipe"), dict):
+        mins = ctx["recipe"].get("active_minutes") or ctx["recipe"].get("total_minutes")
+    if mins is not None:
+        try:
+            bits.append(f"⏱ {int(mins)} min")
+        except (TypeError, ValueError):
+            pass
+
+    portions = None
+    if isinstance(recipe, dict):
+        portions = recipe.get("portioner") or recipe.get("portions")
+    if portions is None and isinstance(ctx.get("recipe"), dict):
+        portions = ctx["recipe"].get("portioner") or ctx["recipe"].get("portions")
+    if portions is None:
+        portions = 1
+    try:
+        n_p = int(portions)
+        if n_p <= 1:
+            bits.append(t("food_meta_portion_one"))
+        else:
+            bits.append(t("food_meta_portions").format(n=n_p))
+    except (TypeError, ValueError):
+        bits.append(t("food_meta_portion_one"))
+
+    n_buy = _shop_item_count(shop if isinstance(shop, dict) else ctx.get("shopping"))
+    if n_buy > 0:
+        bits.append(t("food_meta_buy").format(n=n_buy))
+    return " · ".join(bits)
+
+
+def _render_food_card_html(
+    *,
+    language: str,
+    suggestion: str,
+    justification: str,
+    ctx: dict[str, Any],
+    lock_label_html: str | None = None,
+    lock_body_html: str | None = None,
+) -> str:
+    """Pre-lock / lock food card: category image + title + justification + meta."""
+    import base64
+
+    import food_categories as fcat
+
+    cat = fcat.infer_dish_category(
+        suggestion,
+        meta={
+            **(ctx if isinstance(ctx, dict) else {}),
+            "dish_category": (ctx or {}).get("dish_category"),
+        },
+    )
+    img_html = ""
+    raw = fcat.dish_image_bytes(cat)
+    if raw:
+        b64 = base64.b64encode(raw).decode("ascii")
+        img_html = (
+            f'<img class="oc-food-img" src="data:image/jpeg;base64,{b64}" alt=""/>'
+        )
+
+    shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
+    if not recipe and shop:
+        recipe = shop.get("recipe") if isinstance(shop.get("recipe"), dict) else None
+    meta = _food_meta_line(language=language, ctx=ctx, shop=shop, recipe=recipe)
+
+    just_html = ""
+    if lock_body_html:
+        just_html = lock_body_html.replace("<p>", '<p class="oc-food-just">', 1)
+    elif justification:
+        just_html = f'<p class="oc-food-just">{html.escape(justification)}</p>'
+
+    meta_html = (
+        f'<p class="oc-food-meta">{html.escape(meta)}</p>' if meta else ""
+    )
+    lock_html = lock_label_html or ""
+
+    return (
+        '<div class="oc-decision oc-food-decision">'
+        f"{img_html}"
+        '<div class="oc-food-body">'
+        f"<h1>{html.escape(suggestion)}</h1>"
+        f"{just_html}"
+        f"{meta_html}"
+        f"{lock_html}"
+        "</div>"
         "</div>"
     )
 
@@ -1361,6 +1474,38 @@ a.oc-cta:focus {{
     color: var(--oc-muted) !important;
     font-weight: 500 !important;
 }}
+.oc-food-decision {{
+    text-align: center !important;
+    padding: 0 0 1.35rem !important;
+    overflow: hidden !important;
+}}
+.oc-food-img {{
+    display: block !important;
+    width: 100% !important;
+    aspect-ratio: 16 / 10 !important;
+    object-fit: cover !important;
+    border-radius: 24px 24px 0 0 !important;
+    background: #eee !important;
+}}
+.oc-food-body {{
+    padding: 1.15rem 1.35rem 0 !important;
+}}
+.oc-food-decision h1 {{
+    margin-bottom: 0.65rem !important;
+}}
+.oc-food-just {{
+    max-width: 22rem !important;
+    margin: 0 auto !important;
+}}
+.oc-food-meta {{
+    margin: 0.85rem auto 0 !important;
+    max-width: 22rem !important;
+    color: var(--oc-muted) !important;
+    font-size: 0.92rem !important;
+    font-weight: 500 !important;
+    line-height: 1.35 !important;
+    font-family: "Inter", sans-serif !important;
+}}
 .oc-lock {{
     display: inline-block; margin-top: 1.1rem;
     background: transparent;
@@ -2031,11 +2176,88 @@ a.oc-shop-row .oc-shop-hint {{
     margin-top: 2px;
 }}
 a.oc-shop-row.checked {{
-    opacity: 0.5;
+    opacity: 1;
 }}
 a.oc-shop-row.checked .oc-shop-name {{
-    text-decoration: line-through;
+    text-decoration: none;
+    color: var(--oc-ink);
+    font-weight: 500;
 }}
+/* Execute selection checklist — st.checkbox rows (no strikethrough) */
+.st-key-exec_shop_card {{
+    background: #fff !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] {{
+    min-height: 44px !important;
+    display: flex !important;
+    align-items: center !important;
+    padding: 0 8px !important;
+    margin: 0 !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] label {{
+    display: flex !important;
+    align-items: center !important;
+    gap: 12px !important;
+    width: 100% !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: var(--oc-ink) !important;
+    line-height: 1.25 !important;
+    text-decoration: none !important;
+    opacity: 1 !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] label p {{
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    margin: 0 !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {{
+    display: flex !important;
+    visibility: visible !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] span[data-baseweb="checkbox"] {{
+    margin-right: 4px !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] span[data-baseweb="checkbox"] > div {{
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px !important;
+    border-radius: 50% !important;
+    border: 1.5px solid rgba(0, 0, 0, 0.18) !important;
+    background: #fff !important;
+}}
+.st-key-exec_shop_card [data-testid="stCheckbox"] input:checked + div,
+.st-key-exec_shop_card [data-testid="stCheckbox"] [data-checked="true"] > div,
+.st-key-exec_shop_card [data-testid="stCheckbox"] span[data-baseweb="checkbox"][data-checked="true"] > div {{
+    background: {ACCENT} !important;
+    border-color: {ACCENT} !important;
+}}
+.st-key-exec_shop_card [data-testid="stHorizontalBlock"] {{
+    align-items: center !important;
+    margin: 0 8px 4px !important;
+}}
+.st-key-exec_shop_card [data-testid="stHorizontalBlock"] div.stButton > button {{
+    background: transparent !important;
+    color: var(--oc-muted) !important;
+    border: none !important;
+    box-shadow: none !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 2px !important;
+    min-height: 28px !important;
+    padding: 0.2rem 0.4rem !important;
+    width: auto !important;
+}}
+/* Persistent Lista tab keeps strikethrough for purchased items */
 /* Streamlit bordered container used as premium shop card */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) {{
     background: #fff !important;
@@ -3513,6 +3735,10 @@ def _prepare_execute_local(cur: dict[str, Any] | None = None) -> None:
     st.session_state.page = "execute"
     st.session_state.ui_error = None
     st.session_state["pending_db_accept"] = True
+    _reset_execute_shopping_checks(
+        (updated if isinstance(updated, dict) else {}).get("decision_id")
+        or st.session_state.get("decision_id")
+    )
 
 
 def _cb_open_execute() -> None:
@@ -3671,7 +3897,7 @@ def _selected_to_buy_from_checks(
     shop: dict[str, Any],
     decision_id: int | None,
 ) -> dict[str, list[str]]:
-    """Build to_buy from shopping_checks toggles (default: all checked)."""
+    """Build to_buy from shopping_checks toggles (default: unchecked)."""
     to_buy = shop.get("to_buy") if isinstance(shop.get("to_buy"), dict) else {}
     if not to_buy:
         return {}
@@ -3691,7 +3917,7 @@ def _selected_to_buy_from_checks(
         for item in items:
             ckey = f"{did}:{idx}"
             idx += 1
-            if checks.get(ckey, True):
+            if checks.get(ckey, False):
                 selected.setdefault(str(section), []).append(str(item))
     return selected
 
@@ -3701,6 +3927,21 @@ def _count_checked_shop_items(shop: dict[str, Any], decision_id: int | None) -> 
     return sum(len(v) for v in selected.values())
 
 
+def _shop_item_count(shop: dict[str, Any] | None) -> int:
+    if not shop or not isinstance(shop, dict):
+        return 0
+    to_buy = shop.get("to_buy") or {}
+    if not isinstance(to_buy, dict):
+        return 0
+    n = 0
+    for items in to_buy.values():
+        if isinstance(items, str):
+            n += 1
+        elif isinstance(items, (list, tuple)):
+            n += len(items)
+    return n
+
+
 def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
     did = decision_id if decision_id is not None else "x"
     ckey = f"{did}:{idx}"
@@ -3708,7 +3949,53 @@ def _toggle_shop_check(decision_id: int | None, idx: int) -> None:
     if not isinstance(checks, dict):
         checks = {}
         st.session_state.shopping_checks = checks
-    checks[ckey] = not bool(checks.get(ckey, True))
+    checks[ckey] = not bool(checks.get(ckey, False))
+
+
+def _set_all_shop_checks(
+    shop: dict[str, Any],
+    decision_id: int | None,
+    *,
+    checked: bool,
+) -> None:
+    """Mark all execute-checklist items checked or unchecked."""
+    to_buy = shop.get("to_buy") if isinstance(shop.get("to_buy"), dict) else {}
+    checks = st.session_state.get("shopping_checks")
+    if not isinstance(checks, dict):
+        checks = {}
+        st.session_state.shopping_checks = checks
+    did = decision_id if decision_id is not None else "x"
+    idx = 0
+    for items in to_buy.values():
+        if not items:
+            continue
+        if isinstance(items, str):
+            items = [items]
+        if not isinstance(items, (list, tuple)):
+            continue
+        for _item in items:
+            ckey = f"{did}:{idx}"
+            wkey = f"shop_chk_{did}_{idx}"
+            checks[ckey] = bool(checked)
+            st.session_state[wkey] = bool(checked)
+            idx += 1
+
+
+def _reset_execute_shopping_checks(decision_id: int | None = None) -> None:
+    """All items start unchecked when execute opens."""
+    st.session_state.shopping_checks = {}
+    # Drop widget keys so checkboxes re-init unchecked
+    drop = [
+        k
+        for k in list(st.session_state.keys())
+        if isinstance(k, str) and k.startswith("shop_chk_")
+    ]
+    for k in drop:
+        try:
+            del st.session_state[k]
+        except Exception:
+            pass
+    _ = decision_id
 
 
 def _split_shop_item_label(raw: str) -> tuple[str, bool]:
@@ -4063,8 +4350,10 @@ def render_execute_sticky_cta(shop: dict[str, Any] | None) -> None:
                 disabled=checked_n <= 0,
             ):
                 selected = _selected_to_buy_from_checks(shop, did)
-                payload = selected if selected else to_buy
-                n = _merge_to_buy_into_list(payload, did)
+                if not selected:
+                    st.rerun()
+                    return
+                n = _merge_to_buy_into_list(selected, did)
                 if n:
                     try:
                         safe_toast(t("list_created"))
@@ -4082,7 +4371,7 @@ def render_checkable_shopping(
     *,
     recipe: dict[str, Any] | None = None,
 ) -> None:
-    """Quiet checkbox rows — one card, amounts right-aligned, tap toggles."""
+    """Selection checklist via st.checkbox — stays on execute, no anchors."""
     if not shop or not isinstance(shop, dict):
         return
     to_buy = shop.get("to_buy") or {}
@@ -4101,54 +4390,76 @@ def render_checkable_shopping(
         recipe_src = shop.get("recipe")
     amount_map = _recipe_amount_map(recipe_src)
 
-    rows_html: list[str] = [
-        '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
-        f'<div class="oc-shop-title">{html.escape(t("list_create_hint"))}</div>',
-    ]
-    idx = 0
-    for section, items in to_buy.items():
-        if not items:
-            continue
-        if isinstance(items, str):
-            items = [items]
-        if not isinstance(items, (list, tuple)):
-            continue
-        rows_html.append(
-            f'<div class="oc-sec-label">{html.escape(str(section))}</div>'
+    with st.container(border=True, key="exec_shop_card"):
+        st.markdown(
+            '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
         )
-        for item in items:
-            ckey = f"{did}:{idx}"
-            checked = bool(checks.get(ckey, True))
-            name, has_hint = _split_shop_item_label(str(item))
-            amt = _lookup_amount(amount_map, name)
-            href = html.escape(_qp_href(shop_check=str(idx)), quote=True)
-            cls = "oc-shop-row checked" if checked else "oc-shop-row"
-            chk = "✓" if checked else ""
-            name_html = html.escape(name)
-            if has_hint:
-                name_html += (
-                    f'<span class="oc-shop-hint">{html.escape(t("list_skip_hint"))}</span>'
+        head_l, head_r = st.columns([3, 1])
+        with head_l:
+            st.markdown(
+                f'<div class="oc-shop-title">{html.escape(t("list_create_hint"))}</div>',
+                unsafe_allow_html=True,
+            )
+        with head_r:
+            if st.button(
+                t("list_mark_all"),
+                key=f"shop_mark_all_{did}",
+                use_container_width=True,
+            ):
+                _set_all_shop_checks(shop, decision_id, checked=True)
+                st.rerun()
+
+        idx = 0
+        for section, items in to_buy.items():
+            if not items:
+                continue
+            if isinstance(items, str):
+                items = [items]
+            if not isinstance(items, (list, tuple)):
+                continue
+            st.markdown(
+                f'<div class="oc-sec-label">{html.escape(str(section))}</div>',
+                unsafe_allow_html=True,
+            )
+            for item in items:
+                ckey = f"{did}:{idx}"
+                wkey = f"shop_chk_{did}_{idx}"
+                name, has_hint = _split_shop_item_label(str(item))
+                amt = _lookup_amount(amount_map, name)
+                if wkey not in st.session_state:
+                    st.session_state[wkey] = bool(checks.get(ckey, False))
+
+                label_bits = [name]
+                if has_hint:
+                    label_bits.append(f"({t('list_skip_hint')})")
+                if amt:
+                    label_bits.append(f"— {amt}")
+                label = " ".join(label_bits)
+
+                def _sync_check(ck: str = ckey, wk: str = wkey) -> None:
+                    cur_checks = st.session_state.get("shopping_checks")
+                    if not isinstance(cur_checks, dict):
+                        cur_checks = {}
+                        st.session_state.shopping_checks = cur_checks
+                    cur_checks[ck] = bool(st.session_state.get(wk, False))
+
+                checked = st.checkbox(
+                    label,
+                    key=wkey,
+                    on_change=_sync_check,
                 )
-            amt_html = (
-                f'<span class="oc-shop-amt">{html.escape(amt)}</span>' if amt else ""
-            )
-            rows_html.append(
-                f'<a class="{cls}" href="{href}">'
-                f'<span class="oc-chk">{chk}</span>'
-                f'<span class="oc-shop-name">{name_html}</span>'
-                f"{amt_html}"
-                f"</a>"
-            )
-            idx += 1
+                checks[ckey] = bool(checked)
+                idx += 1
 
-    assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
-    if not isinstance(assumed, (list, tuple)):
-        assumed = ["salt", "peppar", "olja"]
-    assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
-    rows_html.append(f'<p class="oc-assumed">{html.escape(assumed_line)}</p>')
-
-    with st.container(border=True):
-        st.markdown("".join(rows_html), unsafe_allow_html=True)
+        assumed = shop.get("assumed_at_home") or ["salt", "peppar", "olja"]
+        if not isinstance(assumed, (list, tuple)):
+            assumed = ["salt", "peppar", "olja"]
+        assumed_line = shopping_mod.format_assumed_line(list(assumed), language=language)
+        st.markdown(
+            f'<p class="oc-assumed">{html.escape(assumed_line)}</p>',
+            unsafe_allow_html=True,
+        )
 
 
 def _profile_show_nutrition() -> bool:
@@ -5121,6 +5432,25 @@ def page_result() -> None:
                 ),
                 unsafe_allow_html=True,
             )
+        elif domain == "food":
+            ctx_l = _as_dict(cur.get("context"))
+            lock_label_html = f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+            lock_body_html = None
+            if body:
+                lock_body_html = body
+            elif accepted and justification:
+                lock_body_html = f"<p>{html.escape(justification)}</p>"
+            st.markdown(
+                _render_food_card_html(
+                    language=language,
+                    suggestion=suggestion,
+                    justification=justification,
+                    ctx=ctx_l,
+                    lock_label_html=lock_label_html,
+                    lock_body_html=lock_body_html,
+                ),
+                unsafe_allow_html=True,
+            )
         else:
             st.markdown(
                 f'<div class="oc-decision">'
@@ -5220,6 +5550,17 @@ def page_result() -> None:
             ),
             unsafe_allow_html=True,
         )
+    elif domain == "food":
+        # Pre-lock: sell the decision — image + title + justification + meta only
+        st.markdown(
+            _render_food_card_html(
+                language=language,
+                suggestion=suggestion,
+                justification=justification,
+                ctx=ctx,
+            ),
+            unsafe_allow_html=True,
+        )
     else:
         st.markdown(
             f'<div class="oc-decision">'
@@ -5231,27 +5572,8 @@ def page_result() -> None:
         )
     render_reroll_dots(reroll_index)
 
-    # Preview shopping on result (read-only) for dinner only — never for fridge
-    shop = ctx.get("shopping")
-    meal_type = ctx.get("meal_type") or st.session_state.get("food_meal_type")
-    show_shop = False if fridge_mode else True
-    if domain == "food" and not fridge_mode:
-        try:
-            import food_domain as fd
-
-            show_shop = fd.show_shopping(str(meal_type or "middag"))
-        except Exception:
-            show_shop = True
-    if food_cook and show_shop and isinstance(shop, dict):
-        render_shopping_card(shop, language)
-    elif domain == "food":
-        exec_detail = ctx.get("execution_detail")
-        if exec_detail:
-            st.markdown(
-                f'<p class="oc-meta">{html.escape(str(exec_detail))}</p>',
-                unsafe_allow_html=True,
-            )
-    else:
+    # Shopping list + recipe live on execute only — never on pre-lock food card
+    if domain != "food":
         exec_detail = ctx.get("execution_detail")
         if exec_detail:
             st.markdown(
@@ -5287,21 +5609,15 @@ def page_result() -> None:
                     reroll=False,
                     via_router=False,
                 )
-    elif food_cook and show_shop:
-        # Primary: Handla & laga → execute (plain button — Cloud-safe)
-        label = cur.get("execution_label") or t("handla_laga")
+    elif food_cook and not fridge_mode:
+        # Pre-lock primary: lock the decision (details live on execute)
         if st.button(
-            label,
+            t("go_for_it"),
             type="primary",
             use_container_width=True,
-            key="handla_accept",
+            key="food_go_for_it",
         ):
-            open_execute_now(cur)
-    elif food_cook and not show_shop:
-        # Frukost / lunch / kvällsmål — recipe view (no shopping), same path as fridge
-        label = cur.get("execution_label") or ("Ät nu" if language == "sv" else "Eat now")
-        if st.button(label, type="primary", use_container_width=True, key="eat_now_accept"):
-            open_execute_now(cur)
+            on_accept_primary(cur)
     else:
         # Shared accept for clothes / movie / weekend; workout opens execute player
         exec_label = cur.get("execution_label") or t("do_it")

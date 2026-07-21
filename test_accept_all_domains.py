@@ -139,7 +139,7 @@ class AppAcceptUiTests(unittest.TestCase):
         for domain, needle in (
             ("workout", "Starta"),
             ("clothes", "Bygg"),
-            ("food", "Handla"),
+            ("food", "Gör det"),
         ):
             at = AppTest.from_file("app.py", default_timeout=45)
             at.run()
@@ -207,20 +207,20 @@ class AppAcceptUiTests(unittest.TestCase):
         self.assertEqual(at.session_state["food_meal_type"], "lunch")
         cur = at.session_state["current"] or {}
         self.assertEqual((cur.get("context") or {}).get("meal_type"), "lunch")
-        # Accept must work after meal switch (Ät nu / Handla — or lunch-out map link)
+        # Accept must work after meal switch (Gör det — or lunch-out map link)
         labels = [b.label or "" for b in at.button]
         if any("karta" in L.lower() or "map" in L.lower() for L in labels):
             # Eating-out lunch is a valid meal-typed result; no session accept flag
             self.assertEqual((cur.get("context") or {}).get("meal_type"), "lunch")
             self.assertFalse(bool(at.session_state["ui_error"]))
             return
-        needle = "Ät nu" if any("Ät" in L for L in labels) else "Handla"
         for b in at.button:
-            if needle in (b.label or ""):
+            if (b.label or "") == "Gör det":
                 b.click().run()
                 break
         self.assertTrue(at.session_state["accepted"])
         self.assertFalse(bool(at.session_state["ui_error"]))
+        self.assertEqual(at.session_state["page"], "result")
 
     def test_css_chip_rules_override_ghost_secondary(self) -> None:
         """Regression: grid chips are ghost borders, not underlined secondary links."""
