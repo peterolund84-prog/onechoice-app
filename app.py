@@ -888,6 +888,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
 .oc-hero-title {{
     position: relative;
     z-index: 1;
+    display: block;
     font-family: "Sora", "Inter", sans-serif !important;
     font-size: clamp(38px, 10vw, 52px) !important;
     font-weight: 700 !important;
@@ -898,6 +899,10 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     margin: 0 0 28px !important;
     padding: 0 !important;
     width: 100% !important;
+}}
+.st-key-home_hero [data-testid="stHeaderActionElements"],
+.st-key-home_hero a.header-anchor {{
+    display: none !important;
 }}
 a.oc-cta {{
     display: block;
@@ -1028,8 +1033,11 @@ a.oc-domain-card:focus {{
     border: none !important;
 }}
 .st-key-home_free_form [data-testid="stHorizontalBlock"] {{
-    align-items: stretch !important;
+    align-items: flex-end !important;
     gap: 8px !important;
+}}
+.st-key-home_free_form [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child {{
+    min-width: 60% !important;
 }}
 .st-key-home_free_form [data-testid="stWidgetLabel"] {{
     display: none !important;
@@ -1057,37 +1065,31 @@ a.oc-domain-card:focus {{
 }}
 .st-key-home_free_form [data-testid="stFormSubmitButton"] {{
     display: flex !important;
-    align-items: stretch !important;
+    align-items: flex-end !important;
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
 }}
 .st-key-home_free_form [data-testid="stFormSubmitButton"] button {{
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    min-width: 48px !important;
-    width: 48px !important;
+    width: 100% !important;
+    min-width: 0 !important;
     min-height: 48px !important;
     height: 48px !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 0 18px !important;
     border-radius: 12px !important;
     background: {ACCENT} !important;
     color: #fff !important;
     border: none !important;
     box-shadow: none !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-}}
-.st-key-home_free_form [data-testid="stFormSubmitButton"] button::before {{
-    content: "" !important;
-    display: block !important;
-    width: 20px !important;
-    height: 20px !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3Cpath d='m13 6 6 6-6 6'/%3E%3C/svg%3E") !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-    background-size: 20px 20px !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
 }}
 .st-key-home_free_form [data-testid="stFormSubmitButton"] button:hover {{
     opacity: 0.92 !important;
@@ -2854,7 +2856,7 @@ def render_home_hero(inferred: dict[str, Any]) -> None:
     st.markdown(
         '<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<div class="oc-hero">'
-        f'<h1 class="oc-hero-title">{headline}</h1>'
+        f'<div class="oc-hero-title" role="heading" aria-level="1">{headline}</div>'
         f'<a class="oc-cta" href="{href}">{cta}</a>'
         f"</div>",
         unsafe_allow_html=True,
@@ -4161,7 +4163,7 @@ def page_home() -> None:
 
     with st.container(key="home_free_form"):
         with st.form("home_free_form", clear_on_submit=False, border=False):
-            col_in, col_go = st.columns([5, 1], gap="small")
+            col_in, col_go = st.columns([4, 1.3], gap="small", vertical_alignment="bottom")
             with col_in:
                 q = st.text_input(
                     " ",
@@ -4174,7 +4176,6 @@ def page_home() -> None:
                 submitted = st.form_submit_button(
                     t("home_free_submit"),
                     use_container_width=True,
-                    help=t("home_free_submit"),
                 )
     if submitted:
         question = (q or "").strip()
