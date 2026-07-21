@@ -608,13 +608,17 @@ h1, h2, h3, h4, h5, h6, .oc-logo, .oc-decision h1, .oc-pro h2 {{
 #MainMenu, footer, header, [data-testid="stToolbar"],
 [data-testid="stDecoration"], .stDeployButton,
 [data-testid="stSidebar"], [data-testid="stHeader"] {{ display: none !important; }}
+footer {{ visibility: hidden !important; }}
+section.main, [data-testid="stAppViewContainer"] > .main {{
+    padding-top: 0 !important;
+}}
 .block-container {{
     max-width: 420px !important;
-    padding: 1.4rem 1.25rem 7.5rem !important;
+    padding: 76px 1.25rem 96px !important;
     margin: 0 auto !important;
 }}
 @media (max-width: 768px) {{
-    .block-container {{ padding: 1.1rem 1rem 7.5rem !important; }}
+    .block-container {{ padding: 76px 1rem 96px !important; }}
 }}
 /* Fridge camera */
 .block-container:has([data-testid="stCameraInput"]) {{
@@ -784,33 +788,36 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     box-shadow: none !important;
 }}
 /* Domain/meal chips keep oval chrome via scoped rules below — NOT global ButtonGroup */
-/* Fixed top chrome — frosted glass, OneChoice + SV/EN */
-.oc-topbar {{
-    position: sticky !important;
+/* Fixed app header — one frosted bar; lang pills overlay the right slot */
+.oc-header {{
+    position: fixed !important;
     top: 0 !important;
     left: 0 !important;
     right: 0 !important;
-    z-index: 1100 !important;
+    z-index: 999 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: calc(12px + env(safe-area-inset-top)) 88px 12px 20px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    min-height: 52px !important;
     background: rgba(250, 250, 247, 0.72) !important;
     backdrop-filter: blur(14px) !important;
     -webkit-backdrop-filter: blur(14px) !important;
     border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
-    padding: max(0.35rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) 0.4rem max(1rem, env(safe-area-inset-left)) !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    min-height: 2.35rem !important;
+    pointer-events: none !important;
 }}
-.oc-topbar .oc-logo {{
-    position: absolute !important;
-    left: 50% !important;
-    transform: translateX(-50%) !important;
+.oc-header-wordmark, .oc-header .oc-logo {{
     margin: 0 !important;
+    padding: 0 !important;
+    font-family: "Sora", "Inter", sans-serif !important;
     font-size: 22px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--oc-ink) !important;
     text-align: center !important;
-    width: max-content !important;
+    line-height: 1.1 !important;
     pointer-events: none !important;
 }}
 /* Home hero — tight group: headline + 24px + CTA */
@@ -819,8 +826,8 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
-    justify-content: center !important;
-    padding: 48px 0 !important;
+    justify-content: flex-start !important;
+    padding: 40px 0 32px !important;
     max-height: 40vh !important;
     margin: 0 0 8px !important;
     overflow: hidden !important;
@@ -954,50 +961,24 @@ a.oc-domain-card:focus {{
     color: var(--oc-ink) !important;
     background: transparent !important;
 }}
-.st-key-home_free_form {{
-    margin-top: 8px !important;
-}}
-.st-key-home_free_form [data-testid="stTextInput"] input {{
-    border-radius: 12px !important;
-    min-height: 48px !important;
-    font-size: 16px !important;
-    padding: 12px 14px !important;
-    border: 1px solid var(--oc-border) !important;
-    transition: border-color 150ms ease !important;
-}}
-.st-key-home_free_form [data-testid="stTextInput"] input:focus {{
-    border-color: var(--oc-accent) !important;
-    box-shadow: none !important;
-}}
-.st-key-home_free_form [data-testid="stFormSubmitButton"] button {{
-    background: transparent !important;
-    color: var(--oc-muted) !important;
-    border: none !important;
-    box-shadow: none !important;
-    font-size: 0.95rem !important;
-    font-weight: 500 !important;
-    text-decoration: underline !important;
-    text-underline-offset: 3px !important;
-    min-height: 2.25rem !important;
-    margin-top: 4px !important;
-    transition: color 150ms ease !important;
-}}
-.st-key-home_free_form [data-testid="stFormSubmitButton"] button:hover {{
-    color: var(--oc-ink) !important;
-    background: transparent !important;
-}}
-/* Language — frosted header row, top-right SV · EN */
+/* Language — fixed inside header row, top-right SV · EN */
 .st-key-oc_lang_bar {{
     position: fixed !important;
-    top: max(0.35rem, env(safe-area-inset-top)) !important;
-    right: 0.55rem !important;
+    top: 0 !important;
+    right: 20px !important;
     left: auto !important;
-    z-index: 1200 !important;
+    z-index: 1000 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    height: calc(52px + env(safe-area-inset-top)) !important;
+    padding: env(safe-area-inset-top) 0 0 !important;
     width: auto !important;
     max-width: none !important;
     background: transparent !important;
-    padding: 0 !important;
     margin: 0 !important;
+    box-sizing: border-box !important;
+    pointer-events: auto !important;
 }}
 .st-key-oc_lang_bar [data-testid="stButtonGroup"],
 .st-key-oc_lang_pills [data-testid="stButtonGroup"],
@@ -1039,7 +1020,7 @@ a.oc-domain-card:focus {{
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    z-index: 1200 !important;
+    z-index: 999 !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0.35rem 0.4rem max(0.55rem, env(safe-area-inset-bottom)) !important;
@@ -1494,12 +1475,7 @@ div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="elemen
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
 }}
-/* Space so content clears fixed header + slimmer bottom nav */
-.block-container {{
-    padding-top: max(3.15rem, calc(env(safe-area-inset-top) + 2.55rem)) !important;
-    padding-bottom: 3.75rem !important;
-}}
-/* Home domain chips — HTML flex row */
+/* Domain / meal pills — ghost chip look (scoped; never style nav/lang) */
 .oc-chip-row {{
     display: flex !important;
     flex-wrap: wrap !important;
@@ -3842,18 +3818,15 @@ def _format_nutrition_fallback(
 
 
 def render_top_chrome(*, extra_class: str = "") -> None:
-    """Fixed top bar: OneChoice wordmark + SV/EN language toggle."""
-    lang_bar()
-    render_brand_header(extra_class=extra_class)
-
-
-def render_brand_header(*, extra_class: str = "") -> None:
-    """OneChoice wordmark inside the fixed top chrome bar."""
-    cls = "oc-logo" + (f" {extra_class}" if extra_class else "")
+    """Fixed frosted header: OneChoice wordmark + SV/EN (lang pills overlay right)."""
+    extra = f" {extra_class}" if extra_class else ""
     st.markdown(
-        f'<div class="oc-topbar"><div class="{cls}">OneChoice</div></div>',
+        f'<header class="oc-header{extra}" aria-label="OneChoice">'
+        f'<span class="oc-header-wordmark oc-logo">OneChoice</span>'
+        f"</header>",
         unsafe_allow_html=True,
     )
+    lang_bar()
 
 
 def render_food_recipe(
@@ -4006,8 +3979,6 @@ def _clear_guest_query_param() -> None:
 
 
 def page_home() -> None:
-    import router as rt
-
     render_logo()
     inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
 
@@ -4034,24 +4005,6 @@ def page_home() -> None:
                 )
 
     render_home_domain_grid()
-
-    with st.container(key="home_free_form"):
-        with st.form("home_free_form", clear_on_submit=False, border=False):
-            q = st.text_input(
-                "free_text",
-                label_visibility="collapsed",
-                placeholder=t("home_free_placeholder"),
-                max_chars=rt.MAX_INPUT_CHARS,
-            )
-            submitted = st.form_submit_button(t("home_free_submit"), use_container_width=True)
-    if submitted:
-        question = (q or "").strip()
-        if not question:
-            st.warning(t("empty"))
-        elif len(question) > rt.MAX_INPUT_CHARS:
-            st.warning(t("too_long"))
-        else:
-            run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
     nav()
 
 

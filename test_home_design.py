@@ -28,23 +28,19 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-hero", css)
         self.assertIn("oc-orb-breathe", css)
         self.assertIn("oc-domain-grid", css)
-        # Accent fill only on primary CTA (not soft purple theme)
         self.assertIn("var(--oc-accent)", css)
         self.assertNotIn("5A8BFF", css)
         self.assertNotIn("F4F6F8", css)
-        # Premium shopping pick card (execute) stays in design system
         self.assertIn("oc-shop-pick-marker", css)
         self.assertIn("oc-shop-tog-marker", css)
-        # Locked chrome: frosted header + keyed lang/nav
-        self.assertIn("oc-topbar", css)
-        self.assertIn("position: sticky", css)
+        # Fixed frosted chrome — header + lang/nav overlays
+        self.assertIn("oc-header", css)
+        self.assertIn("position: fixed", css)
+        self.assertIn("padding: 76px", css)
         self.assertIn("backdrop-filter", css)
         self.assertIn("st-key-home_hero", css)
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
-        self.assertIn("st-key-oc_lang_pills", css)
-        self.assertIn("st-key-oc_nav_pills", css)
-        self.assertIn("justify-content: center", css)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -53,24 +49,25 @@ class HomeDesignTests(unittest.TestCase):
         at.run()
         labels = [b.label or "" for b in at.button]
         self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
+        self.assertFalse(any("Bestäm" == lab for lab in labels if lab != "Bestäm åt mig"))
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("kylen", body.lower())
         caps = [str(c.value or "") for c in at.caption]
         self.assertFalse(any("/" in c and c[:1].isdigit() for c in caps), caps)
         self.assertIn("oc-hero-title", body)
         self.assertIn("oc-domain-grid", body)
+        self.assertEqual(body.count('class="oc-header"'), 1)
+        self.assertNotIn("oc-topbar", body)
         for need in ("Mat", "Kläder", "Film", "Träning", "Helg"):
             self.assertIn(need, body)
         self.assertIn("SV", body)
         self.assertIn("EN", body)
-        self.assertIn("oc-lang-sep", body)
-        # Build id must never surface in consumer UI
         self.assertNotIn("build ", body.lower())
         for c in caps:
             self.assertNotIn("build ", str(c).lower())
-        # Wordmark is solid (no two-tone <em>)
-        self.assertIn('class="oc-logo">OneChoice</', body.replace(" ", ""))
-        # Tagline token kept for other pages
+        self.assertIn('class="oc-header-wordmark', body.replace(" ", ""))
+        self.assertNotIn("free_text", body.lower())
+        self.assertNotIn("Eller skriv vad du behöver", body)
         css = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-tagline", css)
 
