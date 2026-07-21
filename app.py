@@ -140,7 +140,7 @@ I18N = {
         "ask": "Vad behöver du bestämma?",
         "decide": "Bestäm åt mig",
         "home_or_choose": "Eller välj själv",
-        "home_free_placeholder": "Eller skriv vad du behöver bestämma…",
+        "home_free_placeholder": "Skriv ditt beslut…",
         "home_free_submit": "Bestäm",
         "home_fridge_card": "Fota kylen",
         "new": "Nytt förslag",
@@ -291,7 +291,7 @@ I18N = {
         "ask": "What do you need decided?",
         "decide": "Decide for me",
         "home_or_choose": "Or choose yourself",
-        "home_free_placeholder": "Or type what you need to decide…",
+        "home_free_placeholder": "Type your decision…",
         "home_free_submit": "Decide",
         "home_fridge_card": "Snap the fridge",
         "new": "New suggestion",
@@ -847,7 +847,7 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
 .st-key-home_hero {{
     position: relative !important;
     width: 100% !important;
-    margin: 0 0 40px !important;
+    margin: 0 0 48px !important;
     padding: 0 !important;
     max-height: none !important;
     min-height: 0 !important;
@@ -935,6 +935,7 @@ a.oc-cta:focus {{
     width: 100% !important;
 }}
 .oc-section-label {{
+    display: block !important;
     font-size: 11px !important;
     letter-spacing: 0.1em !important;
     text-transform: uppercase !important;
@@ -958,13 +959,18 @@ a.oc-cta:focus {{
 .oc-domain-grid {{
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-auto-rows: 52px !important;
+    align-items: stretch !important;
     gap: 10px !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
     box-sizing: border-box !important;
 }}
-a.oc-domain-card {{
+.oc-domain-grid > a.oc-domain-card,
+.oc-domain-grid > a.oc-domain-card:link,
+.oc-domain-grid > a.oc-domain-card:visited,
+.oc-domain-grid > a.oc-domain-card:active {{
     display: flex !important;
     flex-direction: row !important;
     align-items: center !important;
@@ -979,18 +985,25 @@ a.oc-domain-card {{
     transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
     min-height: 52px !important;
     height: 52px !important;
+    max-height: 52px !important;
     width: 100% !important;
     min-width: 0 !important;
     max-width: 100% !important;
     margin: 0 !important;
     transform: none !important;
     align-self: stretch !important;
+    justify-self: stretch !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
+    outline: none !important;
+    vertical-align: top !important;
+    position: relative !important;
+    top: 0 !important;
+    -webkit-tap-highlight-color: transparent !important;
 }}
-a.oc-domain-card:hover,
-a.oc-domain-card:focus {{
-    transform: translateY(-1px);
+.oc-domain-grid > a.oc-domain-card:hover,
+.oc-domain-grid > a.oc-domain-card:focus {{
+    transform: translateY(-1px) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
     border-color: rgba(0, 0, 0, 0.1) !important;
     color: var(--oc-ink) !important;
@@ -1002,6 +1015,7 @@ a.oc-domain-card:focus {{
     width: 20px !important;
     height: 20px !important;
     flex: 0 0 20px !important;
+    line-height: 0 !important;
     color: var(--oc-ink) !important;
 }}
 .oc-domain-card-icon svg {{
@@ -1023,8 +1037,8 @@ a.oc-domain-card:focus {{
     min-width: 0 !important;
 }}
 .st-key-home_free_form {{
-    margin: 0 !important;
-    padding: 0 0 20px !important;
+    margin: 24px 0 20px !important;
+    padding: 0 !important;
     width: 100% !important;
 }}
 .st-key-home_free_form [data-testid="stForm"] {{
@@ -1037,7 +1051,7 @@ a.oc-domain-card:focus {{
     gap: 8px !important;
 }}
 .st-key-home_free_form [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"]:first-child {{
-    min-width: 60% !important;
+    min-width: 72% !important;
 }}
 .st-key-home_free_form [data-testid="stWidgetLabel"] {{
     display: none !important;
@@ -2890,7 +2904,7 @@ def render_home_domain_grid() -> None:
     cards += _render_domain_card("fridge", href_params={"fridge": "1"})
     with st.container(key="home_domains"):
         st.markdown(
-            f'<p class="oc-section-label">{html.escape(t("home_or_choose"))}</p>'
+            f'<div class="oc-section-label">{html.escape(t("home_or_choose"))}</div>'
             f'<div class="oc-domain-grid">{cards}</div>',
             unsafe_allow_html=True,
         )
@@ -4163,7 +4177,7 @@ def page_home() -> None:
 
     with st.container(key="home_free_form"):
         with st.form("home_free_form", clear_on_submit=False, border=False):
-            col_in, col_go = st.columns([4, 1.3], gap="small", vertical_alignment="bottom")
+            col_in, col_go = st.columns([5, 1.6], gap="small", vertical_alignment="bottom")
             with col_in:
                 q = st.text_input(
                     " ",

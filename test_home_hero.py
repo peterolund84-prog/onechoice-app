@@ -172,7 +172,7 @@ class HomeHeroTests(unittest.TestCase):
             for inp in getattr(at, "text_input", [])
         ]
         self.assertTrue(
-            any("Eller skriv" in p for p in placeholders),
+            any("Skriv ditt beslut" in p for p in placeholders),
             placeholders,
         )
         body = " ".join(str(m.value or "") for m in at.markdown)
@@ -225,12 +225,25 @@ class HomeHeroTests(unittest.TestCase):
             "role=\"heading\"",
             "oc-cta",
             "margin: 0 0 28px",
-            "min-width: 60%",
+            "margin: 0 0 48px",
+            "grid-auto-rows: 52px",
+            "margin: 24px 0 20px",
+            "min-width: 72%",
             "white-space: nowrap",
             "oc-section-label",
             "oc-header-wordmark",
         ):
             self.assertIn(needle, css, needle)
+
+    def test_domain_cards_share_one_class(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertEqual(body.count('class="oc-domain-card"'), 6)
+        self.assertNotIn("oc-domain-card-clothes", body)
+        self.assertNotIn("oc-domain-card-food", body)
 
     def test_home_domain_card_labels_fit_compact_row(self) -> None:
         import app as app_mod
