@@ -74,6 +74,7 @@ import traceback
 import uuid
 from datetime import datetime
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 
@@ -130,6 +131,8 @@ ICON_LIST = (
 
 # Server-side only — never render in the consumer UI
 BUILD_ID = "food-ui-hard-fix-v28-20260720"
+
+APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
 I18N = {
     "sv": {
@@ -2670,6 +2673,11 @@ _DOMAIN_CARD_ICONS: dict[str, str] = {
 }
 
 
+def _stockholm_now() -> datetime:
+    """Sweden-local clock for home hero (avoid hard dependency on food_domain.local_now)."""
+    return datetime.now(APP_LOCAL_TZ)
+
+
 def infer_home_hero(
     now: datetime | None = None,
     *,
@@ -2679,7 +2687,8 @@ def infer_home_hero(
     import food_domain as fd
 
     if now is None:
-        now = fd.local_now()
+        local_fn = getattr(fd, "local_now", None)
+        now = local_fn() if callable(local_fn) else _stockholm_now()
     meal_type = fd.default_meal_type(now=now)
     meal_name = fd.meal_label(meal_type, language)
     weekend_label = I18N.get(language, I18N["sv"])["domains"]["weekend"]

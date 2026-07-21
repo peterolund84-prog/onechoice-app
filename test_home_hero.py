@@ -55,6 +55,21 @@ class HomeHeroTests(unittest.TestCase):
                 self.assertEqual(inferred["headline"], headline)
                 self.assertEqual(inferred["meal_type"], meal_key)
 
+    def test_infer_works_without_food_domain_local_now(self) -> None:
+        import app as app_mod
+        import food_domain as fd
+
+        now = datetime(2026, 7, 21, 14, 48, tzinfo=TZ)
+        saved = getattr(fd, "local_now", None)
+        if hasattr(fd, "local_now"):
+            delattr(fd, "local_now")
+        try:
+            inferred = app_mod.infer_home_hero(now, language="sv")
+            self.assertEqual(inferred["headline"], "Middag?")
+        finally:
+            if saved is not None:
+                fd.local_now = saved  # type: ignore[attr-defined]
+
     def test_infer_evening_headline_en(self) -> None:
         import app as app_mod
 
