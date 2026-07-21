@@ -96,6 +96,8 @@ class HomeHeroTests(unittest.TestCase):
         self.assertIn("oc-hero", body)
         self.assertIn("oc-hero-orb", body)
         self.assertIn('class="oc-cta"', body.replace(" ", ""))
+        self.assertIn('<divclass="oc-hero-title"', body.replace(" ", "").lower())
+        self.assertNotIn("<h1", body.lower())
         self.assertIn("oc-domain-grid", body)
         self.assertIn("oc-domain-card", body)
         for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
@@ -186,22 +188,27 @@ class HomeHeroTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
         self.assertTrue(at.text_input, "home free-text input missing")
+        submit_btns = [b for b in at.button if b.label == "Bestäm"]
+        self.assertTrue(submit_btns, [b.label for b in at.button])
         at.text_input[0].set_value("Vad ska jag laga till middag?").run()
-        submits = getattr(at, "form_submit_button", None) or []
-        if not submits:
-            for b in at.button:
-                if b.label and "Bestäm" in b.label:
-                    b.click().run()
-                    break
-            else:
-                self.fail("free-text submit control not found")
-        else:
-            submits[0].click().run()
+        submit_btns[0].click().run()
         self.assertFalse(at.exception)
         self.assertIn(
             at.session_state["page"],
             ("result", "ambiguous", "clothes_occasion"),
         )
+
+    def test_free_text_form_submit_button_click(self) -> None:
+        """Button path (not only Enter) routes the question."""
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=90)
+        at.run()
+        at.text_input[0].set_value("Film ikväll").run()
+        submit = next(b for b in at.button if b.label == "Bestäm")
+        submit.click().run()
+        self.assertFalse(at.exception)
+        self.assertIn(at.session_state["page"], ("result", "ambiguous", "clothes_occasion"))
 
 
     def test_home_centerline_css_rules(self) -> None:
@@ -215,8 +222,11 @@ class HomeHeroTests(unittest.TestCase):
             "translateX(-50%)",
             "text-align: center",
             "oc-hero-title",
+            "role=\"heading\"",
             "oc-cta",
             "margin: 0 0 28px",
+            "min-width: 60%",
+            "white-space: nowrap",
             "oc-section-label",
             "oc-header-wordmark",
         ):

@@ -64,6 +64,7 @@ class HomeDesignTests(unittest.TestCase):
         caps = [str(c.value or "") for c in at.caption]
         self.assertFalse(any("/" in c and c[:1].isdigit() for c in caps), caps)
         self.assertIn("oc-hero-title", body)
+        self.assertNotIn("<h1", body.lower())
         self.assertIn("oc-domain-grid", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)
