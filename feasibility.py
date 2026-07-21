@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
+from urllib.parse import quote_plus
 
 import mocks
 import shopping
@@ -631,7 +632,18 @@ def _check_movie(
         except Exception:
             pass
 
-    meta_title = (candidate.get("meta") or {}).get("title") or suggestion
+    meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    catalog_title = str(meta.get("title") or "").strip()
+    try:
+        import movie_domain as md
+
+        if not md.has_catalog_title(candidate):
+            return FeasibilityResult(ok=False, reasons=["no_catalog_title"])
+    except Exception:
+        if not catalog_title:
+            return FeasibilityResult(ok=False, reasons=["no_catalog_title"])
+
+    meta_title = catalog_title or str(candidate.get("suggestion") or "")
     # Strip Swedish wrappers: "Titta på X", "Ett avsnitt av X"
     title = meta_title
     for prefix in ("titta på ", "watch ", "ett avsnitt av ", "filmen ", "serien "):
@@ -662,6 +674,8 @@ def _check_movie(
         tmdb_row = tmdb_mod.lookup_title(title, kind=meta_kind)
         if not tmdb_row:
             return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+
+        display_title = str(tmdb_row.get("title") or suggestion).strip()
 
         vote_raw = tmdb_row.get("vote_average")
         vote_f: float | None = None
@@ -712,39 +726,57 @@ def _check_movie(
                 "url": match.get("url"),
                 "detail": f"{match['runtime_min']} min · {_service_label(match['service'])}",
             },
-            enriched={"meta": {**(candidate.get("meta") or {}), **match, **tmdb_meta}},
+            enriched={
+                "suggestion": display_title,
+                "meta": {
+                    **(candidate.get("meta") or {}),
+                    **match,
+                    **tmdb_meta,
+                    "title": title,
+                    "display_title": display_title,
+                },
+            },
         )
 
-    # Generic suggestions without a catalog title: only OK if they don't name a paywalled title
+    # Named title but not in mock catalog — still OK with TMDB + JustWatch search.
     low = suggestion.lower()
     if any(x in low for x in ("hyr för", "rent for", "49 kr", "pay-per-view")) and not allow_rent:
         return FeasibilityResult(ok=False, reasons=["rental_not_allowed"])
 
-    # If suggestion names a known title not on services → fail
-    for known in mocks.STREAMING_CATALOG:
-        if known in low:
-            return FeasibilityResult(ok=False, reasons=[f"unavailable:{known}"])
+    # Known catalog title that failed availability → reject (wrong service or too long).
+    key = title.strip().lower()
+    catalog_row = mocks.STREAMING_CATALOG.get(key)
+    if not catalog_row:
+        for k, v in mocks.STREAMING_CATALOG.items():
+            if k in key or key in k:
+                catalog_row = v
+                break
+    if catalog_row:
+        return FeasibilityResult(ok=False, reasons=["unavailable_on_services"])
 
-    # Vague "watch a thriller" — pass with search on first service
     import movie_domain as md
 
     svc = services[0] if services else "netflix"
+    search_q = display_title or title
     return FeasibilityResult(
         ok=True,
         execution={
             "type": "stream",
-            "label": f"Öppna {_service_label(svc)}",
-            "url": _service_home(svc),
-            "detail": f"Inom ~{minutes} min på dina tjänster",
+            "label": f"Öppna på {_service_label(svc)}",
+            "url": f"https://www.justwatch.com/se/search?q={quote_plus(search_q)}",
+            "detail": f"Sök {search_q} · {_service_label(svc)}",
         },
         enriched={
+            "suggestion": display_title,
             "meta": {
                 **(candidate.get("meta") or {}),
                 **tmdb_meta,
+                "title": title,
+                "display_title": display_title,
                 "service": svc,
                 "runtime_min": None,
                 "kind": md.format_kind(fmt or "avsnitt") if fmt else None,
-            }
+            },
         },
     )
 

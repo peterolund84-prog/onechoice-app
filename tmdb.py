@@ -58,6 +58,10 @@ _OFFLINE_TMDB: dict[str, dict[str, Any]] = {
     "det sista kapitlet": {"tmdb_id": 102, "year": 2020, "vote_average": 6.8, "poster_path": "/det-sista-kapitlet.jpg"},
     "top gun maverick": {"tmdb_id": 103, "year": 2022, "vote_average": 7.7, "poster_path": "/top-gun-maverick.jpg"},
     "beck": {"tmdb_id": 104, "year": 2015, "vote_average": 7.1, "poster_path": "/beck.jpg"},
+    "our planet": {"tmdb_id": 201, "year": 2019, "vote_average": 8.5, "poster_path": "/our-planet.jpg"},
+    "my octopus teacher": {"tmdb_id": 202, "year": 2020, "vote_average": 8.1, "poster_path": "/octopus.jpg"},
+    "hilda": {"tmdb_id": 203, "year": 2018, "vote_average": 8.0, "poster_path": "/hilda.jpg"},
+    "kung fu panda": {"tmdb_id": 204, "year": 2008, "vote_average": 7.6, "poster_path": "/kfp.jpg"},
 }
 
 

@@ -161,18 +161,50 @@ class MovieDecideLoggingTests(unittest.TestCase):
         )
         self.assertFalse(r.ok)
         good = {
-            "suggestion": "En familjevänlig animationsfilm",
-            "justification": "Med barnen — lagom äventyr.",
-            # TMDB validation requires a catalog-like meta.title.
-            "meta": {"title": "beck", "kind": "film", "kids_ok": True, "max_age_rating": 7},
+            "suggestion": "Hilda",
+            "justification": "Med barnen — äventyr i lagom dos.",
+            "meta": {"title": "hilda", "kind": "series", "kids_ok": True, "max_age_rating": 7},
         }
         r2 = feasibility.feasibility_check(
             good,
             domain="movie",
             profile=profile,
-            context={"mood": "med_barnen", "format": "film", "available_minutes": 140},
+            context={"mood": "med_barnen", "format": "avsnitt", "available_minutes": 50},
         )
         self.assertTrue(r2.ok)
+
+    def test_lar_mig_rejects_vague_placeholder(self) -> None:
+        profile = feasibility.parse_profile(
+            self.user,
+            {"streaming_services": ["netflix"], "available_minutes": 50},
+        )
+        vague = {
+            "suggestion": "Ett kort dokumentäravsnitt",
+            "justification": "Lär mig något.",
+            "meta": {"kind": "series", "genres": ["documentary"]},
+        }
+        r = feasibility.feasibility_check(
+            vague,
+            domain="movie",
+            profile=profile,
+            context={"mood": "lar_mig", "format": "avsnitt", "available_minutes": 50},
+        )
+        self.assertFalse(r.ok)
+        self.assertIn("no_catalog_title", r.reasons or [])
+
+    def test_lar_mig_decide_returns_named_title(self) -> None:
+        r = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            context_extra={"format": "avsnitt", "mood": "lar_mig"},
+        )
+        self.assertTrue(r.ok)
+        self.assertNotIn("dokumentäravsnitt", (r.suggestion or "").lower())
+        ctx = r.context or {}
+        self.assertTrue(ctx.get("movie_poster_url") or ctx.get("movie_tmdb_vote_average"))
 
     def test_ui_has_format_mood_chip_renderer(self) -> None:
         import inspect

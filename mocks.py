@@ -178,6 +178,30 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "kind": "series",
         "links": {"disney_plus": "https://www.disneyplus.com/search?q=Andor"},
     },
+    "our planet": {
+        "services": {"netflix"},
+        "runtime_min": 50,
+        "kind": "series",
+        "links": {"netflix": "https://www.netflix.com/search?q=Our%20Planet"},
+    },
+    "my octopus teacher": {
+        "services": {"netflix"},
+        "runtime_min": 85,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=My%20Octopus%20Teacher"},
+    },
+    "hilda": {
+        "services": {"netflix"},
+        "runtime_min": 24,
+        "kind": "series",
+        "links": {"netflix": "https://www.netflix.com/search?q=Hilda"},
+    },
+    "kung fu panda": {
+        "services": {"netflix"},
+        "runtime_min": 92,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Kung%20Fu%20Panda"},
+    },
 }
 
 SERVICE_ALIASES = {

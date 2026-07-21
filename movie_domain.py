@@ -165,52 +165,62 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
     "lar_mig": {
         "sv": [
             {
-                "suggestion": "Ett kort dokumentäravsnitt",
-                "justification": "Lär mig något — känns produktivt, fortfarande vila.",
-                "meta": {"kind": "series", "genres": ["documentary"]},
+                "suggestion": "Our Planet",
+                "justification": "Lär dig om naturen — ett avsnitt, lagom tempo.",
+                "meta": {"title": "our planet", "kind": "series", "genres": ["documentary"]},
             },
             {
-                "suggestion": "En naturdokumentär under 90 minuter",
-                "justification": "Nyfiken kväll utan plot-ångest.",
-                "meta": {"kind": "film", "genres": ["documentary", "nature"]},
+                "suggestion": "Det sista kapitlet",
+                "justification": "Svenskt och tankeväckande — perfekt för en nyfiken kväll.",
+                "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
+            },
+            {
+                "suggestion": "My Octopus Teacher",
+                "justification": "En film som lär och stillar — under 90 minuter.",
+                "meta": {"title": "my octopus teacher", "kind": "film", "genres": ["documentary", "nature"]},
             },
         ],
         "en": [
             {
-                "suggestion": "A short documentary episode",
-                "justification": "Learn something — productive, still rest.",
-                "meta": {"kind": "series", "genres": ["documentary"]},
+                "suggestion": "Our Planet",
+                "justification": "Learn about the natural world — one episode, easy pace.",
+                "meta": {"title": "our planet", "kind": "series", "genres": ["documentary"]},
             },
             {
-                "suggestion": "A nature documentary under 90 minutes",
-                "justification": "Curious evening without plot anxiety.",
-                "meta": {"kind": "film", "genres": ["documentary", "nature"]},
+                "suggestion": "Det sista kapitlet",
+                "justification": "Swedish and thought-provoking — curious evening without stress.",
+                "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
+            },
+            {
+                "suggestion": "My Octopus Teacher",
+                "justification": "A film that teaches and calms — under 90 minutes.",
+                "meta": {"title": "my octopus teacher", "kind": "film", "genres": ["documentary", "nature"]},
             },
         ],
     },
     "med_barnen": {
         "sv": [
             {
-                "suggestion": "En familjevänlig animationsfilm",
-                "justification": "Med barnen — lagom äventyr, noll åldersoro.",
-                "meta": {"kind": "film", "kids_ok": True, "max_age_rating": 7},
+                "suggestion": "Hilda",
+                "justification": "Med barnen — äventyr i lagom dos, klart innan läggdags.",
+                "meta": {"title": "hilda", "kind": "series", "kids_ok": True, "max_age_rating": 7},
             },
             {
-                "suggestion": "Ett kort familjeavsnitt",
-                "justification": "Tillsammans i soffan — klart innan läggdags.",
-                "meta": {"kind": "series", "kids_ok": True, "max_age_rating": 7},
+                "suggestion": "Kung Fu Panda",
+                "justification": "Familjefilm med hjärta — alla skrattar i soffan.",
+                "meta": {"title": "kung fu panda", "kind": "film", "kids_ok": True, "max_age_rating": 7},
             },
         ],
         "en": [
             {
-                "suggestion": "A family-friendly animated film",
-                "justification": "With the kids — right-sized adventure, zero age worry.",
-                "meta": {"kind": "film", "kids_ok": True, "max_age_rating": 7},
+                "suggestion": "Hilda",
+                "justification": "With the kids — right-sized adventure, done before bedtime.",
+                "meta": {"title": "hilda", "kind": "series", "kids_ok": True, "max_age_rating": 7},
             },
             {
-                "suggestion": "A short family episode",
-                "justification": "Couch together — done before bedtime.",
-                "meta": {"kind": "series", "kids_ok": True, "max_age_rating": 7},
+                "suggestion": "Kung Fu Panda",
+                "justification": "Family film with heart — everyone laughs on the couch.",
+                "meta": {"title": "kung fu panda", "kind": "film", "kids_ok": True, "max_age_rating": 7},
             },
         ],
     },
@@ -460,6 +470,44 @@ def normalize_format(value: str | None) -> str:
     return v if v in FORMATS else "avsnitt"
 
 
+def has_catalog_title(candidate: dict[str, Any]) -> bool:
+    """True when meta.title names a concrete title (not a vague category phrase)."""
+    meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    title = str(meta.get("title") or "").strip()
+    return bool(title) and not is_vague_movie_phrase(title)
+
+
+def is_vague_movie_phrase(text: str) -> bool:
+    """Detect category placeholders like 'Ett kort dokumentäravsnitt'."""
+    low = str(text or "").strip().lower()
+    if not low:
+        return True
+    vague_prefixes = (
+        "ett ",
+        "en ",
+        "a ",
+        "an ",
+        "one ",
+    )
+    vague_fragments = (
+        "documentäravsnitt",
+        "documentary episode",
+        "familjevänlig",
+        "family-friendly",
+        "family episode",
+        "familjeavsnitt",
+        "naturdokumentär",
+        "nature documentary",
+        "under 90",
+        "under two hours",
+        "avsnitt av en",
+        "episode of a",
+    )
+    if any(low.startswith(p) for p in vague_prefixes):
+        return True
+    return any(frag in low for frag in vague_fragments)
+
+
 def normalize_mood(value: str | None) -> str:
     v = str(value or "").strip().lower()
     aliases = {
@@ -610,41 +658,20 @@ def local_candidates(
         out.append({**c, "meta": meta})
 
     if not out:
-        # Guarantee at least one vague candidate for the format
-        if lang == "sv":
-            out = [
-                {
-                    "suggestion": (
-                        "Ett avsnitt av en varm komediserie"
-                        if want_kind == "series"
-                        else "En film under två timmar"
-                    ),
-                    "justification": mood_guidance(mood_n, "sv").split("Ton: ")[-1][:80],
-                    "meta": {
-                        "kind": want_kind,
-                        "format": fmt_n,
-                        "mood": mood_n,
-                        "local_pack": True,
-                    },
-                }
-            ]
-        else:
-            out = [
-                {
-                    "suggestion": (
-                        "One episode of a warm comedy series"
-                        if want_kind == "series"
-                        else "A film under two hours"
-                    ),
-                    "justification": "Right mood for tonight.",
-                    "meta": {
-                        "kind": want_kind,
-                        "format": fmt_n,
-                        "mood": mood_n,
-                        "local_pack": True,
-                    },
-                }
-            ]
+        # Last resort: reuse avkopplat comfort titles (always named + streamable).
+        fallback = list((_MOOD_LOCAL.get("avkopplat") or {}).get(lang) or [])
+        for c in fallback:
+            meta = dict(c.get("meta") or {})
+            kind = str(meta.get("kind") or "")
+            if kind and kind != want_kind:
+                continue
+            meta.setdefault("kind", want_kind)
+            meta["format"] = fmt_n
+            meta["mood"] = mood_n
+            meta["local_pack"] = True
+            out.append({**c, "meta": meta})
+            if len(out) >= 2:
+                break
     return out[:5]
 
 
