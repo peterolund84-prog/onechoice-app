@@ -7,12 +7,14 @@ import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+TZ = ZoneInfo("Europe/Stockholm")
+
 
 class HomeHeroTests(unittest.TestCase):
     def test_infer_breakfast_headline_sv(self) -> None:
         import app as app_mod
 
-        now = datetime(2026, 7, 21, 8, 30, tzinfo=ZoneInfo("Europe/Stockholm"))
+        now = datetime(2026, 7, 21, 8, 30, tzinfo=TZ)
         inferred = app_mod.infer_home_hero(now, language="sv")
         self.assertEqual(inferred["headline"], "Frukost?")
         self.assertEqual(inferred["domain"], "food")
@@ -21,15 +23,42 @@ class HomeHeroTests(unittest.TestCase):
     def test_infer_dinner_headline_sv(self) -> None:
         import app as app_mod
 
-        now = datetime(2026, 7, 21, 14, 35, tzinfo=ZoneInfo("Europe/Stockholm"))
+        now = datetime(2026, 7, 21, 14, 35, tzinfo=TZ)
         inferred = app_mod.infer_home_hero(now, language="sv")
         self.assertEqual(inferred["headline"], "Middag?")
         self.assertEqual(inferred["meal_type"], "middag")
 
+    def test_infer_dinner_at_1448_stockholm(self) -> None:
+        """Regression: UTC servers must not show Lunch at 14:48 local."""
+        import app as app_mod
+
+        now = datetime(2026, 7, 21, 14, 48, tzinfo=TZ)
+        inferred = app_mod.infer_home_hero(now, language="sv")
+        self.assertEqual(inferred["headline"], "Middag?")
+        self.assertEqual(inferred["meal_type"], "middag")
+
+    def test_meal_boundary_times(self) -> None:
+        import app as app_mod
+        import food_domain as fd
+
+        cases = [
+            (datetime(2026, 7, 21, 5, 0, tzinfo=TZ), "frukost", "Frukost?"),
+            (datetime(2026, 7, 21, 10, 0, tzinfo=TZ), "lunch", "Lunch?"),
+            (datetime(2026, 7, 21, 13, 30, tzinfo=TZ), "middag", "Middag?"),
+            (datetime(2026, 7, 21, 20, 0, tzinfo=TZ), "kvallsmal", "Kvällsmål?"),
+            (datetime(2026, 7, 21, 23, 59, tzinfo=TZ), "kvallsmal", "Kvällsmål?"),
+        ]
+        for now, meal_key, headline in cases:
+            with self.subTest(now=now.isoformat()):
+                self.assertEqual(fd.default_meal_type(now=now), meal_key)
+                inferred = app_mod.infer_home_hero(now, language="sv")
+                self.assertEqual(inferred["headline"], headline)
+                self.assertEqual(inferred["meal_type"], meal_key)
+
     def test_infer_evening_headline_en(self) -> None:
         import app as app_mod
 
-        now = datetime(2026, 7, 21, 21, 0, tzinfo=ZoneInfo("Europe/Stockholm"))
+        now = datetime(2026, 7, 21, 21, 0, tzinfo=TZ)
         inferred = app_mod.infer_home_hero(now, language="en")
         self.assertEqual(inferred["headline"], "Evening snack?")
         self.assertEqual(inferred["meal_type"], "kvallsmal")
@@ -37,7 +66,7 @@ class HomeHeroTests(unittest.TestCase):
     def test_weekend_shows_alternate(self) -> None:
         import app as app_mod
 
-        now = datetime(2026, 7, 18, 14, 0, tzinfo=ZoneInfo("Europe/Stockholm"))  # Saturday
+        now = datetime(2026, 7, 18, 14, 0, tzinfo=TZ)  # Saturday
         inferred = app_mod.infer_home_hero(now, language="sv")
         self.assertTrue(inferred["weekend_alternate"])
         self.assertEqual(inferred["weekend_headline"], "Helg?")
@@ -49,7 +78,6 @@ class HomeHeroTests(unittest.TestCase):
         at.run()
         self.assertFalse(at.exception)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        css = body  # css is in first markdown block
         self.assertIn("oc-hero", body)
         self.assertIn("oc-hero-orb", body)
         self.assertIn("oc-domain-grid", body)
@@ -57,6 +85,9 @@ class HomeHeroTests(unittest.TestCase):
         for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
             self.assertIn(needle, body, f"missing domain card {needle}")
         self.assertIn("kylen", body.lower())
+        # Valid inline SVG icons — no broken glyph placeholders
+        self.assertGreaterEqual(body.count('xmlns="http://www.w3.org/2000/svg"'), 6)
+        self.assertNotIn("▯", body)
 
     def test_hero_decide_runs_food_decision(self) -> None:
         from streamlit.testing.v1 import AppTest
