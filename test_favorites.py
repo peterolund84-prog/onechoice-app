@@ -159,7 +159,7 @@ class FavoritesAppTest(unittest.TestCase):
                         question="test",
                         suggestion="Krämig tomatsås-pasta",
                         justification="x",
-                        status="shown",
+                        status="accepted",
                         context={"meal_type": "middag"},
                     )
                     at.session_state["page"] = "history"
@@ -167,8 +167,16 @@ class FavoritesAppTest(unittest.TestCase):
         self.assertFalse(at.exception)
         keys = {getattr(b, "key", None) for b in at.button}
         rid = int(row["id"])
-        self.assertIn(f"hist_open_btn_{rid}", keys)
+        self.assertIn(f"hist_open_btn_history_{rid}", keys)
         self.assertIn(f"hist_fav_btn_history_{rid}", keys)
+        # No text "Öppna" links on the redesigned list
+        open_labels = [
+            str(getattr(b, "label", "") or "")
+            for b in at.button
+            if getattr(b, "key", None) == f"hist_open_btn_history_{rid}"
+        ]
+        self.assertTrue(open_labels)
+        self.assertNotIn("Öppna", open_labels[0])
         # Toggle favorite from history
         fav_btn = next(
             b for b in at.button if getattr(b, "key", None) == f"hist_fav_btn_history_{rid}"
