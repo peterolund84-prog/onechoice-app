@@ -108,12 +108,30 @@ class HappyPathSmokeTest(unittest.TestCase):
         self._click_nav(at, "home")
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
-        # Hem is highlighted on execute — tapping it must keep the choice, not the chooser
-        self.assertEqual(at.session_state["page"], "execute")
+        # Nav Hem always opens the domain chooser — never resume the dish.
+        self.assertEqual(at.session_state["page"], "home")
         labels = [b.label or "" for b in at.button]
-        self.assertNotIn("Mat", labels)
-        self.assertFalse(any("Bestäm åt mig" == lab for lab in labels), labels)
-        self.assertFalse(any("Fota kylen" == lab for lab in labels), labels)
+        self.assertIn("Mat", labels)
+
+    def test_home_nav_from_lista_opens_chooser(self) -> None:
+        """Lista → Hem must not bounce back to the accepted dish/execute page."""
+        at = self._boot_authenticated()
+        at.session_state["food_meal_type"] = "middag"
+        at.query_params["domain"] = "food"
+        at.run()
+        for b in at.button:
+            if (b.label or "") == "Välj":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "execute")
+        self._click_nav(at, "lista")
+        self.assertEqual(at.session_state["page"], "lista")
+        self._click_nav(at, "home")
+        self.assertFalse(at.exception)
+        self.assertEqual(at.session_state["page"], "home")
+        labels = [b.label or "" for b in at.button]
+        self.assertIn("Mat", labels)
+        self.assertNotEqual(at.session_state["page"], "execute")
 
     def test_nav_chrome_identical_across_pages(self) -> None:
         """Glass nav marker + four nav keys present on home/lista/history/execute."""
