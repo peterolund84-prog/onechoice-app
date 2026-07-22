@@ -724,15 +724,49 @@ def delete_shopping_items(
     access_token: str,
     refresh_token: str,
 ) -> int:
-    """Delete shopping rows by primary key — used by Rensa klara."""
+    """Delete shopping rows by primary key — used by Rensa klara.
+
+    Deletes one id at a time and verifies removal. PostgREST can return 204
+    even when RLS filters the delete to zero rows; verification catches that.
+    """
     ids = [int(i) for i in item_ids if int(i) > 0]
     if not ids:
         return 0
     client = _client(access_token, refresh_token)
-    client.table("shopping_items").delete().eq("user_id", user_id).in_(
-        "id", ids
-    ).execute()
-    return len(ids)
+    removed = 0
+    for item_id in ids:
+        client.table("shopping_items").delete().eq("user_id", user_id).eq(
+            "id", item_id
+        ).execute()
+        check = (
+            client.table("shopping_items")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("id", item_id)
+            .limit(1)
+            .execute()
+        )
+        if not (check.data or []):
+            removed += 1
+    if removed < len(ids):
+        # Bulk retry in case per-row delete was flaky
+        client.table("shopping_items").delete().eq("user_id", user_id).in_(
+            "id", ids
+        ).execute()
+        left = (
+            client.table("shopping_items")
+            .select("id")
+            .eq("user_id", user_id)
+            .in_("id", ids)
+            .execute()
+        )
+        still = {int(r["id"]) for r in (left.data or []) if r.get("id") is not None}
+        removed = len(ids) - len(still)
+        if still:
+            raise RuntimeError(
+                f"shopping delete blocked or incomplete for ids={sorted(still)}"
+            )
+    return removed
 
 
 def toggle_shopping_item(
