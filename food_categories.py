@@ -181,6 +181,11 @@ def infer_dish_category(suggestion: str, *, meta: dict | None = None) -> str:
     if explicit is not None and str(explicit).strip() != "":
         return normalize_dish_category(str(explicit))
     s = (suggestion or "").lower()
+    # Dish-form words beat protein cues — "Sallad med tonfisk" is a salad, not fisk.jpg (salmon).
+    if "sallad" in s or "salad" in s:
+        return "sallad"
+    if "smörgås" in s or "smorgas" in s or "macka" in s or "sandwich" in s:
+        return "smorgas"
     for cue, cat in sorted(_CATEGORY_CUES, key=lambda x: len(x[0]), reverse=True):
         if cue in s:
             return cat

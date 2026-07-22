@@ -69,6 +69,39 @@ class AuthUiTests(unittest.TestCase):
             self.assertEqual(at.session_state["page"], "auth")
             self.assertFalse(bool(at.session_state["guest_mode"]))
             self.assertIsNone(at.session_state["user_id"])
+            body = " ".join(str(m.value or "") for m in at.markdown)
+            self.assertNotIn("Supabase Auth", body)
+            self.assertNotIn("supabase auth", body.lower())
+
+    def test_auth_page_has_no_vendor_eyebrow(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        with mock.patch("supabase_client.is_configured", return_value=True):
+            with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                at = AppTest.from_file("app.py", default_timeout=90)
+                at.run()
+                self.assertEqual(at.session_state["page"], "auth")
+                body = " ".join(str(m.value or "") for m in at.markdown)
+                self.assertNotIn("Supabase Auth", body)
+                self.assertNotIn("spara beslut i molnet", body.lower())
+                self.assertIn("Logga in", body)
+
+    def test_home_domain_cards_css_kills_underline(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        css = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("st-key-home_domain_", css)
+        # Domain card buttons must explicitly kill underline
+        self.assertIn(
+            '[class*="st-key-home_domain_"] div.stButton > button',
+            css,
+        )
+        # Global secondary must not force underline on all buttons
+        secondary_block = css.split("baseButton-secondary")[1][:400] if "baseButton-secondary" in css else ""
+        # After our fix, first secondary rule should say text-decoration: none
+        self.assertIn("text-decoration: none !important", css)
 
 if __name__ == "__main__":
     unittest.main()
