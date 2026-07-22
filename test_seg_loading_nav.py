@@ -134,6 +134,20 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertIn("_render_decide_evictor", src)
         self.assertIn("_decide_skel_painted", src)
 
+    def test_pending_nav_wipe_runtime(self) -> None:
+        """General click→wipe so old pages never sit dimmed under the next run."""
+        import app as app_mod
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn("html.oc-pending", src)
+        self.assertIn("__ocPendingNavBound", src)
+        self.assertIn("inject_app_runtime", src)
+        self.assertIn("data-test-script-state", src)
+        html = app_mod._oc_pending_nav_runtime_html()
+        self.assertIn("oc-pending", html)
+        self.assertIn("isRunning", html)
+        self.assertIn("rerunRequested", html)
+
     def test_run_decision_always_uses_time_based_await(self) -> None:
         import app as app_mod
 

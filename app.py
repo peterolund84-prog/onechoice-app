@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-skel-ghost-v62-20260722"
+BUILD_ID = "fix-nav-ghost-v63-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2034,6 +2034,23 @@ body:has([data-oc-deciding]) [data-testid="stDecoration"] {{
     pointer-events: none !important;
 }}
 .oc-deciding-root {{
+    display: none !important;
+}}
+/* General nav ghost wipe: on click we arm html.oc-pending so the prior page
+   cannot sit dimmed under the next run. Skeleton is exempt (decide loading). */
+html.oc-pending .block-container::after {{
+    content: "";
+    position: fixed;
+    top: calc(52px + env(safe-area-inset-top));
+    left: 0;
+    right: 0;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    background: var(--oc-bg) !important;
+    z-index: 9000;
+    pointer-events: none;
+}}
+html.oc-pending:has(.oc-skel-card) .block-container::after,
+html.oc-pending:has([data-oc-deciding]) .block-container::after {{
     display: none !important;
 }}
 .oc-hist-date {{
@@ -4089,6 +4106,86 @@ def _share_icon_button_html(
         f'data-oc-share-key="{html.escape(safe_key)}" data-payload="{payload_b64}" '
         f'aria-label="{aria}"></button></span>'
     )
+
+
+def _oc_pending_nav_runtime_html() -> str:
+    """Blank prior page content on click until the next Streamlit run finishes.
+
+    Streamlit keeps the old UI (often dimmed) visible while a rerun is in flight.
+    That reads as 'ghosting' when tapping nav / Nytt förslag / domain cards.
+    """
+    return """<script>
+(function() {
+  if (window.__ocPendingNavBound) return;
+  window.__ocPendingNavBound = true;
+
+  function appEl() {
+    return document.querySelector('[data-testid="stApp"]');
+  }
+  function scriptState() {
+    var a = appEl();
+    return a ? (a.getAttribute("data-test-script-state") || "") : "";
+  }
+  function isRunning() {
+    var s = scriptState();
+    return s === "running" || s === "rerunRequested";
+  }
+  function arm() {
+    document.documentElement.classList.add("oc-pending");
+  }
+  function disarm() {
+    document.documentElement.classList.remove("oc-pending");
+  }
+
+  document.addEventListener("click", function(e) {
+    var t = e.target && e.target.closest && e.target.closest(
+      'button, [role="button"], a[href^="?"]'
+    );
+    if (!t) return;
+    if (t.closest(".st-key-oc_lang_bar") || t.closest('[class*="st-key-oc_lang"]')) return;
+    if (t.closest('[data-testid="stCheckbox"]')) return;
+    if (t.closest('[data-testid="stTextInput"]')) return;
+    if (t.closest('[data-testid="stNumberInput"]')) return;
+    arm();
+  }, true);
+
+  function onStateChange() {
+    if (!document.documentElement.classList.contains("oc-pending")) return;
+    if (!isRunning()) disarm();
+  }
+
+  var appObs = null;
+  function watchApp() {
+    var a = appEl();
+    if (!a) return;
+    if (appObs) appObs.disconnect();
+    appObs = new MutationObserver(onStateChange);
+    appObs.observe(a, { attributes: true, attributeFilter: ["data-test-script-state"] });
+    onStateChange();
+  }
+  watchApp();
+  new MutationObserver(watchApp).observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+})();
+</script>"""
+
+
+def inject_app_runtime() -> None:
+    """One-shot parent-frame helpers (nav wipe). Safe to call every run."""
+    try:
+        st.html(
+            _oc_pending_nav_runtime_html(),
+            unsafe_allow_javascript=True,
+        )
+    except TypeError:
+        try:
+            st.html(_oc_pending_nav_runtime_html())
+        except Exception:
+            pass
+    except Exception:
+        pass
 
 
 def _oc_share_runtime_html() -> str:
@@ -9630,6 +9727,7 @@ def main() -> None:
     except Exception as exc:
         log.warning("db API ensure failed: %s", exc)
     inject_css()
+    inject_app_runtime()
     require_auth_context()
 
     # Resolve a WORKING LLM model once per session (probes candidate list).
