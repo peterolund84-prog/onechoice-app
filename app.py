@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "food-ui-hard-fix-v28-20260720"
+BUILD_ID = "post-auth-regressions-v29-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1127,24 +1127,44 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     gap: 10px !important;
     margin-bottom: 10px !important;
 }}
-/* Domain cards — button IS the card (no nested pill) */
+/* Domain cards — button IS the card (no nested pill / no outer shell) */
+.st-key-home_domains [class*="st-key-home_domain_"],
 [class*="st-key-home_domain_"] {{
     margin: 0 !important;
     padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}}
+.st-key-home_domains [class*="st-key-home_domain_"] [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-home_domains [class*="st-key-home_domain_"] [data-testid="stVerticalBlock"] {{
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }}
 [class*="st-key-home_domain_"] div.stButton {{
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
 }}
-[class*="st-key-home_domain_"] div.stButton > button {{
+[class*="st-key-home_domain_"] div.stButton > button,
+[class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"],
+[class*="st-key-home_domain_"] div.stButton > button[kind="secondary"],
+[class*="st-key-home_domain_"] button[data-testid="stBaseButton-secondary"] {{
     display: flex !important;
+    flex-direction: row !important;
     align-items: center !important;
     justify-content: flex-start !important;
+    gap: 0 !important;
     width: 100% !important;
     min-height: 52px !important;
+    height: 52px !important;
     max-height: 52px !important;
     background: #fff !important;
+    background-color: #fff !important;
     border-radius: 14px !important;
     border: 1px solid rgba(0, 0, 0, 0.06) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
@@ -1155,19 +1175,22 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     font-weight: 500 !important;
     line-height: 1.2 !important;
     text-align: left !important;
-    padding: 0 12px !important;
+    padding: 0 14px !important;
     white-space: nowrap !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
     -webkit-tap-highlight-color: transparent !important;
 }}
 [class*="st-key-home_domain_"] div.stButton > button:hover,
-[class*="st-key-home_domain_"] div.stButton > button:focus {{
+[class*="st-key-home_domain_"] div.stButton > button:focus,
+[class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"]:hover,
+[class*="st-key-home_domain_"] div.stButton > button[kind="secondary"]:hover {{
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
     border-color: rgba(0, 0, 0, 0.1) !important;
     background: #fff !important;
+    background-color: #fff !important;
     color: var(--oc-ink) !important;
 }}
 {_domain_card_button_css()}
