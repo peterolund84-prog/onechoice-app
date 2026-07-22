@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-double-load-v54-20260722"
+BUILD_ID = "decision-chips-actions-v55-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -262,6 +262,7 @@ I18N = {
         "gdpr_delete_confirm": "Detta raderar allt permanent — konto, historik, preferenser och foton. Går inte att ångra.",
         "gdpr_delete_yes": "Ja, radera allt",
         "gdpr_delete_done": "Ditt konto och all data är raderade.",
+        "cancel": "Avbryt",
         "gdpr_guest_note": "Gästläge: data finns bara lokalt i den här enheten tills du rensar den.",
 
         "guest": "Fortsätt som gäst (lokal demo)",
@@ -441,6 +442,7 @@ I18N = {
         "gdpr_delete_confirm": "This permanently deletes everything — account, history, preferences and photos. Cannot be undone.",
         "gdpr_delete_yes": "Yes, delete everything",
         "gdpr_delete_done": "Your account and all data have been deleted.",
+        "cancel": "Cancel",
         "gdpr_guest_note": "Guest mode: data stays only on this device until you clear it.",
 
         "guest": "Continue as guest (local demo)",
@@ -1710,6 +1712,85 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: #4F46E5 !important;
 }}
 .st-key-hist_seg {{ margin: 0 0 12px !important; }}
+/* Meal segmented control — one row, equal segments (Favoriter|Historik family) */
+.st-key-meal_seg {{
+    margin: 0 0 16px !important;
+    width: 100% !important;
+}}
+.st-key-meal_seg [data-testid="stButtonGroup"],
+.st-key-meal_seg [data-testid="stPills"] {{
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 3px !important;
+    background: rgba(0, 0, 0, 0.04) !important;
+    border-radius: 999px !important;
+    box-sizing: border-box !important;
+}}
+.st-key-meal_seg [data-testid="stButtonGroup"] button,
+.st-key-meal_seg [data-testid="stPills"] button {{
+    flex: 1 1 0 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    max-height: 36px !important;
+    margin: 0 !important;
+    padding: 0 6px !important;
+    border: none !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}}
+.st-key-meal_seg [data-testid="stButtonGroup"] button[aria-checked="true"],
+.st-key-meal_seg [data-testid="stPills"] button[aria-checked="true"],
+.st-key-meal_seg [data-testid="stButtonGroup"] button[kind="primary"],
+.st-key-meal_seg [data-testid="stPills"] button[kind="primary"] {{
+    background: #4F46E5 !important;
+    background-color: #4F46E5 !important;
+    color: #fff !important;
+    font-weight: 600 !important;
+}}
+/* Decision secondary — outlined "Nytt förslag" under primary Välj */
+.st-key-result_secondary_btn {{
+    margin: 12px 0 0 !important;
+    width: 100% !important;
+}}
+.st-key-result_secondary_btn div.stButton {{
+    width: 100% !important;
+}}
+.st-key-result_secondary_btn div.stButton > button,
+.st-key-result_secondary_btn button {{
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--oc-ink) !important;
+    border: 1px solid var(--oc-border) !important;
+    box-shadow: none !important;
+    border-radius: 999px !important;
+    font-family: "Inter", sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 16px !important;
+    height: 48px !important;
+    min-height: 48px !important;
+    width: 100% !important;
+    padding: 0 1.5rem !important;
+    text-decoration: none !important;
+}}
+.st-key-result_secondary_btn div.stButton > button:hover,
+.st-key-result_secondary_btn button:hover {{
+    border-color: rgba(0, 0, 0, 0.22) !important;
+    color: var(--oc-ink) !important;
+}}
 .oc-hist-date {{
     font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
     color: var(--oc-muted); font-weight: 600; margin: 1rem 0 0.45rem;
@@ -2252,7 +2333,6 @@ div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="elemen
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"],
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"],
 .st-key-home_domain_pills [data-testid="stButtonGroup"],
-.st-key-meal_pills [data-testid="stButtonGroup"],
 .st-key-movie_format_pills [data-testid="stButtonGroup"],
 .st-key-movie_mood_pills [data-testid="stButtonGroup"],
 .st-key-ambig_domain_pills [data-testid="stButtonGroup"] {{
@@ -2274,7 +2354,6 @@ div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="elemen
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] div[data-testid="stPills"] button,
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] [data-testid="stButtonGroup"] button,
 .st-key-home_domain_pills [data-testid="stButtonGroup"] button,
-.st-key-meal_pills [data-testid="stButtonGroup"] button,
 .st-key-movie_format_pills [data-testid="stButtonGroup"] button,
 .st-key-movie_mood_pills [data-testid="stButtonGroup"] button,
 .st-key-ambig_domain_pills [data-testid="stButtonGroup"] button {{
@@ -6773,10 +6852,6 @@ def page_fridge() -> None:
                 st.session_state["fridge_last_scan_secs"] = elapsed
                 st.rerun()
                 return
-        if st.button(t("home"), use_container_width=True, key="fridge_home_cap"):
-            _clear_fridge_session()
-            st.session_state.page = "home"
-            st.rerun()
         nav()
         return
 
@@ -6872,10 +6947,6 @@ def page_fridge() -> None:
         st.session_state.fridge_step = "capture"
         st.rerun()
         return
-    if st.button(t("home"), use_container_width=True, key="fridge_home_conf"):
-        _clear_fridge_session()
-        st.session_state.page = "home"
-        st.rerun()
     nav()
 
 
@@ -6928,10 +6999,6 @@ def page_clothes_occasion() -> None:
                     via_router=False,
                 )
 
-    if st.button(t("home"), use_container_width=True, key="occasion_home"):
-        st.session_state.page = "home"
-        st.session_state.clothes_occasion = None
-        st.rerun()
     nav()
 
 
@@ -6955,10 +7022,6 @@ def page_ambiguous() -> None:
     if choice and choice != prev:
         st.session_state._ambig_domain_pills_prev = choice
         _pick_ambiguous_domain(str(choice))
-    if st.button(t("home"), use_container_width=True):
-        st.session_state.page = "home"
-        st.session_state.pending_free_text = None
-        st.rerun()
     nav()
 
 
@@ -6982,7 +7045,7 @@ def _ensure_movie_chips_defaults() -> None:
 
 
 def render_meal_type_chips(cur: dict[str, Any]) -> None:
-    """Meal type chooser above the food decision — st.pills (visible on Cloud)."""
+    """Meal type segmented control above the food decision (one row, no label)."""
     import food_domain as fd
 
     language = st.session_state.get("language", "sv")
@@ -6999,18 +7062,15 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
     if st.session_state.get("meal_pills") not in fd.MEAL_TYPES:
         st.session_state.meal_pills = current
 
-    st.markdown(
-        f'<p class="oc-sec-label">{html.escape("Måltid" if language == "sv" else "Meal")}</p>',
-        unsafe_allow_html=True,
-    )
-    choice = st.pills(
-        "meal_pills",
-        options=list(fd.MEAL_ORDER),
-        format_func=lambda k: fd.meal_label(k, language),
-        selection_mode="single",
-        key="meal_pills",
-        label_visibility="collapsed",
-    )
+    with st.container(key="meal_seg"):
+        choice = st.pills(
+            "meal_pills",
+            options=list(fd.MEAL_ORDER),
+            format_func=lambda k: fd.meal_label(k, language),
+            selection_mode="single",
+            key="meal_pills",
+            label_visibility="collapsed",
+        )
     if choice is None:
         choice = current
     if choice != current:
@@ -7112,9 +7172,6 @@ def page_not_a_decision() -> None:
     cur = st.session_state.current or {}
     msg = cur.get("ui_message") or t("not_a_decision")
     st.markdown(f'<div class="oc-refuse">{html.escape(msg)}</div>', unsafe_allow_html=True)
-    if st.button(t("home"), use_container_width=True):
-        st.session_state.page = "home"
-        st.rerun()
     nav()
 
 
@@ -7141,9 +7198,6 @@ def page_result() -> None:
     if cur.get("refused"):
         msg = cur.get("refusal_message") or t("refuse")
         st.markdown(f'<div class="oc-refuse">{html.escape(msg)}</div>', unsafe_allow_html=True)
-        if st.button(t("home"), use_container_width=True):
-            st.session_state.page = "home"
-            st.rerun()
         nav()
         return
 
@@ -7274,8 +7328,6 @@ def page_result() -> None:
                     open_execute_now(cur)
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
                 on_accept_primary(cur)
-        if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
-            _go_home_chooser()
         nav()
         return
 
@@ -7383,19 +7435,22 @@ def page_result() -> None:
         elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
             on_accept_primary(cur)
 
-    # Secondary: reroll — hidden once accepted (lock card branch above)
-    st.markdown('<div class="oc-link-wrap"></div>', unsafe_allow_html=True)
-    if st.button(t("new"), type="secondary", use_container_width=True, key="reroll_link"):
-        via = bool(cur.get("route") or st.session_state.get("route_log_id"))
-        run_decision(
-            question=st.session_state.get("last_question") or "",
-            domain_hint=st.session_state.get("last_domain_hint") or cur.get("domain"),
-            reroll=True,
-            via_router=via,
-        )
+    # Secondary: reroll — outlined button 12px under primary (no text-link chrome)
+    with st.container(key="result_secondary_btn"):
+        if st.button(
+            t("new"),
+            type="secondary",
+            use_container_width=True,
+            key="reroll_btn",
+        ):
+            via = bool(cur.get("route") or st.session_state.get("route_log_id"))
+            run_decision(
+                question=st.session_state.get("last_question") or "",
+                domain_hint=st.session_state.get("last_domain_hint") or cur.get("domain"),
+                reroll=True,
+                via_router=via,
+            )
 
-    if st.button(t("home"), key="back_home", type="secondary", use_container_width=True):
-        _go_home_chooser()
     nav()
 
 
@@ -7764,8 +7819,6 @@ def page_execute() -> None:
             if st.button(t("retry"), type="primary", use_container_width=True, key="wo_exec_retry"):
                 _reset_workout_player()
                 st.rerun()
-            if st.button(t("home"), use_container_width=True, key="wo_exec_home"):
-                _go_home_chooser()
             nav()
             return
 
@@ -8131,9 +8184,6 @@ def page_lista() -> None:
             f'<p class="oc-meta">{html.escape(t("list_empty"))}</p>',
             unsafe_allow_html=True,
         )
-        if st.button(t("home"), type="primary", use_container_width=True, key="lista_go_home"):
-            _go_home_chooser()
-            return
         if st.button(
             t("list_open_history"),
             type="secondary",
@@ -8430,7 +8480,7 @@ def page_profile() -> None:
                     st.success(t("gdpr_delete_done"))
                     st.rerun()
         with c2:
-            if st.button(t("home"), use_container_width=True, key="gdpr_delete_cancel"):
+            if st.button(t("cancel"), use_container_width=True, key="gdpr_delete_cancel"):
                 st.session_state["gdpr_delete_pending"] = False
                 st.rerun()
 
@@ -8468,13 +8518,7 @@ def page_privacy() -> None:
         st.markdown(path.read_text(encoding="utf-8"))
     else:
         st.info("Integritetspolicyn saknas i repot (PRIVACY.md).")
-    if st.button(t("home"), use_container_width=True, key="privacy_home"):
-        st.session_state.page = "home" if st.session_state.get("user_id") else "auth"
-        try:
-            del st.query_params["privacy"]
-        except Exception:
-            pass
-        st.rerun()
+    nav()
 
 
 def handle_query_params() -> None:
@@ -8956,9 +9000,6 @@ def main() -> None:
             if st.button(t("retry"), type="primary", use_container_width=True, key="soft_retry"):
                 st.session_state.page = "execute"
                 st.session_state.accepted = True
-                st.rerun()
-            if st.button(t("home"), use_container_width=True, key="soft_home"):
-                st.session_state.page = "home"
                 st.rerun()
             nav()
             return
