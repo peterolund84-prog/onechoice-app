@@ -101,7 +101,7 @@ class DecideSkeletonTests(unittest.TestCase):
         import food_domain as fd
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("font-size: 12px", src)
+        self.assertIn("font-size: 13px", src)
         self.assertIn("letter-spacing: 0", src)
         self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
         labels = [fd.meal_label(k, "sv") for k in fd.MEAL_ORDER]

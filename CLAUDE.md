@@ -10,4 +10,4 @@ Prefer session-safe widgets (`st.button`, `st.pills`, `on_click`) for in-app nav
 
 **Widget labels render visibly by default and steal layout width** — every non-decorative widget needs `label_visibility="collapsed"` (and a blank `" "` label, never the widget key). Covered by `test_no_widget_label_leaks`.
 
-**Never style `stPills > *` with `display:flex` / grid on the meal control.** That selector is more specific than label-hide rules and re-shows the collapsed label as a grid cell (the `"meal_pills"` leak). The meal control uses four `st.button` columns instead of `st.pills` for this reason.
+**Meal segmented control uses the footer-nav construction** — `st.container` + `st.columns([1,1,1,1])` + four `st.button`s + `.oc-seg` marker. Never `st.pills` / `segmented_control` for meal type (label-leak / unequal-width class).
