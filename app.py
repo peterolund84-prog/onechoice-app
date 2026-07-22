@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "share-native-icon-v35-20260722"
+BUILD_ID = "share-icon-css-v36-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1598,23 +1598,26 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     justify-content: center;
     border: none;
     border-radius: 12px;
-    background: transparent;
-    color: var(--oc-muted);
+    background-color: rgba(255, 255, 255, 0.92);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5c57' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 20px 20px;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }}
 .oc-share-icon-btn:active {{
-    opacity: 0.65;
+    opacity: 0.7;
 }}
-.oc-share-icon-btn svg {{
+.oc-share-icon-btn img {{
     width: 20px;
     height: 20px;
     display: block;
-    stroke: currentColor;
-}}
-.oc-food-decision .oc-share-icon-btn {{
-    background: rgba(255, 255, 255, 0.88);
-    color: #5c5c57;
+    pointer-events: none;
 }}
 .oc-share-lista-wrap {{
     display: flex;
@@ -1626,7 +1629,8 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     position: static;
 }}
 .oc-share-lista-wrap .oc-share-icon-btn {{
-    color: var(--oc-muted);
+    background-color: transparent;
+    box-shadow: none;
 }}
 .oc-movie-decision {{
     text-align: left !important;
@@ -3167,18 +3171,6 @@ def _session_pop(key: str, default: Any = None) -> Any:
     return val
 
 
-def _ios_share_icon_svg() -> str:
-    """iOS-style share glyph — square with upward arrow (20px viewBox)."""
-    return (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<path d="M12 14V3"/><path d="M8 7l4-4 4 4"/>'
-        '<path d="M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/>'
-        "</svg>"
-    )
-
-
 def _share_icon_button_html(
     *,
     title: str,
@@ -3187,29 +3179,32 @@ def _share_icon_button_html(
     key: str,
     log_list: bool = False,
 ) -> str:
-    """Corner share control — HTML button with sync onclick (preserves user gesture)."""
+    """Corner share control — HTML button with sync click (preserves user gesture)."""
     import base64
     import json as _json
 
     safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
+    payload = {
+        "title": title or "OneChoice",
+        "text": text or "",
+        "url": url or "",
+        "log_list": bool(log_list),
+    }
     payload_b64 = base64.b64encode(
-        _json.dumps(
-            {
-                "title": title or "OneChoice",
-                "text": text or "",
-                "url": url or "",
-                "log_list": bool(log_list),
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
+        _json.dumps(payload, ensure_ascii=False).encode("utf-8")
     ).decode("ascii")
+    payload_json = _json.dumps(payload, ensure_ascii=False)
     aria = html.escape(t("share"))
+    # Icon is CSS background-image (inline SVG is stripped by DOMPurify → white box).
+    # Payload also registered in JS map in case data-* attrs are sanitized away.
     return (
+        f'<script>(function(){{window.__ocSharePayloads=window.__ocSharePayloads||{{}};'
+        f'window.__ocSharePayloads[{_json.dumps(safe_key)}]={payload_json};'
+        f'}})();</script>'
         f'<span class="oc-share-corner">'
         f'<button type="button" class="oc-share-icon-btn" data-oc-share="icon" '
         f'data-oc-share-key="{html.escape(safe_key)}" data-payload="{payload_b64}" '
-        f'aria-label="{aria}" onclick="window.ocNativeShare && window.ocNativeShare(this); '
-        f'return false;">{_ios_share_icon_svg()}</button></span>'
+        f'aria-label="{aria}"></button></span>'
     )
 
 
@@ -3284,7 +3279,14 @@ def _oc_share_runtime_html() -> str:
   }};
   window.ocNativeShare = function(el) {{
     var payload = {{}};
-    try {{ payload = JSON.parse(atob(el.getAttribute("data-payload") || "")); }} catch (e) {{ payload = {{}}; }}
+    var key = el.getAttribute("data-oc-share-key") || "";
+    try {{
+      if (window.__ocSharePayloads && key && window.__ocSharePayloads[key]) {{
+        payload = window.__ocSharePayloads[key];
+      }} else {{
+        payload = JSON.parse(atob(el.getAttribute("data-payload") || ""));
+      }}
+    }} catch (e) {{ payload = {{}}; }}
     var shareUrl = payload.url || "";
     if (shareUrl.indexOf("?") === 0) shareUrl = window.location.origin + "/" + shareUrl;
     else if (shareUrl.indexOf("/") === 0) shareUrl = window.location.origin + shareUrl;
@@ -3292,8 +3294,7 @@ def _oc_share_runtime_html() -> str:
     if (payload.log_list) {{
       try {{ document.cookie = "oc_list_shared=1; path=/; max-age=600; SameSite=Lax"; }} catch (e) {{}}
     }}
-    var nav = navigator;
-    if (typeof navigator.share === "function" || (nav && typeof nav.share === "function")) {{
+    if (typeof navigator.share === "function") {{
       var data = {{ title: payload.title || "OneChoice", text: payload.text || "" }};
       if (shareUrl) data.url = shareUrl;
       // Must start share inside the click stack — never after a Streamlit rerun.
@@ -3309,6 +3310,18 @@ def _oc_share_runtime_html() -> str:
     window.ocCopyShare(full);
     return false;
   }};
+  if (!window.__ocShareClickBound) {{
+    window.__ocShareClickBound = true;
+    document.addEventListener("click", function(e) {{
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var el = t.closest("[data-oc-share=\\"icon\\"]");
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.ocNativeShare) window.ocNativeShare(el);
+    }}, true);
+  }}
 }})();
 </script>"""
 
