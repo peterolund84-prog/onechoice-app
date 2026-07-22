@@ -834,7 +834,13 @@ section.main, [data-testid="stAppViewContainer"] > .main {{
 }}
 /* Collapse in-flow chrome wrappers — fixed header/lang must not reserve vertical space */
 div[data-testid="element-container"]:has(.oc-header),
-div[data-testid="element-container"]:has(.st-key-oc_lang_bar) {{
+div[data-testid="element-container"]:has(.st-key-oc_lang_bar),
+div[data-testid="stElementContainer"]:has(.oc-header),
+div[data-testid="stElementContainer"]:has(.st-key-oc_lang_bar),
+div[data-testid="stElementContainer"]:has(.oc-result),
+div[data-testid="stElementContainer"]:has(.oc-seg),
+div[data-testid="element-container"]:has(.oc-result),
+div[data-testid="element-container"]:has(.oc-seg) {{
     margin: 0 !important;
     padding: 0 !important;
     min-height: 0 !important;
@@ -1733,34 +1739,122 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: #4F46E5 !important;
 }}
 .st-key-hist_seg {{ margin: 0 0 12px !important; }}
-/* Meal segmented control — 4 equal button columns, NO st.pills (label-leak class). */
+/* Meal segmented control — same construction as footer nav (columns + buttons).
+   Shared .oc-seg marker; NEVER st.pills / segmented_control. */
+.oc-seg {{
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+.oc-result {{
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+/* Decision page: header → 24px → content (kill the ~270px dead band) */
+.block-container:has(.oc-result) {{
+    padding-top: calc(52px + env(safe-area-inset-top) + 24px) !important;
+}}
+/* Streamlit flex gap between collapsed chrome hosts was inventing ~60px air */
+.block-container:has(.oc-result) [data-testid="stVerticalBlock"] {{
+    gap: 0 !important;
+    row-gap: 0 !important;
+}}
+.block-container:has(.oc-result) [data-testid="stVerticalBlockBorderWrapper"] {{
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}}
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-header),
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-result),
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-seg) {{
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    pointer-events: none !important;
+}}
+/* Lang bar stays fixed-visible; pull its in-flow host out of the flex stack */
+.block-container:has(.oc-result) .st-key-oc_lang_bar {{
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    width: auto !important;
+    height: calc(52px + env(safe-area-inset-top)) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    z-index: 10001 !important;
+    background: transparent !important;
+    border: none !important;
+    pointer-events: auto !important;
+}}
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.st-key-oc_lang_bar),
+.block-container:has(.oc-result) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-oc_lang_bar),
+.block-container:has(.oc-result) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-oc_lang_pills) {{
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: none !important;
+    flex: 0 0 0 !important;
+}}
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-decision),
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-rerolls) {{
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+.block-container:has(.oc-result) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-result_primary_btn),
+.block-container:has(.oc-result) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-result_secondary_btn),
+.block-container:has(.oc-result) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-meal_seg) {{
+    margin: 0 !important;
+    padding: 0 !important;
+}}
 .st-key-meal_seg {{
-    margin: 0 0 16px !important;
+    margin: 0 0 24px !important;
     width: 100% !important;
     max-width: 100% !important;
     box-sizing: border-box !important;
 }}
+/* Zero Streamlit chrome inside the control — same as nav */
 .st-key-meal_seg [data-testid="stVerticalBlock"],
 .st-key-meal_seg [data-testid="stVerticalBlockBorderWrapper"],
-.st-key-meal_seg [data-testid="stElementContainer"] {{
+.st-key-meal_seg [data-testid="stElementContainer"],
+.st-key-meal_seg [data-testid="element-container"] {{
     width: 100% !important;
     max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    row-gap: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }}
+/* Track: full content width (block-container already has 20px side margins) */
 .st-key-meal_seg [data-testid="stHorizontalBlock"] {{
     display: flex !important;
     flex-direction: row !important;
     flex-wrap: nowrap !important;
     align-items: stretch !important;
+    justify-content: stretch !important;
     gap: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
-    height: 36px !important;
-    min-height: 36px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    max-height: 40px !important;
     margin: 0 !important;
-    padding: 3px !important;
+    padding: 4px !important;
     background: rgba(0, 0, 0, 0.04) !important;
     border-radius: 999px !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
 }}
 .st-key-meal_seg [data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {{
     flex: 1 1 0 !important;
@@ -1768,27 +1862,38 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     min-width: 0 !important;
     max-width: none !important;
     width: auto !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
     padding: 0 !important;
+    margin: 0 !important;
 }}
-.st-key-meal_seg div.stButton {{
-    width: 100% !important;
+/* Button keys meal_seg_* — mirror [class*="st-key-nav_"] pattern */
+[class*="st-key-meal_seg_"] {{
     margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
 }}
-.st-key-meal_seg div.stButton > button,
-.st-key-meal_seg div.stButton > button[kind="secondary"],
-.st-key-meal_seg div.stButton > button[kind="primary"],
-.st-key-meal_seg div.stButton > button[data-testid="baseButton-secondary"],
-.st-key-meal_seg div.stButton > button[data-testid="baseButton-primary"],
-.st-key-meal_seg div.stButton > button[data-testid="stBaseButton-secondary"],
-.st-key-meal_seg div.stButton > button[data-testid="stBaseButton-primary"] {{
-    flex: 1 1 0 !important;
+[class*="st-key-meal_seg_"] div.stButton {{
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+}}
+[class*="st-key-meal_seg_"] div.stButton > button,
+[class*="st-key-meal_seg_"] div.stButton > button[kind="secondary"],
+[class*="st-key-meal_seg_"] div.stButton > button[kind="primary"],
+[class*="st-key-meal_seg_"] div.stButton > button[data-testid="baseButton-secondary"],
+[class*="st-key-meal_seg_"] div.stButton > button[data-testid="baseButton-primary"],
+[class*="st-key-meal_seg_"] div.stButton > button[data-testid="stBaseButton-secondary"],
+[class*="st-key-meal_seg_"] div.stButton > button[data-testid="stBaseButton-primary"] {{
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
-    height: 30px !important;
-    min-height: 30px !important;
-    max-height: 30px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
     margin: 0 !important;
     padding: 0 4px !important;
     border: none !important;
@@ -1798,7 +1903,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     background-color: transparent !important;
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 12px !important;
+    font-size: 13px !important;
     letter-spacing: 0 !important;
     font-weight: 500 !important;
     line-height: 1.2 !important;
@@ -1810,9 +1915,9 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     align-items: center !important;
     text-decoration: none !important;
 }}
-.st-key-meal_seg div.stButton > button p,
-.st-key-meal_seg div.stButton > button span,
-.st-key-meal_seg div.stButton > button div {{
+[class*="st-key-meal_seg_"] div.stButton > button p,
+[class*="st-key-meal_seg_"] div.stButton > button span,
+[class*="st-key-meal_seg_"] div.stButton > button div {{
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: unset !important;
@@ -1821,42 +1926,44 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     max-width: none !important;
     text-align: center !important;
 }}
-@media (max-width: 420px) {{
-    .st-key-meal_seg div.stButton > button {{
-        font-size: 11px !important;
-        padding: 0 2px !important;
-    }}
-}}
-.st-key-meal_seg div.stButton > button[kind="primary"],
-.st-key-meal_seg div.stButton > button[data-testid="baseButton-primary"],
-.st-key-meal_seg div.stButton > button[data-testid="stBaseButton-primary"] {{
+[class*="st-key-meal_seg_"] div.stButton > button[kind="primary"],
+[class*="st-key-meal_seg_"] div.stButton > button[data-testid="baseButton-primary"],
+[class*="st-key-meal_seg_"] div.stButton > button[data-testid="stBaseButton-primary"] {{
     background: #4F46E5 !important;
     background-color: #4F46E5 !important;
     color: #fff !important;
     font-weight: 600 !important;
-    width: 100% !important;
-    height: 30px !important;
-    border-radius: 999px !important;
 }}
-/* Full-width decide skeleton host — never a half column */
-.st-key-decide_slot {{
-    width: 100% !important;
-    max-width: 100% !important;
+/* Decision page vertical rhythm: meal → 24px → card → 24px → dots → 20px → CTA → 12px → secondary */
+.block-container:has(.oc-result) .oc-decision {{
     margin: 0 !important;
 }}
-.st-key-decide_slot [data-testid="stVerticalBlock"],
-.st-key-decide_slot [data-testid="stVerticalBlockBorderWrapper"],
-.st-key-decide_slot [data-testid="stElementContainer"] {{
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-decision) {{
+    margin: 0 !important;
+    padding: 0 0 20px !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}}
+.block-container:has(.oc-result) .oc-rerolls {{
+    margin: 0 !important;
+}}
+.block-container:has(.oc-result) [data-testid="stElementContainer"]:has(.oc-rerolls) {{
+    margin: 0 !important;
+    padding: 0 0 0 !important;
+    height: auto !important;
+    min-height: 7px !important;
+    overflow: visible !important;
+}}
+.block-container:has(.oc-result) .st-key-result_primary_btn {{
+    margin: 24px 0 0 !important;
+    padding: 0 !important;
     width: 100% !important;
-    max-width: 100% !important;
 }}
-/* No page-wide dim while deciding — keep chrome crisp */
-body:has(.oc-skel-card) [data-testid="stStatusWidget"],
-body:has(.oc-skel-card) [data-testid="stDecoration"] {{
-    opacity: 0 !important;
-    pointer-events: none !important;
+.block-container:has(.oc-result) .st-key-result_primary_btn div.stButton {{
+    margin: 0 !important;
+    width: 100% !important;
 }}
-/* Decision secondary — outlined "Nytt förslag" under primary Välj */
 .st-key-result_secondary_btn {{
     margin: 12px 0 0 !important;
     width: 100% !important;
@@ -1885,6 +1992,24 @@ body:has(.oc-skel-card) [data-testid="stDecoration"] {{
 .st-key-result_secondary_btn button:hover {{
     border-color: rgba(0, 0, 0, 0.22) !important;
     color: var(--oc-ink) !important;
+}}
+/* Full-width decide skeleton host — never a half column */
+.st-key-decide_slot {{
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+}}
+.st-key-decide_slot [data-testid="stVerticalBlock"],
+.st-key-decide_slot [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-decide_slot [data-testid="stElementContainer"] {{
+    width: 100% !important;
+    max-width: 100% !important;
+}}
+/* No page-wide dim while deciding — keep chrome crisp */
+body:has(.oc-skel-card) [data-testid="stStatusWidget"],
+body:has(.oc-skel-card) [data-testid="stDecoration"] {{
+    opacity: 0 !important;
+    pointer-events: none !important;
 }}
 .oc-hist-date {{
     font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
@@ -7438,7 +7563,7 @@ def _ensure_movie_chips_defaults() -> None:
 
 
 def render_meal_type_chips(cur: dict[str, Any]) -> None:
-    """Meal type segmented control above the food decision (buttons — no pills label)."""
+    """Meal segmented control — same construction as footer nav (columns + buttons)."""
     import food_domain as fd
 
     language = st.session_state.get("language", "sv")
@@ -7456,9 +7581,13 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
 
     clicked: str | None = None
     with st.container(key="meal_seg"):
-        cols = st.columns(4, gap="small")
-        for i, meal_key in enumerate(fd.MEAL_ORDER):
-            with cols[i]:
+        st.markdown(
+            '<div class="oc-seg" data-oc-seg="meal" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
+        cols = st.columns([1, 1, 1, 1], gap="small")
+        for col, meal_key in zip(cols, fd.MEAL_ORDER):
+            with col:
                 active = meal_key == current
                 if st.button(
                     fd.meal_label(meal_key, language),
@@ -7574,6 +7703,10 @@ def page_not_a_decision() -> None:
 
 def page_result() -> None:
     render_top_chrome()
+    st.markdown(
+        '<div class="oc-result" data-oc-page="result" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
     cur = st.session_state.get("current") or {}
     if not isinstance(cur, dict):
         cur = {}
@@ -7806,56 +7939,64 @@ def page_result() -> None:
     if food_cook and fridge_mode:
         # Cook from inventory — recipe execute, no shopping list
         empty_fallback = bool(ctx.get("offers_shopping")) and not ctx.get("recipe")
-        if not empty_fallback:
-            label = cur.get("execution_label") or t("fridge_cook")
-            if st.button(
-                label,
-                type="primary",
-                use_container_width=True,
-                key="fridge_cook_accept",
-            ):
-                open_execute_now(cur)
-        if ctx.get("offers_shopping"):
-            if st.button(
-                t("fridge_shop_alt"),
-                type="secondary" if not empty_fallback else "primary",
-                use_container_width=True,
-                key="fridge_shop_escape",
-            ):
-                st.session_state.fridge_mode = False
-                st.session_state.fridge_inventory = []
-                st.session_state.accepted = False
-                run_decision(
-                    question="",
-                    domain_hint="food",
-                    reroll=False,
-                    via_router=False,
-                )
+        with st.container(key="result_primary_btn"):
+            if not empty_fallback:
+                label = cur.get("execution_label") or t("fridge_cook")
+                if st.button(
+                    label,
+                    type="primary",
+                    use_container_width=True,
+                    key="fridge_cook_accept",
+                ):
+                    open_execute_now(cur)
+            if ctx.get("offers_shopping"):
+                if st.button(
+                    t("fridge_shop_alt"),
+                    type="secondary" if not empty_fallback else "primary",
+                    use_container_width=True,
+                    key="fridge_shop_escape",
+                ):
+                    st.session_state.fridge_mode = False
+                    st.session_state.fridge_inventory = []
+                    st.session_state.accepted = False
+                    run_decision(
+                        question="",
+                        domain_hint="food",
+                        reroll=False,
+                        via_router=False,
+                    )
     elif food_cook and not fridge_mode:
         # Pre-lock primary: lock the decision (details live on execute)
-        if st.button(
-            t("food_choose"),
-            type="primary",
-            use_container_width=True,
-            key="food_go_for_it",
-        ):
-            on_accept_food_and_execute(cur)
+        with st.container(key="result_primary_btn"):
+            if st.button(
+                t("food_choose"),
+                type="primary",
+                use_container_width=True,
+                key="food_go_for_it",
+            ):
+                on_accept_food_and_execute(cur)
     else:
         # Shared accept for clothes / movie / weekend; workout opens execute player
         exec_label = cur.get("execution_label") or t("do_it")
-        if domain == "workout" or cur.get("execution_type") == "workout":
-            if st.button(
+        with st.container(key="result_primary_btn"):
+            if domain == "workout" or cur.get("execution_type") == "workout":
+                if st.button(
+                    exec_label,
+                    type="primary",
+                    use_container_width=True,
+                    key="do_it_primary",
+                    on_click=_cb_open_execute,
+                ):
+                    open_execute_now(cur)
+            elif st.button(
                 exec_label,
                 type="primary",
                 use_container_width=True,
                 key="do_it_primary",
-                on_click=_cb_open_execute,
             ):
-                open_execute_now(cur)
-        elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_primary"):
-            on_accept_primary(cur)
+                on_accept_primary(cur)
 
-    # Secondary: reroll — outlined button 12px under primary (no text-link chrome)
+    # Secondary: reroll — outlined button 12px under primary
     with st.container(key="result_secondary_btn"):
         if st.button(
             t("new"),

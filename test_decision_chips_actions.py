@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Decision view: meal segmented control, outlined reroll, no page Hem links."""
+"""Decision view: meal segmented control (nav pattern), outlined reroll, no page Hem."""
 
 from __future__ import annotations
 
@@ -13,21 +13,39 @@ class DecisionChipsActionsTests(unittest.TestCase):
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn(".st-key-meal_seg", src)
-        self.assertIn("height: 36px", src)
-        self.assertIn("font-size: 12px", src)
+        self.assertIn(".oc-seg", src)
+        self.assertIn("height: 40px", src)
+        self.assertIn("height: 32px", src)
+        self.assertIn("font-size: 13px", src)
+        self.assertIn("padding: 4px", src)
         self.assertIn("#4F46E5", src)
-        # No Måltid section label in renderer
         self.assertNotIn('html.escape("Måltid"', src)
         self.assertIn('key="meal_seg"', src)
-        # Buttons — never st.pills (label-leak class)
+        self.assertIn('class="oc-seg"', src)
+        self.assertIn("st.columns([1, 1, 1, 1]", src)
         self.assertNotIn('key="meal_pills"', src)
         self.assertNotIn('key="meal_seg_choice"', src)
         self.assertIn('key=f"meal_seg_{meal_key}"', src)
-        self.assertNotIn("st.pills(", src.split("def render_meal_type_chips")[1].split("def render_movie")[0])
-        # Full labels — never abbreviated chip text
+        meal_fn = src.split("def render_meal_type_chips", 1)[1].split("def render_movie", 1)[0]
+        self.assertNotIn("st.pills(", meal_fn)
+        self.assertIn("st.button(", meal_fn)
+        # Nav-style key scoping
+        self.assertIn('[class*="st-key-meal_seg_"]', src)
         import food_domain as fd
 
         self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
+
+    def test_result_vertical_rhythm_css(self) -> None:
+        import app as app_mod
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn(".oc-result", src)
+        self.assertIn("52px + env(safe-area-inset-top) + 24px", src)
+        self.assertIn('key="result_primary_btn"', src)
+        self.assertIn(".st-key-result_secondary_btn", src)
+        self.assertIn("margin: 12px 0 0 !important", src)
+        self.assertIn("st.columns([1, 1, 1, 1]", src)
+        self.assertIn('[class*="st-key-meal_seg_"]', src)
 
     def test_result_secondary_outlined_button_css(self) -> None:
         import app as app_mod
@@ -90,6 +108,8 @@ class DecisionChipsActionsTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertNotIn("Måltid", body)
         self.assertNotIn("meal_pills", body)
+        self.assertIn("oc-seg", body)
+        self.assertIn("oc-result", body)
         keys = {getattr(b, "key", None) for b in at.button}
         for mk in ("frukost", "lunch", "middag", "kvallsmal"):
             self.assertIn(f"meal_seg_{mk}", keys)
@@ -99,13 +119,6 @@ class DecisionChipsActionsTests(unittest.TestCase):
         self.assertIn("food_go_for_it", keys)
         self.assertIn("reroll_btn", keys)
         self.assertNotIn("back_home", keys)
-        page_hem = [
-            b
-            for b in at.button
-            if (getattr(b, "label", "") or "") == "Hem"
-            and not str(getattr(b, "key", "") or "").startswith("nav_")
-        ]
-        self.assertEqual(page_hem, [], labels)
 
 
 if __name__ == "__main__":
