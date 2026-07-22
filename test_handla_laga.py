@@ -167,7 +167,16 @@ class HandlaLagaUiTests(unittest.TestCase):
             body = " ".join(str(m.value or "") for m in at.markdown)
             self.assertNotIn("Något gick fel", body)
             labels = [b.label or "" for b in at.button]
-            self.assertTrue(any("Tillbaka" in lab or "Back" in lab for lab in labels), labels)
+            # Locked execute: sticky list CTA only — no Tillbaka / Välj / Nytt förslag
+            self.assertNotIn("Välj", labels)
+            self.assertNotIn("Nytt förslag", labels)
+            self.assertFalse(
+                any("Tillbaka" in lab or "Back" in lab for lab in labels), labels
+            )
+            self.assertTrue(
+                any("Lägg till" in lab or "listan" in lab.lower() for lab in labels),
+                labels,
+            )
         finally:
             app_mod.render_share_for_decision = orig  # type: ignore[assignment]
 
@@ -210,15 +219,11 @@ class HandlaLagaUiTests(unittest.TestCase):
                 break
         self.assertEqual(at.session_state["page"], "execute")
         self.assertTrue(at.session_state["accepted"])
-        # Back to lock card on result
-        for b in at.button:
-            if b.label and ("Tillbaka" in b.label or "Back" in b.label):
-                b.click().run()
-                break
-        self.assertEqual(at.session_state["page"], "result")
 
-        # Fresh AppTest — execute shopping checkboxes ghost the element tree and
-        # KeyError on the next run once page-level Hem was removed from lock card.
+        # Fresh AppTest with JSON-string context must land on execute (accepted food)
+        # without crashing — no lock-card Handla/Välj leftovers.
+        import json
+
         cur = dict(at.session_state["current"] or {})
         ctx = cur.get("context")
         if not isinstance(ctx, dict):
@@ -254,9 +259,11 @@ class HandlaLagaUiTests(unittest.TestCase):
         except Exception:
             last = None
         self.assertFalse(bool(at2.session_state["ui_error"]), last)
-        self.assertEqual(at2.session_state["page"], "result")
+        # Accepted food redirects result → execute
+        self.assertEqual(at2.session_state["page"], "execute")
         labels = [b.label or "" for b in at2.button]
-        self.assertTrue(any("Handla" in lab for lab in labels), labels)
+        self.assertNotIn("Välj", labels)
+        self.assertNotIn("Nytt förslag", labels)
         # Handla again from lock card
         for b in at2.button:
             if b.label and "Handla" in b.label:

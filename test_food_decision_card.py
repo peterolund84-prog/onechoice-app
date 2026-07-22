@@ -149,16 +149,11 @@ class PreLockFoodCardUiTests(unittest.TestCase):
         self.assertIn("data:image/jpeg", exec_body)
         labels = [b.label or "" for b in at.button]
         self.assertFalse(any("Handla" in lab for lab in labels), labels)
-        # Back from execute still shows locked card for re-entry
-        for b in at.button:
-            if b.label and ("Tillbaka" in b.label or "Back" in b.label):
-                b.click().run()
-                break
-        self.assertEqual(at.session_state["page"], "result")
-        lock_body = _html_blobs(at)
-        self.assertIn("oc-food-img", lock_body)
-        labels2 = [b.label or "" for b in at.button]
-        self.assertTrue(any("Handla" in lab for lab in labels2), labels2)
+        self.assertNotIn("Välj", labels)
+        self.assertNotIn("Nytt förslag", labels)
+        # Heart lives inside the card HTML (not a floating Streamlit host)
+        self.assertIn("oc-fav-corner", exec_body)
+        self.assertIn("oc-share-corner", exec_body)
 
 
 if __name__ == "__main__":
