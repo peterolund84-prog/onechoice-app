@@ -35,7 +35,7 @@ Button → transition:
   [home] "Bestäm åt mig" / domain chip
         → run_decision → page=result  (current set, accepted=False)
 
-  [result] food primary "Gör det"  (accepted is False)
+  [result] food primary "Välj"  (accepted is False)
         → accept_decision(decision_id)  # DB status=accepted
         → current.locked=True, accepted=True, disable rerolls
         → page=execute directly (one tap — no intermediate lock card)
@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "share-icon-css-v36-20260722"
+BUILD_ID = "food-valj-exec-image-v37-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -149,6 +149,7 @@ I18N = {
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
         "go_for_it": "Gör det",
+        "food_choose": "Välj",
         "handla_laga": "Handla & laga",
         "accepted": "Sparat — bra val.",
         "food_meta_buy": "{n} varor att köpa",
@@ -314,6 +315,7 @@ I18N = {
         "lock_msg": "It’s {suggestion}. Go.",
         "do_it": "Do it now",
         "go_for_it": "Do it",
+        "food_choose": "Choose",
         "handla_laga": "Shop & cook",
         "accepted": "Saved — good call.",
         "food_meta_buy": "{n} items to buy",
@@ -4741,7 +4743,7 @@ def _flush_db_accept_bg() -> None:
 
 
 def on_accept_food_and_execute(cur: dict[str, Any]) -> None:
-    """Food 'Gör det' — accept, lock, and open execute in one tap."""
+    """Food 'Välj' — accept, lock, and open execute in one tap."""
     try:
         st.session_state.accepted = False
         accept_current_decision(cur)
@@ -6292,7 +6294,7 @@ def page_result() -> None:
     elif food_cook and not fridge_mode:
         # Pre-lock primary: lock the decision (details live on execute)
         if st.button(
-            t("go_for_it"),
+            t("food_choose"),
             type="primary",
             use_container_width=True,
             key="food_go_for_it",
@@ -6704,13 +6706,20 @@ def page_execute() -> None:
 
     # ----- Food shopping + recipe (minimal — never escalates to ui_error) -----
     suggestion = str(cur.get("suggestion") or "")
+    justification = str(cur.get("justification") or "")
     share_corner = _safe_decision_share_button_html(cur, key="share_execute")
+    # Same dish image as pre-lock card — not a title-only stub
     _paint_html(
-        f'<div class="oc-decision oc-exec-lock">'
-        f"{share_corner}"
-        f"<h1>{html.escape(suggestion)}</h1>"
-        f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-        f"</div>"
+        _render_food_card_html(
+            language=language,
+            suggestion=suggestion,
+            justification=justification,
+            ctx=ctx,
+            lock_label_html=(
+                f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+            ),
+            share_corner_html=share_corner,
+        )
     )
 
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None

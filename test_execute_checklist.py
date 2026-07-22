@@ -77,7 +77,7 @@ class ExecuteChecklistUi(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")

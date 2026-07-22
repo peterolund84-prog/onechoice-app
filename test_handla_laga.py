@@ -155,7 +155,7 @@ class HandlaLagaUiTests(unittest.TestCase):
             at.query_params["domain"] = "food"
             at.run()
             for b in at.button:
-                if (b.label or "") == "Gör det":
+                if (b.label or "") == "Välj":
                     b.click().run()
                     hit = True
                     break
@@ -186,7 +186,7 @@ class HandlaLagaUiTests(unittest.TestCase):
         cur["context"] = json.dumps(cur.get("context") or {}, ensure_ascii=False)
         at.session_state["current"] = cur
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertFalse(bool(at.session_state["ui_error"]))
@@ -205,7 +205,7 @@ class HandlaLagaUiTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")

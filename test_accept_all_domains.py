@@ -139,7 +139,7 @@ class AppAcceptUiTests(unittest.TestCase):
         for domain, needle in (
             ("workout", "Starta"),
             ("clothes", "Bygg"),
-            ("food", "Gör det"),
+            ("food", "Välj"),
         ):
             at = AppTest.from_file("app.py", default_timeout=45)
             at.run()
@@ -207,7 +207,7 @@ class AppAcceptUiTests(unittest.TestCase):
         self.assertEqual(at.session_state["food_meal_type"], "lunch")
         cur = at.session_state["current"] or {}
         self.assertEqual((cur.get("context") or {}).get("meal_type"), "lunch")
-        # Accept must work after meal switch (Gör det — or lunch-out map link)
+        # Accept must work after meal switch (Välj — or lunch-out map link)
         labels = [b.label or "" for b in at.button]
         if any("karta" in L.lower() or "map" in L.lower() for L in labels):
             # Eating-out lunch is a valid meal-typed result; no session accept flag
@@ -215,7 +215,7 @@ class AppAcceptUiTests(unittest.TestCase):
             self.assertFalse(bool(at.session_state["ui_error"]))
             return
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertTrue(at.session_state["accepted"])

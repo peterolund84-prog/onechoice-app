@@ -162,7 +162,7 @@ class MealTypeInferTests(unittest.TestCase):
         at.run()
         self.assertEqual(at.session_state["page"], "result")
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")

@@ -54,8 +54,8 @@ class HappyPathSmokeTest(unittest.TestCase):
         self._assert_authenticated(at)
         self.assertEqual(at.session_state["page"], "result")
 
-        # Gör det → execute directly (no intermediate Handla card)
-        go = next(b for b in at.button if (b.label or "") == "Gör det")
+        # Välj → execute directly (no intermediate Handla card)
+        go = next(b for b in at.button if (b.label or "") == "Välj")
         go.click().run()
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
@@ -101,7 +101,7 @@ class HappyPathSmokeTest(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
@@ -119,7 +119,7 @@ class HappyPathSmokeTest(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
