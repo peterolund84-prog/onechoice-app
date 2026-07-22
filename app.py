@@ -1740,6 +1740,19 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     max-width: 100% !important;
     box-sizing: border-box !important;
 }}
+.st-key-meal_seg [data-testid="stWidgetLabel"],
+.st-key-meal_seg label[data-testid="stWidgetLabel"],
+.st-key-meal_seg label {{
+    display: none !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    visibility: hidden !important;
+}}
 .st-key-meal_seg [data-testid="stVerticalBlock"],
 .st-key-meal_seg [data-testid="stVerticalBlockBorderWrapper"],
 .st-key-meal_seg [data-testid="stElementContainer"] {{
@@ -2598,14 +2611,33 @@ a.oc-chip:hover, a.oc-chip:focus {{
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
 }}
-[data-testid="stWidgetLabel"] {{ display: none !important; }}
-div[data-testid="stTextInput"] [data-testid="stWidgetLabel"],
-div[data-testid="stSelectbox"] [data-testid="stWidgetLabel"],
+/* Labels steal layout width unless collapsed — hide by default. */
+[data-testid="stWidgetLabel"] {{
+    display: none !important;
+    width: 0 !important;
+    max-width: 0 !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    height: 0 !important;
+}}
+/* Intentional visible labels only (auth, profile sizes, clothes select, checkboxes). */
+[class*="st-key-auth_"] [data-testid="stWidgetLabel"],
+[class*="st-key-prof_size_"] [data-testid="stWidgetLabel"],
+[class*="st-key-prof_clothes_"] [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] label[data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] label {{
     display: flex !important;
     visibility: visible !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
 }}
 div[data-testid="stHorizontalBlock"] {{
     display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important;
@@ -4341,7 +4373,7 @@ def lang_bar() -> None:
 
     with st.container(key="oc_lang_bar", horizontal=True, horizontal_alignment="right"):
         st.pills(
-            "lang",
+            " ",
             options=["sv", "en"],
             format_func=lambda x: "SV" if x == "sv" else "EN",
             selection_mode="single",
@@ -4490,7 +4522,7 @@ def render_domain_chips(*, key_prefix: str = "home") -> None:
         st.session_state._clear_domain_pills = False
 
     choice = st.pills(
-        "domain_chips",
+        " ",
         options=list(domains),
         format_func=lambda d: domain_label(d),
         selection_mode="single",
@@ -7093,7 +7125,11 @@ def page_fridge() -> None:
                     cam_kwargs["resolution"] = "1080p"
             except Exception:
                 pass
-            cam = st.camera_input(t("fridge_camera"), **cam_kwargs)
+            cam = st.camera_input(
+                " ",
+                label_visibility="collapsed",
+                **cam_kwargs,
+            )
             if cam is not None:
                 try:
                     added = _fridge_add_photo(
@@ -7138,7 +7174,7 @@ def page_fridge() -> None:
 
         with st.expander(t("fridge_upload"), expanded=False):
             uploads = st.file_uploader(
-                t("fridge_upload"),
+                " ",
                 type=["jpg", "jpeg", "png", "webp"],
                 accept_multiple_files=True,
                 key="fridge_uploads",
@@ -7261,7 +7297,7 @@ def page_fridge() -> None:
     add_cols = st.columns([3, 1])
     with add_cols[0]:
         new_item = st.text_input(
-            t("fridge_add"),
+            " ",
             key="fridge_add_input",
             placeholder=t("fridge_add_placeholder"),
             label_visibility="collapsed",
@@ -7376,7 +7412,7 @@ def page_ambiguous() -> None:
     domains = ("food", "clothes", "movie", "workout", "weekend", "other")
     st.markdown('<div class="oc-chip-row" aria-hidden="true"></div>', unsafe_allow_html=True)
     choice = st.pills(
-        "ambiguous_pick",
+        " ",
         options=list(domains),
         format_func=lambda d: t("other") if d == "other" else domain_label(d),
         selection_mode="single",
@@ -7429,12 +7465,13 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
 
     with st.container(key="meal_seg"):
         choice = st.pills(
-            "meal_pills",
+            " ",
             options=list(fd.MEAL_ORDER),
             format_func=lambda k: fd.meal_label(k, language),
             selection_mode="single",
             key="meal_pills",
             label_visibility="collapsed",
+            width="stretch",
         )
     if choice is None:
         choice = current
@@ -7489,7 +7526,7 @@ def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
         unsafe_allow_html=True,
     )
     fmt_choice = st.pills(
-        "movie_format_pills",
+        " ",
         options=list(md.FORMAT_ORDER),
         format_func=lambda k: md.format_label(
             k, language, in_progress_series=in_prog if k == "avsnitt" else None
@@ -7497,18 +7534,20 @@ def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
         selection_mode="single",
         key="movie_format_pills",
         label_visibility="collapsed",
+        width="stretch",
     )
     st.markdown(
         f'<p class="oc-sec-label">{html.escape("Läge" if language == "sv" else "Mood")}</p>',
         unsafe_allow_html=True,
     )
     mood_choice = st.pills(
-        "movie_mood_pills",
+        " ",
         options=list(md.MOOD_ORDER),
         format_func=lambda k: md.mood_label(k, language),
         selection_mode="single",
         key="movie_mood_pills",
         label_visibility="collapsed",
+        width="stretch",
     )
 
     fmt_choice = current_fmt if fmt_choice is None else fmt_choice
@@ -8543,7 +8582,7 @@ def page_lista() -> None:
             cols = st.columns([4, 1], gap="small")
             with cols[0]:
                 added = st.text_input(
-                    t("list_add_placeholder"),
+                    " ",
                     label_visibility="collapsed",
                     key="shop_add_input",
                     placeholder=t("list_add_placeholder"),
@@ -8613,12 +8652,13 @@ def page_history() -> None:
     hist_label = t("history_seg_history")
     with st.container(key="hist_seg"):
         seg = st.pills(
-            "hist_seg",
+            " ",
             options=[fav_label, hist_label],
             selection_mode="single",
             default=hist_label,
             label_visibility="collapsed",
             key="history_segment",
+            width="stretch",
         )
     show_favs = seg == fav_label
 

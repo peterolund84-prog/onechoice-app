@@ -71,10 +71,9 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         at = self._boot_lista()
         self.assertFalse(at.exception)
         add = next(i for i in at.text_input if getattr(i, "key", None) == "shop_add_input")
-        self.assertEqual(add.label, "Lägg till...")
+        self.assertEqual(add.label, " ")
         self.assertTrue(str(add.placeholder).startswith("Lägg till"))
-        # label_visibility=collapsed — AppTest still exposes the label string,
-        # but the visible double-label is suppressed in CSS + collapsed.
+        # label_visibility=collapsed — blank label so the key never leaks into layout.
         plus = next(
             b
             for b in at.button
