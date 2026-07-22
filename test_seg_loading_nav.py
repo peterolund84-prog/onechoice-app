@@ -131,8 +131,19 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn("body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card)", src)
         self.assertIn("data-oc-deciding", src)
-        self.assertIn("_render_decide_evictor", src)
         self.assertIn("_decide_skel_painted", src)
+
+    def test_page_deciding_marks_slot_painted(self) -> None:
+        """Cold Bestäm åt mig must not remount decide_slot (DuplicateElementKey → ui_error)."""
+        import app as app_mod
+        import inspect
+
+        src = inspect.getsource(app_mod.page_deciding)
+        self.assertIn("_render_decide_skeleton", src)
+        self.assertIn('["_decide_skel_painted"] = True', src)
+        # Must not leave painted=False after occupying decide_slot
+        self.assertNotIn('["_decide_skel_painted"] = False', src)
+        self.assertNotIn("_render_decide_evictor", src)
 
     def test_pending_nav_wipe_runtime(self) -> None:
         """General click→wipe so old pages never sit dimmed under the next run."""

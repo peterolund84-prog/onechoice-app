@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-scroll-wipe-flash-v66-20260722"
+BUILD_ID = "fix-decide-dup-slot-v67-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -5194,20 +5194,6 @@ def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
         )
 
 
-def _render_decide_evictor() -> None:
-    """Immediate opaque slot — evicts the previous decision card before any wait."""
-    with st.container(key="decide_slot"):
-        st.html(
-            '<div class="oc-deciding-root" data-oc-deciding="1" aria-hidden="true"></div>'
-            '<div class="oc-decision oc-food-decision oc-skel-card oc-skel-evict" aria-hidden="true">'
-            '<div class="oc-food-img" style="background:#f3f3f0"></div>'
-            '<div class="oc-food-body">'
-            '<div class="oc-skel-bar is-title" style="width:70%;opacity:0.35"></div>'
-            '<div class="oc-skel-bar" style="width:50%;opacity:0.25"></div>'
-            "</div></div>"
-        )
-
-
 def _await_decide_with_skeleton(
     fut,
     *,
@@ -5271,17 +5257,11 @@ def page_deciding() -> None:
         st.session_state.page = "home"
         st.rerun()
         return
-    # Evict the previous decision card from the viewport before any wait.
-    # If we're replacing an on-screen suggestion, show the full skeleton now
-    # (time-based delay only applies when there is nothing to hide).
-    cur = st.session_state.get("current")
-    replacing = isinstance(cur, dict) and bool(cur.get("suggestion"))
-    if replacing:
-        _render_decide_skeleton(fridge_mode=bool(st.session_state.get("fridge_mode")))
-        st.session_state["_decide_skel_painted"] = True
-    else:
-        _render_decide_evictor()
-        st.session_state["_decide_skel_painted"] = False
+    # Paint decide_slot EXACTLY once this run. Remounting skeleton later
+    # (time-based await) raises StreamlitDuplicateElementKey → ui_error
+    # ("Något gick fel") after Bestäm åt mig / domain taps on a cold home.
+    _render_decide_skeleton(fridge_mode=bool(st.session_state.get("fridge_mode")))
+    st.session_state["_decide_skel_painted"] = True
     st.session_state["_decide_in_slot"] = True
     run_decision(
         question=str(pending.get("question") or ""),
