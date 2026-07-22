@@ -12,6 +12,52 @@ import db
 import share_domain as sd
 
 
+def _html_blobs(at) -> str:
+    """Collect markdown + st.html bodies from an AppTest tree (including columns)."""
+    parts: list[str] = []
+    for m in at.markdown:
+        parts.append(str(getattr(m, "value", None) or ""))
+
+    def walk(block) -> None:
+        kids = getattr(block, "children", None)
+        if not isinstance(kids, dict):
+            return
+        for _k, v in kids.items():
+            items = v if isinstance(v, list) else [v]
+            for it in items:
+                proto = getattr(it, "proto", None)
+                body = getattr(proto, "body", None) if proto is not None else None
+                if body:
+                    parts.append(str(body))
+                else:
+                    try:
+                        val = it.value
+                    except Exception:
+                        val = None
+                    if isinstance(val, str):
+                        parts.append(val)
+                walk(it)
+
+    try:
+        walk(at._tree.main)
+    except Exception:
+        pass
+    return "\n".join(parts)
+
+
+def _assert_share_icon(test: unittest.TestCase, at, *, where: str) -> None:
+    body = _html_blobs(at)
+    test.assertIn('data-oc-share="icon"', body, where)
+    test.assertIn("ocNativeShare", body, where)
+    test.assertIn("onclick=", body, where)
+    # No floating Dela pills
+    labels = [b.label or "" for b in at.button]
+    test.assertFalse(
+        any(lab.strip() in ("Dela", "↗ Dela", "Share", "Dela listan") for lab in labels),
+        labels,
+    )
+
+
 class ShareCopyTests(unittest.TestCase):
     def test_food_frames_app_as_decider_tonight(self) -> None:
         msg = sd.share_message(
@@ -242,14 +288,7 @@ class ShareLandingUiTests(unittest.TestCase):
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
-        # Share present on execute
-        share_keys = [
-            getattr(b, "key", None) for b in at.button if getattr(b, "key", None)
-        ]
-        self.assertTrue(
-            any(k and str(k).startswith("share_btn_") for k in share_keys),
-            share_keys,
-        )
+        _assert_share_icon(self, at, where="execute")
         # Back to locked result
         for b in at.button:
             if (b.label or "") in ("Tillbaka", "Back"):
@@ -263,12 +302,7 @@ class ShareLandingUiTests(unittest.TestCase):
         share = db.ensure_public_share(dict(cur), language="sv")
         self.assertTrue(share.get("token"))
         self.assertIn("ref=share", sd.share_path(token=share["token"], decision_id=did))
-        # Lock card share control (readable label — not bare ↗)
-        labels = [b.label or "" for b in at.button]
-        self.assertTrue(
-            any("Dela" in lab or "Share" in lab for lab in labels),
-            labels,
-        )
+        _assert_share_icon(self, at, where="lock card")
 
     def test_food_decision_and_execute_expose_share(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -289,19 +323,11 @@ class ShareLandingUiTests(unittest.TestCase):
         mat = next(b for b in at.button if (b.label or "") == "Mat")
         mat.click().run()
         self.assertEqual(at.session_state["page"], "result")
-        labels = [b.label or "" for b in at.button]
-        self.assertTrue(
-            any("Dela" in lab or "Share" in lab for lab in labels),
-            labels,
-        )
+        _assert_share_icon(self, at, where="food decision")
         go = next(b for b in at.button if (b.label or "") == "Gör det")
         go.click().run()
         self.assertEqual(at.session_state["page"], "execute")
-        labels = [b.label or "" for b in at.button]
-        self.assertTrue(
-            any("Dela" in lab or "Share" in lab for lab in labels),
-            labels,
-        )
+        _assert_share_icon(self, at, where="food execute")
 
     def test_lista_exposes_share_list_when_items_present(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -328,13 +354,31 @@ class ShareLandingUiTests(unittest.TestCase):
                         at.session_state["_auth_cookie_checked"] = True
                         at.session_state["shopping_list_cache"] = None
                         at.run()
-            labels = [b.label or "" for b in at.button]
-            self.assertTrue(
-                any("Dela listan" in lab or "Share list" in lab for lab in labels),
-                labels,
-            )
+            body = _html_blobs(at)
+            self.assertIn('data-oc-share="icon"', body)
+            self.assertIn('data-oc-share-key="lista_share"', body)
+            self.assertIn("ocNativeShare", body)
+            self.assertIn("navigator.share", body)
         finally:
             db._SHOPPING_FORCE_SQLITE = False
+
+    def test_share_button_html_is_sync_onclick_not_streamlit_button(self) -> None:
+        import app as app_mod
+
+        html_btn = app_mod._share_icon_button_html(
+            title="OneChoice",
+            text="🍽 OneChoice har bestämt: X ikväll",
+            url="?share=tok&ref=share&decision_id=1",
+            key="unit",
+        )
+        self.assertIn('data-oc-share="icon"', html_btn)
+        self.assertIn("onclick=", html_btn)
+        self.assertIn("ocNativeShare", html_btn)
+        self.assertIn("oc-share-icon-btn", html_btn)
+        runtime = app_mod._oc_share_runtime_html()
+        self.assertIn("navigator.share", runtime)
+        self.assertIn("oc-share-toast", runtime)
+        self.assertIn("web-share", runtime)
 
 
 if __name__ == "__main__":
