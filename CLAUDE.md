@@ -9,3 +9,5 @@ Any state that must survive user taps (auth, active decision, checklist toggles)
 Prefer session-safe widgets (`st.button`, `st.pills`, `on_click`) for in-app navigation. When anchors are kept for design reasons, persist auth via browser cookie (`auth_cookie.py` + Supabase refresh token).
 
 **Widget labels render visibly by default and steal layout width** — every non-decorative widget needs `label_visibility="collapsed"` (and a blank `" "` label, never the widget key). Covered by `test_no_widget_label_leaks`.
+
+**Never style `stPills > *` with `display:flex` / grid on the meal control.** That selector is more specific than label-hide rules and re-shows the collapsed label as a grid cell (the `"meal_pills"` leak). Grid the `stButtonGroup` only.

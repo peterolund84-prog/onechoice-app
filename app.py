@@ -1733,7 +1733,10 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: #4F46E5 !important;
 }}
 .st-key-hist_seg {{ margin: 0 0 12px !important; }}
-/* Meal segmented control — full width track, 4 equal segments, full labels */
+/* Meal segmented control — full width track, 4 equal segments, full labels.
+   CRITICAL: grid ONLY on stButtonGroup — never on stPills. Applying grid /
+   display:flex to stPills > * re-shows the collapsed widget label as a 5th
+   cell (was leaking "meal_pills") and squeezes the four meal segments. */
 .st-key-meal_seg {{
     margin: 0 0 16px !important;
     width: 100% !important;
@@ -1742,7 +1745,8 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 }}
 .st-key-meal_seg [data-testid="stWidgetLabel"],
 .st-key-meal_seg label[data-testid="stWidgetLabel"],
-.st-key-meal_seg label {{
+.st-key-meal_seg [data-testid="stPills"] > [data-testid="stWidgetLabel"],
+.st-key-meal_seg [data-testid="stPills"] > label {{
     display: none !important;
     width: 0 !important;
     max-width: 0 !important;
@@ -1752,15 +1756,16 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     overflow: hidden !important;
     position: absolute !important;
     visibility: hidden !important;
+    pointer-events: none !important;
 }}
 .st-key-meal_seg [data-testid="stVerticalBlock"],
 .st-key-meal_seg [data-testid="stVerticalBlockBorderWrapper"],
-.st-key-meal_seg [data-testid="stElementContainer"] {{
+.st-key-meal_seg [data-testid="stElementContainer"],
+.st-key-meal_seg [data-testid="stPills"] {{
     width: 100% !important;
     max-width: 100% !important;
 }}
-.st-key-meal_seg [data-testid="stButtonGroup"],
-.st-key-meal_seg [data-testid="stPills"] {{
+.st-key-meal_seg [data-testid="stButtonGroup"] {{
     display: grid !important;
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     align-items: stretch !important;
@@ -1775,16 +1780,14 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     border-radius: 999px !important;
     box-sizing: border-box !important;
 }}
-.st-key-meal_seg [data-testid="stButtonGroup"] > *,
-.st-key-meal_seg [data-testid="stPills"] > * {{
+.st-key-meal_seg [data-testid="stButtonGroup"] > * {{
     min-width: 0 !important;
     width: 100% !important;
     max-width: none !important;
     display: flex !important;
     justify-content: stretch !important;
 }}
-.st-key-meal_seg [data-testid="stButtonGroup"] button,
-.st-key-meal_seg [data-testid="stPills"] button {{
+.st-key-meal_seg [data-testid="stButtonGroup"] button {{
     flex: 1 1 0 !important;
     flex-basis: 0 !important;
     width: 100% !important;
@@ -1813,11 +1816,8 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     align-items: center !important;
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"] button p,
-.st-key-meal_seg [data-testid="stPills"] button p,
 .st-key-meal_seg [data-testid="stButtonGroup"] button span,
-.st-key-meal_seg [data-testid="stPills"] button span,
-.st-key-meal_seg [data-testid="stButtonGroup"] button div,
-.st-key-meal_seg [data-testid="stPills"] button div {{
+.st-key-meal_seg [data-testid="stButtonGroup"] button div {{
     white-space: nowrap !important;
     overflow: visible !important;
     text-overflow: clip !important;
@@ -1828,16 +1828,13 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     text-align: center !important;
 }}
 @media (max-width: 420px) {{
-    .st-key-meal_seg [data-testid="stButtonGroup"] button,
-    .st-key-meal_seg [data-testid="stPills"] button {{
+    .st-key-meal_seg [data-testid="stButtonGroup"] button {{
         font-size: 11px !important;
         padding: 0 2px !important;
     }}
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"] button[aria-checked="true"],
-.st-key-meal_seg [data-testid="stPills"] button[aria-checked="true"],
-.st-key-meal_seg [data-testid="stButtonGroup"] button[kind="primary"],
-.st-key-meal_seg [data-testid="stPills"] button[kind="primary"] {{
+.st-key-meal_seg [data-testid="stButtonGroup"] button[kind="primary"] {{
     background: #4F46E5 !important;
     background-color: #4F46E5 !important;
     color: #fff !important;
@@ -7459,9 +7456,13 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
         current = fd.default_meal_type()
     st.session_state.food_meal_type = current
 
-    # Session-state only (no default=) — avoids Streamlit warning and overwrite races
-    if st.session_state.get("meal_pills") not in fd.MEAL_TYPES:
-        st.session_state.meal_pills = current
+    # Session-state only (no default=) — avoids Streamlit warning and overwrite races.
+    # Key must not be a human-readable leak string; migrate legacy meal_pills.
+    legacy = st.session_state.pop("meal_pills", None)
+    if st.session_state.get("meal_seg_choice") not in fd.MEAL_TYPES:
+        st.session_state.meal_seg_choice = (
+            legacy if legacy in fd.MEAL_TYPES else current
+        )
 
     with st.container(key="meal_seg"):
         choice = st.pills(
@@ -7469,7 +7470,7 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
             options=list(fd.MEAL_ORDER),
             format_func=lambda k: fd.meal_label(k, language),
             selection_mode="single",
-            key="meal_pills",
+            key="meal_seg_choice",
             label_visibility="collapsed",
             width="stretch",
         )
