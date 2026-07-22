@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "auth-underline-dish-img-v31-20260722"
+BUILD_ID = "share-visible-linsgryta-v34-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -263,6 +263,8 @@ I18N = {
         "not_a_decision": "Jag tar beslut, inte frågor. Vad behöver du bestämma?",
         "share": "Dela",
         "share_copied": "Kopierat!",
+        "share_list": "Dela listan",
+        "share_list_empty": "Inget att dela — listan är tom.",
         "share_cta": "Låt OneChoice bestämma åt dig",
         "share_landing_sub": "Ett beslut. Klart.",
         "share_open_recipe": "Recept & lista",
@@ -426,6 +428,8 @@ I18N = {
         "not_a_decision": "I make decisions, not answer questions. What do you need decided?",
         "share": "Share",
         "share_copied": "Copied!",
+        "share_list": "Share list",
+        "share_list_empty": "Nothing to share — the list is empty.",
         "share_cta": "Let OneChoice decide for you",
         "share_landing_sub": "One decision. Done.",
         "share_open_recipe": "Recipe & list",
@@ -1655,8 +1659,61 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     border: 1px solid var(--oc-border);
 }}
 .oc-share-row {{
-    display: flex; justify-content: flex-end; margin: 0 0 0.15rem;
-    min-height: 2rem;
+    display: flex; justify-content: flex-end; margin: 0 0 0.35rem;
+    min-height: 2.2rem;
+}}
+.oc-share-row + div[data-testid="element-container"] div.stButton {{
+    display: flex !important;
+    justify-content: flex-end !important;
+}}
+.oc-share-row + div[data-testid="element-container"] div.stButton > button,
+div[data-testid="element-container"]:has(.oc-share-row) + div[data-testid="element-container"] div.stButton > button,
+[class*="st-key-share_btn_"] div.stButton > button {{
+    width: auto !important;
+    min-width: 4.5rem !important;
+    min-height: 2.5rem !important;
+    padding: 0.4rem 0.85rem !important;
+    font-size: 0.95rem !important;
+    font-weight: 600 !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}}
+.st-key-lista_share_row {{
+    margin: 0 0 8px !important;
+    padding: 0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+}}
+.st-key-lista_share_row div.stButton {{
+    display: flex !important;
+    justify-content: flex-end !important;
+}}
+.st-key-lista_share_row div.stButton > button {{
+    width: auto !important;
+    min-height: 2.4rem !important;
+    padding: 0.35rem 0.85rem !important;
+    font-size: 0.92rem !important;
+    font-weight: 600 !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}}
+/* Public share landing — wordmark only, no lang bar / bottom nav */
+.oc-header.oc-share-landing {{
+    pointer-events: none !important;
+}}
+.oc-share-landing-marker {{ display: none !important; height: 0 !important; margin: 0 !important; }}
+body:has(.oc-share-landing) .st-key-oc_lang_bar,
+body:has(.oc-share-landing) .st-key-oc_nav_bar,
+.block-container:has(.oc-share-landing) ~ * .st-key-oc_nav_bar {{
+    display: none !important;
 }}
 .oc-share-landing .oc-decision h1 {{ font-size: 1.65rem; }}
 .oc-share-cta-note {{
@@ -3063,6 +3120,7 @@ def build_share_bundle(cur: dict[str, Any]) -> dict[str, str]:
     if "context" in cur:
         cur = dict(cur)
         cur["context"] = _as_dict(cur.get("context"))
+    ctx = _as_dict(cur.get("context"))
     share = db.ensure_public_share(cur, language=language)
     token = str(share.get("token") or "")
     did = share.get("decision_id")
@@ -3070,6 +3128,7 @@ def build_share_bundle(cur: dict[str, Any]) -> dict[str, str]:
         domain=str(cur.get("domain") or share.get("domain") or ""),
         suggestion=str(cur.get("suggestion") or share.get("suggestion") or ""),
         language=language,
+        year=ctx.get("movie_tmdb_year"),
     )
     base = _app_base_url()
     if base:
@@ -3099,30 +3158,106 @@ def _session_pop(key: str, default: Any = None) -> Any:
     return val
 
 
-def render_share_for_decision(
-    cur: dict[str, Any], *, key: str, icon: bool = False
-) -> None:
-    """
-    Share control that cannot take down Handla & laga / execute.
+def _inject_native_share(*, title: str, text: str, url: str = "") -> None:
+    """One shared Web Share / clipboard helper — never builds per-app buttons."""
+    import base64
+    import json as _json
 
-    Uses a normal Streamlit button first (Cloud-safe). Native share sheet is
-    attempted only after the user taps Dela — never on initial page paint.
-    """
+    payload_b64 = base64.b64encode(
+        _json.dumps(
+            {"title": title or "OneChoice", "text": text or "", "url": url or ""},
+            ensure_ascii=False,
+        ).encode("utf-8")
+    ).decode("ascii")
+    copied = html.escape(t("share_copied"))
+    html_doc = f"""<!DOCTYPE html><html><body style="margin:0">
+    <script>
+    (async function() {{
+      var payload = JSON.parse(atob("{payload_b64}"));
+      var shareUrl = payload.url || "";
+      if (shareUrl.indexOf("?") === 0) shareUrl = window.location.origin + "/" + shareUrl;
+      else if (shareUrl.indexOf("/") === 0) shareUrl = window.location.origin + shareUrl;
+      var full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
+      var shared = false;
+      if (navigator.share) {{
+        try {{
+          var data = {{ title: payload.title || "OneChoice", text: payload.text || "" }};
+          if (shareUrl) data.url = shareUrl;
+          await navigator.share(data);
+          shared = true;
+        }} catch (e) {{
+          if (e && e.name === "AbortError") return;
+        }}
+      }}
+      if (!shared) {{
+        try {{ await navigator.clipboard.writeText(full || payload.text || ""); }} catch (e) {{}}
+      }}
+    }})();
+    </script>
+    <div style="font-family:Inter,sans-serif;font-size:0.85rem;color:#6B6B66;font-weight:600;">
+      {copied}
+    </div>
+    </body></html>"""
+    injected = False
+    iframe = getattr(st, "iframe", None)
+    if callable(iframe):
+        try:
+            iframe(html_doc, height=36)
+            injected = True
+        except Exception:
+            injected = False
+    if not injected:
+        try:
+            import streamlit.components.v1 as components
+
+            components.html(html_doc, height=36)
+            injected = True
+        except Exception:
+            injected = False
+    if not injected:
+        full = f"{text}\n{url}".strip() if url else str(text or "")
+        st.caption(t("share_copied"))
+        st.code(full, language=None)
+
+
+def render_share(
+    *,
+    title: str,
+    text: str,
+    url: str = "",
+    key: str,
+    label: str | None = None,
+    icon: bool = False,
+    on_shared: Any = None,
+) -> None:
+    """Universal share control — Web Share API with copy-to-clipboard fallback."""
     safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
-    label = "↗" if icon else t("share")
+    # Always show readable "Dela" — bare ↗ was invisible in the wild
+    if icon:
+        btn_label = f"↗ {label or t('share')}"
+    else:
+        btn_label = label or t("share")
     btn_key = f"share_btn_{safe_key}"
     armed_key = f"_share_armed_{safe_key}"
 
     try:
         clicked = st.button(
-            label,
+            btn_label,
             key=btn_key,
             use_container_width=not icon,
             type="secondary",
         )
         if clicked:
-            bundle = build_share_bundle(cur if isinstance(cur, dict) else {})
-            st.session_state[armed_key] = bundle
+            st.session_state[armed_key] = {
+                "title": title or "OneChoice",
+                "text": text or "",
+                "url": url or "",
+            }
+            if callable(on_shared):
+                try:
+                    on_shared()
+                except Exception as exc:
+                    log.warning("share on_shared hook failed: %s", exc)
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
@@ -3132,77 +3267,116 @@ def render_share_for_decision(
     bundle = st.session_state.get(armed_key)
     if not isinstance(bundle, dict):
         return
-
-    text = str(bundle.get("text") or "")
-    url = str(bundle.get("url") or "")
-    full = f"{text}\n{url}".strip()
-
-    # Try native share sheet once (lazy) — failures fall back to copy text
     try:
-        import base64
-        import json as _json
-
-        payload_b64 = base64.b64encode(
-            _json.dumps(
-                {"title": "OneChoice", "text": text, "url": url},
-                ensure_ascii=False,
-            ).encode("utf-8")
-        ).decode("ascii")
-        html_doc = f"""<!DOCTYPE html><html><body style="margin:0">
-        <script>
-        (async function() {{
-          var payload = JSON.parse(atob("{payload_b64}"));
-          var shareUrl = payload.url || "";
-          if (shareUrl.indexOf("?") === 0) shareUrl = window.location.origin + "/" + shareUrl;
-          else if (shareUrl.indexOf("/") === 0) shareUrl = window.location.origin + shareUrl;
-          var full = (payload.text || "") + (shareUrl ? ("\\n" + shareUrl) : "");
-          if (navigator.share) {{
-            try {{
-              await navigator.share({{
-                title: payload.title || "OneChoice",
-                text: payload.text || "",
-                url: shareUrl || undefined
-              }});
-              return;
-            }} catch (e) {{
-              if (e && e.name === "AbortError") return;
-            }}
-          }}
-          try {{ await navigator.clipboard.writeText(full); }} catch (e) {{}}
-        }})();
-        </script>
-        <div style="font-family:Manrope,sans-serif;font-size:0.85rem;color:#5a8bff;font-weight:700;">
-          {html.escape(t("share_copied"))}
-        </div>
-        </body></html>"""
-        injected = False
-        iframe = getattr(st, "iframe", None)
-        if callable(iframe):
-            try:
-                iframe(html_doc, height=36)
-                injected = True
-            except Exception:
-                injected = False
-        if not injected:
-            try:
-                import streamlit.components.v1 as components
-
-                components.html(html_doc, height=36)
-                injected = True
-            except Exception:
-                injected = False
-        if not injected:
-            st.caption(t("share_copied"))
-            st.code(full, language=None)
+        _inject_native_share(
+            title=str(bundle.get("title") or "OneChoice"),
+            text=str(bundle.get("text") or ""),
+            url=str(bundle.get("url") or ""),
+        )
     except BaseException as exc:
         if _is_streamlit_control_flow(exc):
             raise
         log.exception("share sheet failed: %s", exc)
         try:
+            full = f"{bundle.get('text') or ''}\n{bundle.get('url') or ''}".strip()
             st.caption(t("share_copied"))
             st.code(full, language=None)
         except Exception:
             pass
+
+
+def render_share_for_decision(
+    cur: dict[str, Any], *, key: str, icon: bool = False
+) -> None:
+    """Share a decision — public link + domain copy. Builds snapshot only on tap."""
+    safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
+    # Always show readable "Dela" — bare ↗ was invisible in the wild
+    btn_label = f"↗ {t('share')}" if icon else t("share")
+    btn_key = f"share_btn_{safe_key}"
+    armed_key = f"_share_armed_{safe_key}"
+
+    try:
+        clicked = st.button(
+            btn_label,
+            key=btn_key,
+            use_container_width=not icon,
+            type="secondary",
+        )
+        if clicked:
+            bundle = build_share_bundle(cur if isinstance(cur, dict) else {})
+            st.session_state[armed_key] = {
+                "title": "OneChoice",
+                "text": str(bundle.get("text") or ""),
+                "url": str(bundle.get("url") or ""),
+            }
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("share button failed: %s", exc)
+        return
+
+    bundle = st.session_state.get(armed_key)
+    if not isinstance(bundle, dict):
+        return
+    try:
+        _inject_native_share(
+            title=str(bundle.get("title") or "OneChoice"),
+            text=str(bundle.get("text") or ""),
+            url=str(bundle.get("url") or ""),
+        )
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("share sheet failed: %s", exc)
+
+
+def _safe_render_share_for_decision(
+    cur: dict[str, Any], *, key: str, icon: bool = False
+) -> None:
+    """Outer guard so a broken share never takes down Handla / execute / result."""
+    try:
+        render_share_for_decision(cur, key=key, icon=icon)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("share render failed: %s", exc)
+
+
+def render_share_list() -> None:
+    """Lista tab — share unchecked items as Messenger/SMS-ready plain text."""
+    import share_domain as sd
+
+    language = st.session_state.get("language", "sv")
+    try:
+        items = _load_shopping_items()
+    except Exception:
+        items = []
+    unchecked = [r for r in items if isinstance(r, dict) and not bool(r.get("checked"))]
+    if not unchecked:
+        return
+
+    text = sd.format_list_share_text(items, language=language)
+
+    def _log_list_share() -> None:
+        uid = st.session_state.get("user_id")
+        if not uid:
+            return
+        try:
+            n = db.record_list_share(str(uid))
+            st.session_state["list_share_count"] = n
+        except Exception as exc:
+            log.warning("list share counter failed: %s", exc)
+
+    with st.container(key="lista_share_row"):
+        render_share(
+            title="OneChoice",
+            text=text,
+            url="",
+            key="lista_share",
+            label=t("share_list"),
+            icon=False,
+            on_shared=_log_list_share,
+        )
 
 
 
@@ -4970,7 +5144,7 @@ def _format_nutrition_fallback(
     return f"Ca {k_i} kcal per portion · {p_i} g protein"
 
 
-def render_top_chrome(*, extra_class: str = "") -> None:
+def render_top_chrome(*, extra_class: str = "", show_lang: bool = True) -> None:
     """Fixed frosted header: OneChoice wordmark + SV/EN (lang pills overlay right)."""
     extra = f" {extra_class}" if extra_class else ""
     st.markdown(
@@ -4979,7 +5153,17 @@ def render_top_chrome(*, extra_class: str = "") -> None:
         f"</header>",
         unsafe_allow_html=True,
     )
-    lang_bar()
+    if show_lang:
+        lang_bar()
+
+
+def render_share_landing_chrome() -> None:
+    """Public share page — wordmark only (no lang bar / bottom nav)."""
+    render_top_chrome(extra_class="oc-share-landing", show_lang=False)
+    st.markdown(
+        '<div class="oc-share-landing-marker" data-oc-share="landing" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_food_recipe(
@@ -5802,10 +5986,9 @@ def page_result() -> None:
     food_cook = _is_food_cook(cur)
 
     if show_lock_card:
-        # Lock card — share for non-food; food prioritizes Handla reliability
-        if (accepted or reroll_locked) and (domain or "") != "food":
-            st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
-            render_share_for_decision(cur, key="share_lock_icon", icon=True)
+        # Share icon on every locked decision card (all five domains)
+        st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
+        _safe_render_share_for_decision(cur, key="share_lock_icon", icon=True)
         title = (
             t("locked_title").format(suggestion=suggestion)
             if accepted
@@ -5932,9 +6115,11 @@ def page_result() -> None:
         nav()
         return
 
-    # Unlocked decision card
+    # Unlocked decision card — share icon top-right on every domain
     ctx = _as_dict(cur.get("context"))
     fridge_mode = str(ctx.get("source") or "") == "fridge_photo"
+    st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
+    _safe_render_share_for_decision(cur, key="share_card_icon", icon=True)
     # Food: meal-type chips ABOVE the decision (not for fridge — inventory is the constraint)
     if domain == "food" and not accepted and not fridge_mode:
         render_meal_type_chips(cur)
@@ -6300,8 +6485,6 @@ def render_workout_done(workout: dict[str, Any], cur: dict[str, Any], language: 
             _record_workout_feel(did, positive=False, cur=cur)
             st.session_state.page = "home"
             st.rerun()
-    # Share — done screen is high-intent distribution moment
-    render_share_for_decision(cur, key="share_workout_done", icon=False)
 
 
 def _record_workout_feel(
@@ -6377,6 +6560,8 @@ def page_execute() -> None:
                 st.session_state.current = cur
 
             phase = st.session_state.get("workout_phase") or "overview"
+            st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
+            _safe_render_share_for_decision(cur, key=f"share_wo_{phase}", icon=False)
             if phase == "overview":
                 render_workout_overview(workout, language)
             elif phase == "done":
@@ -6418,6 +6603,8 @@ def page_execute() -> None:
 
     # ----- Food shopping + recipe (minimal — never escalates to ui_error) -----
     suggestion = str(cur.get("suggestion") or "")
+    st.markdown('<div class="oc-share-row"></div>', unsafe_allow_html=True)
+    _safe_render_share_for_decision(cur, key="share_execute", icon=False)
     st.markdown(
         f'<div class="oc-decision oc-exec-lock">'
         f'<h1>{html.escape(suggestion)}</h1>'
@@ -6676,10 +6863,19 @@ def page_execute() -> None:
 def page_lista() -> None:
     render_top_chrome()
     require_auth_context()
-    st.markdown(
-        f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("list_title"))}</p>',
-        unsafe_allow_html=True,
-    )
+    head_l, head_r = st.columns([3, 1], gap="small")
+    with head_l:
+        st.markdown(
+            f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("list_title"))}</p>',
+            unsafe_allow_html=True,
+        )
+    with head_r:
+        try:
+            render_share_list()
+        except BaseException as exc:
+            if _is_streamlit_control_flow(exc):
+                raise
+            log.exception("lista share failed: %s", exc)
     if st.session_state.guest_mode:
         st.caption(t("list_guest_login_hint"))
     with st.container(key="lista_add_row"):
@@ -7268,7 +7464,7 @@ def handle_query_params() -> None:
 
 def page_shared() -> None:
     """Public read-only decision landing — what recipients see from every share."""
-    render_top_chrome(extra_class="oc-share-landing")
+    render_share_landing_chrome()
     st.markdown(
         f'<p class="oc-tagline">{html.escape(t("share_landing_sub"))}</p>',
         unsafe_allow_html=True,
@@ -7312,6 +7508,20 @@ def page_shared() -> None:
                 ctx=_as_dict(ctx),
                 lock_label_html=lock_label_html,
                 lock_body_html=lock_body_html,
+            ),
+            unsafe_allow_html=True,
+        )
+    elif domain == "food":
+        st.markdown(
+            _render_food_card_html(
+                language=language,
+                suggestion=suggestion,
+                justification=justification,
+                ctx=_as_dict(ctx),
+                lock_label_html=f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>',
+                lock_body_html=(
+                    f"<p>{html.escape(justification)}</p>" if justification else None
+                ),
             ),
             unsafe_allow_html=True,
         )
