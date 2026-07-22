@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "food-variation-favorites-v48-20260722"
+BUILD_ID = "favorite-kwarg-reload-v49-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -5003,6 +5003,7 @@ def accept_and_open_execute(cur: dict[str, Any]) -> None:
 
 
 def _toggle_decision_favorite(decision_id: int) -> None:
+    _ensure_db_api()
     cur = st.session_state.get("current")
     if not isinstance(cur, dict):
         cur = {}
@@ -5119,15 +5120,15 @@ def _shopping_list_user_id() -> str | None:
     return str(uid) if uid else None
 
 
-def _ensure_db_shopping_api() -> None:
+def _ensure_db_api() -> None:
     """Streamlit Cloud can hot-reload app.py while keeping a stale `db` module.
 
-    Production saw AttributeError: module 'db' has no attribute
-    'delete_shopping_items' after partial deploys — reload until shopping APIs
-    are present.
+    Reloads until shopping + favorites APIs are present (incl. list_decisions
+    accepting favorite=).
     """
     global db
     import importlib
+    import inspect
 
     required = (
         "delete_shopping_items",
@@ -5137,11 +5138,25 @@ def _ensure_db_shopping_api() -> None:
         "toggle_shopping_item",
         "add_manual_shopping_item",
         "merge_shopping_from_decision",
+        "list_decisions",
+        "set_decision_favorite",
+        "list_favorite_suggestions",
     )
-    if all(hasattr(db, name) for name in required):
-        return
     missing = [name for name in required if not hasattr(db, name)]
-    log.warning("stale db module missing %s — reloading db (+ supabase_store)", missing)
+    needs_fav_kw = False
+    if hasattr(db, "list_decisions"):
+        try:
+            params = inspect.signature(db.list_decisions).parameters
+            needs_fav_kw = "favorite" not in params
+        except (TypeError, ValueError):
+            needs_fav_kw = True
+    if not missing and not needs_fav_kw:
+        return
+    log.warning(
+        "stale db module missing %s fav_kw=%s — reloading db (+ supabase_store)",
+        missing,
+        needs_fav_kw,
+    )
     db = importlib.reload(db)
     try:
         import supabase_store as store
@@ -5151,7 +5166,51 @@ def _ensure_db_shopping_api() -> None:
         log.warning("supabase_store reload skipped: %s", exc)
     still = [name for name in required if not hasattr(db, name)]
     if still:
-        raise AttributeError(f"db shopping API still missing after reload: {still}")
+        raise AttributeError(f"db API still missing after reload: {still}")
+    if "favorite" not in inspect.signature(db.list_decisions).parameters:
+        raise AttributeError("db.list_decisions still missing favorite= after reload")
+
+
+def _ensure_db_shopping_api() -> None:
+    """Back-compat alias — shopping + favorites share one reload gate."""
+    _ensure_db_api()
+
+
+def _list_decisions(
+    user_id: str,
+    *,
+    domain: str | None = None,
+    status: str | None = None,
+    favorite: bool | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Call db.list_decisions after ensuring favorite= is supported."""
+    global db
+    _ensure_db_api()
+    kwargs: dict[str, Any] = {"limit": limit}
+    if domain is not None:
+        kwargs["domain"] = domain
+    if status is not None:
+        kwargs["status"] = status
+    if favorite is not None:
+        kwargs["favorite"] = favorite
+    try:
+        return db.list_decisions(user_id, **kwargs)
+    except TypeError as exc:
+        # Stale module slipped through — reload once and retry
+        if "favorite" not in str(exc):
+            raise
+        log.warning("list_decisions favorite TypeError — force reload: %s", exc)
+        import importlib
+
+        db = importlib.reload(db)
+        try:
+            import supabase_store as store
+
+            importlib.reload(store)
+        except Exception:
+            pass
+        return db.list_decisions(user_id, **kwargs)
 
 
 def _flag_shopping_list_error(exc: BaseException | str | None = None) -> None:
@@ -5867,12 +5926,7 @@ def render_error_boundary() -> None:
         f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
         unsafe_allow_html=True,
     )
-    detail = st.session_state.get("_last_ui_error")
-    if detail:
-        st.markdown(
-            f'<p class="oc-meta" style="color:#b00020">{html.escape(str(detail)[:240])}</p>',
-            unsafe_allow_html=True,
-        )
+    # Raw exception stays in logs / _last_ui_error — never render to users
     if st.button(t("retry"), type="primary", use_container_width=True, key="ui_error_retry"):
         st.session_state.ui_error = None
         st.session_state._last_ui_error = None
@@ -7233,7 +7287,7 @@ def page_execute() -> None:
     if did and not is_fav:
         # Heal favorite flag from DB if session was restored without it
         try:
-            rows = db.list_decisions(
+            rows = _list_decisions(
                 str(st.session_state.user_id), favorite=True, limit=80
             )
             is_fav = any(int(r.get("id") or 0) == int(did) for r in rows)
@@ -7588,6 +7642,7 @@ def page_lista() -> None:
 
 
 def page_history() -> None:
+    _ensure_db_api()
     render_top_chrome()
     require_auth_context()
     st.markdown(
@@ -7608,7 +7663,7 @@ def page_history() -> None:
     show_favs = seg == fav_label
 
     if show_favs:
-        rows = db.list_decisions(
+        rows = _list_decisions(
             st.session_state.user_id, favorite=True, limit=40
         )
         if not rows:
@@ -7648,7 +7703,7 @@ def page_history() -> None:
     if st.button(t("list_go"), type="secondary", use_container_width=True, key="hist_open_list"):
         st.session_state.page = "lista"
         st.rerun()
-    rows = db.list_decisions(st.session_state.user_id, limit=30)
+    rows = _list_decisions(st.session_state.user_id, limit=30)
     if not rows:
         st.info(t("history_empty"))
     else:
@@ -8321,6 +8376,11 @@ def main() -> None:
     init_state()
     if not st.session_state.get("_auth_cookie_checked"):
         st.stop()
+    # Heal stale db module before any page that needs favorites/shopping APIs
+    try:
+        _ensure_db_api()
+    except Exception as exc:
+        log.warning("db API ensure failed: %s", exc)
     inject_css()
     require_auth_context()
 
@@ -8399,11 +8459,7 @@ def main() -> None:
                 f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
                 unsafe_allow_html=True,
             )
-            st.markdown(
-                f'<p class="oc-meta" style="color:#b00020">'
-                f'{html.escape(str(st.session_state._last_ui_error)[:240])}</p>',
-                unsafe_allow_html=True,
-            )
+            # Do not render raw exception text — already logged above
             cur = st.session_state.get("current") or {}
             if isinstance(cur, dict) and cur.get("suggestion"):
                 st.markdown(

@@ -270,6 +270,29 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         importlib.reload(db)
         app_mod.db = db
 
+    def test_list_decisions_reloads_when_favorite_kw_missing(self) -> None:
+        import importlib
+        import inspect
+
+        import app as app_mod
+
+        def no_fav_sig(user_id, *, domain=None, status=None, limit=50, path=None):  # noqa: ANN001
+            return []
+
+        app_mod.db = db
+        db.list_decisions = no_fav_sig  # type: ignore[assignment]
+        try:
+            app_mod._ensure_db_api()
+            self.assertIn(
+                "favorite",
+                inspect.signature(app_mod.db.list_decisions).parameters,
+            )
+            rows = app_mod._list_decisions("uid-x", favorite=True, limit=5)
+            self.assertIsInstance(rows, list)
+        finally:
+            importlib.reload(db)
+            app_mod.db = db
+
 
 if __name__ == "__main__":
     unittest.main()
