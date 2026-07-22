@@ -86,6 +86,52 @@ class AuthUiTests(unittest.TestCase):
                 self.assertNotIn("spara beslut i molnet", body.lower())
                 self.assertIn("Logga in", body)
 
+    def test_login_lands_home_without_ui_error(self) -> None:
+        """Regression: CookieManager.set after login caused the error boundary."""
+        from streamlit.testing.v1 import AppTest
+
+        sess = {
+            "user_id": "uid-login",
+            "email": "a@b.se",
+            "access_token": "at-login",
+            "refresh_token": "rt-login",
+        }
+        set_calls: list[bool] = []
+
+        def fake_set(at: str, rt: str, *, quiet: bool = False) -> None:
+            set_calls.append(quiet)
+
+        with mock.patch("supabase_client.is_configured", return_value=True):
+            with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                with mock.patch("supabase_client.sign_in", return_value=sess):
+                    with mock.patch("db.ensure_user", return_value={"id": "uid-login"}):
+                        with mock.patch("db.set_auth"):
+                            with mock.patch(
+                                "auth_cookie.set_auth_cookie", side_effect=fake_set
+                            ):
+                                at = AppTest.from_file("app.py", default_timeout=90)
+                                at.run()
+                                self.assertEqual(at.session_state["page"], "auth")
+                                # Seed credentials into widget state
+                                at.session_state["auth_email"] = "a@b.se"
+                                at.session_state["auth_password"] = "secret"
+                                at.run()
+                                for b in at.button:
+                                    if (b.label or "") == "Logga in":
+                                        b.click().run()
+                                        break
+                                else:
+                                    self.fail([b.label for b in at.button])
+                                self.assertEqual(at.session_state["page"], "home")
+                                self.assertFalse(bool(at.session_state["ui_error"]))
+                                self.assertEqual(at.session_state["user_id"], "uid-login")
+                                self.assertFalse(bool(at.session_state["guest_mode"]))
+                                # Must persist via quiet document.cookie, not CookieManager.set
+                                self.assertTrue(set_calls)
+                                self.assertTrue(all(set_calls))
+                                body = " ".join(str(m.value or "") for m in at.markdown)
+                                self.assertNotIn("Något gick fel", body)
+
     def test_home_domain_cards_css_kills_underline(self) -> None:
         from streamlit.testing.v1 import AppTest
 

@@ -59,6 +59,8 @@ class DishCategoryTests(unittest.TestCase):
         self.assertIsNone(fcat.dish_image_bytes("not-a-real-category"))
 
     def test_pipeline_stamps_dish_category(self) -> None:
+        import dish_images as dimg
+
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         db_path = str(Path(tmp.name) / "t.db")
@@ -75,7 +77,13 @@ class DishCategoryTests(unittest.TestCase):
         self.assertTrue(r.ok)
         cat = (r.context or {}).get("dish_category")
         self.assertIn(cat, fcat.DISH_CATEGORY_SET)
-        self.assertTrue(fcat.dish_image_path(str(cat)).is_file())
+        # Title resolver must find a real photo even when pack stamps English
+        # ids that normalize to generic (e.g. burger → generic).
+        path = dimg.resolve_dish_image(
+            str(r.suggestion or ""), str(cat) if cat else None
+        )
+        self.assertIsNotNone(path)
+        self.assertTrue(Path(path).is_file())
 
 
 class PreLockFoodCardUiTests(unittest.TestCase):

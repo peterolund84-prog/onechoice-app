@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "dish-image-loading-v56-20260722"
+BUILD_ID = "fix-login-error-v57-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -3351,13 +3351,13 @@ def _is_authenticated() -> bool:
     )
 
 
-def _apply_auth_session(sess: dict[str, Any], *, persist_cookie: str = "set") -> None:
+def _apply_auth_session(sess: dict[str, Any], *, persist_cookie: str = "quiet") -> None:
     """
     Mirror Supabase session into session_state + DB.
 
     persist_cookie:
-      "set" — CookieManager.set (login/signup; may trigger one component rerun)
-      "quiet" — document.cookie only (reload restore; no extra Streamlit rerun)
+      "quiet" — document.cookie only (default; no CookieManager.set rerun)
+      "set" — CookieManager.set (legacy; may orphan widgets when home skips CM)
       "skip" — memory/session only
     """
     import auth_cookie as ac
@@ -3367,13 +3367,20 @@ def _apply_auth_session(sess: dict[str, Any], *, persist_cookie: str = "set") ->
     st.session_state.access_token = sess["access_token"]
     st.session_state.refresh_token = sess["refresh_token"]
     st.session_state.guest_mode = False
+    # Never carry a prior soft-error into the authenticated home.
+    st.session_state.ui_error = None
+    st.session_state._last_ui_error = None
     _clear_guest_query_param()
     db.set_auth(sess["access_token"], sess["refresh_token"])
-    db.ensure_user(
-        sess["user_id"],
-        language=st.session_state.language,
-        email=sess.get("email"),
-    )
+    try:
+        db.ensure_user(
+            sess["user_id"],
+            language=st.session_state.language,
+            email=sess.get("email"),
+        )
+    except Exception as exc:
+        # Tokens are valid — don't block login if profile upsert blips.
+        log.warning("ensure_user after auth failed: %s", exc)
     if persist_cookie == "skip":
         return
     if persist_cookie == "quiet":
@@ -3444,6 +3451,11 @@ def _try_restore_auth_from_cookie() -> bool:
 
 
 def init_state() -> None:
+    import auth_cookie as ac
+
+    # Remount CookieManager each script run (ctx id is stable across runs).
+    ac.begin_script_run()
+
     defaults: dict[str, Any] = {
         "language": "sv",
         "page": "home",
@@ -4129,10 +4141,15 @@ def page_auth() -> None:
             try:
                 with st.spinner(t("loading")):
                     sess = sb.sign_in(email.strip(), password)
-                    _apply_auth_session(sess)
+                    # quiet cookie — CookieManager.set after login orphaned the
+                    # oc_auth_set widget when home skipped mounting CookieManager,
+                    # which surfaced as the global error boundary.
+                    _apply_auth_session(sess, persist_cookie="quiet")
                 st.session_state.page = "home"
                 st.rerun()
-            except Exception as exc:
+            except BaseException as exc:
+                if _is_streamlit_control_flow(exc):
+                    raise
                 st.error(str(exc))
         if st.button(t("signup_title"), use_container_width=True):
             st.session_state.auth_mode = "signup"
@@ -4157,7 +4174,7 @@ def page_auth() -> None:
                         email.strip(), password, language=st.session_state.language
                     )
                     if sess.get("access_token") and sess.get("refresh_token"):
-                        _apply_auth_session(sess)
+                        _apply_auth_session(sess, persist_cookie="quiet")
                         st.session_state.page = "home"
                         st.success("Konto skapat.")
                         st.rerun()
@@ -4166,7 +4183,9 @@ def page_auth() -> None:
                             "Konto skapat. Bekräfta e-post om det krävs, sedan logga in."
                         )
                         st.session_state.auth_mode = "login"
-                except Exception as exc:
+                except BaseException as exc:
+                    if _is_streamlit_control_flow(exc):
+                        raise
                     st.error(str(exc))
         if st.button(t("login_title"), use_container_width=True):
             st.session_state.auth_mode = "login"
@@ -4183,6 +4202,8 @@ def page_auth() -> None:
         st.session_state.access_token = None
         st.session_state.refresh_token = None
         st.session_state.user_id = str(uuid.uuid4())
+        st.session_state.ui_error = None
+        st.session_state._last_ui_error = None
         db.ensure_user(st.session_state.user_id, language=st.session_state.language)
         _set_guest_query_param()
         st.session_state.page = "home"
@@ -4852,6 +4873,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
     except Exception as exc:
         log.exception("decide failed: %s", exc)
         st.session_state.ui_error = True
+        st.session_state._last_ui_error = f"{type(exc).__name__}: {exc}"
         st.rerun()
         return
 

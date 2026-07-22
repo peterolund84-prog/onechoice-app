@@ -16,8 +16,20 @@ COOKIE_COMPONENT_KEY = "oc_auth_cm"
 # CookieManager must call getAll once per *script run* (Streamlit widget contract).
 # Process-level reuse without remounting froze stale cookies and skipped the
 # loading frame — then set() on restore painted home twice.
+# ScriptRunContext object identity is reused across runs, so we reset the
+# process cache explicitly at the start of each script via begin_script_run().
 _COOKIE_MANAGER: Any = None
-_COOKIE_MANAGER_CTX_ID: int | None = None
+
+
+def begin_script_run() -> None:
+    """Call once at the top of each Streamlit script run before reading cookies."""
+    global _COOKIE_MANAGER
+    _COOKIE_MANAGER = None
+
+
+def reset_cookie_manager_for_tests() -> None:
+    """Test helper — clear process-level CookieManager cache."""
+    begin_script_run()
 
 
 def _cookie_secure() -> bool:
@@ -28,32 +40,21 @@ def _cookie_secure() -> bool:
     return True
 
 
-def _script_ctx_id() -> int | None:
-    try:
-        from streamlit.runtime.scriptrunner import get_script_run_ctx
-
-        ctx = get_script_run_ctx()
-        return id(ctx) if ctx is not None else None
-    except Exception:
-        return None
-
-
 def get_cookie_manager():
     """
     Mount CookieManager getAll once per script run (stable key).
 
     Remounting each run is required so the component can return real browser
-    cookies after the default placeholder frame.
+    cookies after the default placeholder frame. Call begin_script_run() at
+    the start of init_state so the process cache does not span runs.
     """
-    global _COOKIE_MANAGER, _COOKIE_MANAGER_CTX_ID
+    global _COOKIE_MANAGER
     import extra_streamlit_components as stx
 
-    ctx_id = _script_ctx_id()
-    if _COOKIE_MANAGER is not None and _COOKIE_MANAGER_CTX_ID == ctx_id:
+    if _COOKIE_MANAGER is not None:
         return _COOKIE_MANAGER
 
     _COOKIE_MANAGER = stx.CookieManager(key=COOKIE_COMPONENT_KEY)
-    _COOKIE_MANAGER_CTX_ID = ctx_id
     return _COOKIE_MANAGER
 
 
