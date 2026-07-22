@@ -102,6 +102,38 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertTrue(shown)
         self.assertEqual(painted, [True])
 
+    def test_immediate_paints_skeleton_without_delay(self) -> None:
+        """Replacing an on-screen card must not leave it dimmed under the wait."""
+        import app as app_mod
+
+        painted: list[bool] = []
+
+        def fake_paint(*, fridge_mode: bool = False) -> None:
+            painted.append(True)
+
+        def slow() -> str:
+            time.sleep(0.15)
+            return "imm-ok"
+
+        with mock.patch.object(app_mod, "_render_decide_skeleton", side_effect=fake_paint):
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(slow)
+                result, shown = app_mod._await_decide_with_skeleton(
+                    fut, fridge_mode=False, delay_s=0.4, timeout_s=5, immediate=True
+                )
+        self.assertEqual(result, "imm-ok")
+        self.assertTrue(shown)
+        self.assertEqual(painted, [True])
+
+    def test_css_hides_prior_card_under_skeleton(self) -> None:
+        import app as app_mod
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn("body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card)", src)
+        self.assertIn("data-oc-deciding", src)
+        self.assertIn("_render_decide_evictor", src)
+        self.assertIn("immediate=already", src)
+
     def test_run_decision_always_uses_time_based_await(self) -> None:
         import app as app_mod
 
