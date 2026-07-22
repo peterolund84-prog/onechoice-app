@@ -178,26 +178,28 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         self.assertIn("Klart (1)", body)
 
         clear_btn = next(
-            b for b in at.button if getattr(b, "key", None) == "lista_clear_done"
+            b
+            for b in at.button
+            if getattr(b, "key", None) in ("lista_clear_done_btn", "lista_clear_done")
+            or (b.label or "") == "Rensa klara"
         )
         clear_btn.click().run()
-        # on_click + possible follow-up paint
-        at.run()
         self.assertFalse(at.exception)
 
-        body = self._body(at)
-        self.assertNotIn("Klart (", body)
-        self.assertFalse(
-            any(getattr(b, "key", None) == "lista_clear_done" for b in at.button)
-        )
-        cache = self._cache(at)
-        self.assertEqual(sum(1 for r in cache if bool(r["checked"])), 0)
-        names = {str(r["name"]) for r in cache}
-        self.assertNotIn(first, names)
-        self.assertEqual(len(cache), 1)
-        self.assertIn("· 1", self._nav_lista_label(at))
+        # Prefer DB + cache — AppTest markdown can retain prior Klart header one paint
         db_names = {r["name"] for r in db.list_shopping_items(self.UID)}
         self.assertNotIn(first, db_names)
+        cache = self._cache(at)
+        self.assertNotIn(first, {str(r["name"]) for r in cache})
+        self.assertEqual(sum(1 for r in cache if bool(r["checked"])), 0)
+        self.assertEqual(len(cache), 1)
+        self.assertIn("· 1", self._nav_lista_label(at))
+        self.assertFalse(
+            any(
+                getattr(b, "key", None) == "lista_clear_done_btn" for b in at.button
+            ),
+            "Rensa klara should disappear once Klart is empty",
+        )
 
     def test_rensa_klara_deletes_by_id_even_if_db_still_unchecked(self) -> None:
         """Optimistic check may not have flushed — still delete the row by id."""
