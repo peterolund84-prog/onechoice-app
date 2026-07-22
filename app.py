@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-skel-home-leak-v68-20260722"
+BUILD_ID = "restore-decide-status-v70-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2025,16 +2025,17 @@ body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card) {{
     pointer-events: none !important;
     visibility: hidden !important;
 }}
-/* Streamlit delta-merge / bfcache can leave decide skeleton on Hem
-   ("Sätter ihop receptet…" above Bestäm åt mig). Kill it whenever home is up. */
-body:has(.st-key-home_hero) .st-key-decide_slot,
-body:has(.st-key-home_hero) .oc-skel-card,
-body:has(.st-key-home_hero) [data-oc-deciding],
-body:has(.st-key-home_domains) .st-key-decide_slot,
-body:has(.st-key-home_domains) .oc-skel-card,
-body:has(.st-key-home_domains) [data-oc-deciding],
-body:has(.st-key-home_free_form) .st-key-decide_slot,
-body:has(.st-key-home_free_form) .oc-skel-card {{
+/* Streamlit delta-merge / bfcache can leave decide skeleton on Hem.
+   Only hide it on a settled home — never during an active decide hop
+   (html.oc-pending), or the cycling status lines vanish when choosing. */
+html:not(.oc-pending) body:has(.st-key-home_hero) .st-key-decide_slot,
+html:not(.oc-pending) body:has(.st-key-home_hero) .oc-skel-card,
+html:not(.oc-pending) body:has(.st-key-home_hero) [data-oc-deciding],
+html:not(.oc-pending) body:has(.st-key-home_domains) .st-key-decide_slot,
+html:not(.oc-pending) body:has(.st-key-home_domains) .oc-skel-card,
+html:not(.oc-pending) body:has(.st-key-home_domains) [data-oc-deciding],
+html:not(.oc-pending) body:has(.st-key-home_free_form) .st-key-decide_slot,
+html:not(.oc-pending) body:has(.st-key-home_free_form) .oc-skel-card {{
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;

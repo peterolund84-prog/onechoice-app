@@ -156,9 +156,11 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertIn("inject_app_runtime", src)
         self.assertIn("data-test-script-state", src)
         self.assertIn("unsafe_allow_javascript", src)
-        # Skeleton must not leak onto Hem
-        self.assertIn("body:has(.st-key-home_hero) .oc-skel-card", src)
-        self.assertIn("body:has(.st-key-home_hero) .st-key-decide_slot", src)
+        # Orphan skeleton on settled Hem only — keep cycling status during decide
+        self.assertIn("html:not(.oc-pending) body:has(.st-key-home_hero) .oc-skel-card", src)
+        self.assertIn("html:not(.oc-pending) body:has(.st-key-home_hero) .st-key-decide_slot", src)
+        self.assertIn("Kollar vad du åt senast", src)
+        self.assertIn("oc-status-cycle", src)
         # Wipe lifts only when home is gone
         self.assertIn(":not(:has(.st-key-home_hero))", src)
         html = app_mod._oc_pending_nav_runtime_html()
