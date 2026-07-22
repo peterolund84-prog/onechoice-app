@@ -31,7 +31,9 @@ class UiLeakTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("oc-sec-label", body)
+        # Meal control is the segmented row (no separate "Måltid" section label)
+        self.assertIn("oc-seg", body)
+        self.assertIn("oc-result", body)
         # One section label — not caption + pills label duplicate
         self.assertLessEqual(body.lower().count("måltid"), 2)
 

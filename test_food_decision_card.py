@@ -100,14 +100,22 @@ class PreLockFoodCardUiTests(unittest.TestCase):
         self.assertFalse(at.exception)
 
         body = " ".join(str(m.value or "") for m in at.markdown)
-        # Decision card present
-        self.assertIn("oc-food-decision", body)
-        self.assertIn("oc-food-img", body)
-        self.assertIn("oc-food-meta", body)
+        cur = at.session_state["current"] or {}
+        import app as app_mod
+
+        card = app_mod._render_food_card_html(
+            language="sv",
+            suggestion=str(cur.get("suggestion") or ""),
+            justification=str(cur.get("justification") or ""),
+            ctx=(cur.get("context") if isinstance(cur.get("context"), dict) else {}) or {},
+        )
+        # Decision card present (painted via st.html — assert renderer)
+        self.assertIn("oc-food-decision", card)
+        self.assertIn("oc-food-img", card)
+        self.assertIn("oc-food-meta", card)
         # Shopping list + recipe steps belong to execute, not pre-lock
         self.assertNotIn('class="oc-shop"', body)
         self.assertNotIn("Inköpslista", body)
-        cur = at.session_state["current"] or {}
         shop = (cur.get("context") or {}).get("shopping") or {}
         recipe = (cur.get("context") or {}).get("recipe") or shop.get("recipe") or {}
         steps = list(recipe.get("steps") or []) if isinstance(recipe, dict) else []
@@ -115,6 +123,7 @@ class PreLockFoodCardUiTests(unittest.TestCase):
             snip = str(step).strip()
             if len(snip) >= 12:
                 self.assertNotIn(snip, body, f"recipe step leaked into pre-lock: {snip!r}")
+                self.assertNotIn(snip, card, f"recipe step leaked into card: {snip!r}")
         to_buy = shop.get("to_buy") if isinstance(shop, dict) else {}
         if isinstance(to_buy, dict):
             for items in to_buy.values():

@@ -13,6 +13,10 @@ from typing import Any
 
 from supabase import Client, create_client
 
+# Process-wide authed clients keyed by token pair (avoid set_session on every call).
+_AUTHED: dict[tuple[str, str], Client] = {}
+_BASE: Client | None = None
+
 
 def _secret(name: str, default: str = "") -> str:
     env = os.environ.get(name, "")
@@ -73,13 +77,31 @@ def is_configured() -> bool:
 
 
 def get_client() -> Client:
+    """Anon/base client — cached per process (creds rarely change)."""
+    global _BASE
     if not is_configured():
         raise RuntimeError(
             "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY "
             "in .streamlit/secrets.toml"
         )
+    if _BASE is not None:
+        return _BASE
     url, key = get_creds()
-    return create_client(url, key)
+
+    def _create() -> Client:
+        return create_client(url, key)
+
+    try:
+        import streamlit as st
+
+        @st.cache_resource(show_spinner=False)
+        def _cached(u: str, k: str) -> Client:
+            return create_client(u, k)
+
+        _BASE = _cached(url, key)
+    except Exception:
+        _BASE = _create()
+    return _BASE
 
 
 def sign_up(email: str, password: str, *, language: str = "sv") -> dict[str, Any]:
@@ -119,8 +141,28 @@ def sign_in(email: str, password: str) -> dict[str, Any]:
 
 
 def restore_session(access_token: str, refresh_token: str) -> Client:
-    client = get_client()
-    client.auth.set_session(access_token, refresh_token)
+    """Return an authed client; reuse when the token pair is unchanged."""
+    key = (str(access_token or ""), str(refresh_token or ""))
+    cached = _AUTHED.get(key)
+    if cached is not None:
+        return cached
+
+    def _build(at: str, rt: str) -> Client:
+        client = create_client(*get_creds())
+        client.auth.set_session(at, rt)
+        return client
+
+    try:
+        import streamlit as st
+
+        @st.cache_resource(show_spinner=False)
+        def _cached_authed(at: str, rt: str) -> Client:
+            return _build(at, rt)
+
+        client = _cached_authed(key[0], key[1])
+    except Exception:
+        client = _build(key[0], key[1])
+    _AUTHED[key] = client
     return client
 
 
@@ -132,6 +174,8 @@ def refresh_session(refresh_token: str) -> dict[str, Any]:
     session = res.session
     if user is None or session is None:
         raise RuntimeError("Session refresh failed — log in again.")
+    # Drop stale authed clients — tokens rotated
+    _AUTHED.clear()
     return {
         "user_id": user.id,
         "email": user.email,
@@ -148,6 +192,7 @@ def sign_out(access_token: str | None = None, refresh_token: str | None = None) 
         client.auth.sign_out()
     except Exception:
         pass
+    _AUTHED.clear()
 
 
 def authed_client(access_token: str, refresh_token: str) -> Client:

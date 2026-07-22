@@ -74,15 +74,19 @@ class DishImageResolverTests(unittest.TestCase):
 
 class DecideSkeletonTests(unittest.TestCase):
     def test_skeleton_css_and_helpers(self) -> None:
+        from pathlib import Path
+
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("oc-skel-shimmer", src)
-        self.assertIn("oc-skel-status", src)
-        self.assertIn("oc-status-cycle", src)
-        self.assertIn("oc-card-arrive", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("oc-skel-shimmer", css)
+        self.assertIn("oc-skel-status", css)
+        self.assertIn("oc-status-cycle", css)
+        self.assertIn("oc-card-arrive", css)
         self.assertIn("_render_decide_skeleton", src)
         self.assertIn("_await_decide_with_skeleton", src)
+        self.assertIn("resolve_dish_image_b64", src)
         self.assertIn("DECIDE_TIMEOUT_S = 20.0", src)
         self.assertIn("DECIDE_SKELETON_DELAY_S = 0.4", src)
         self.assertIn("Kollar vad du åt senast", src)
@@ -97,12 +101,13 @@ class DecideSkeletonTests(unittest.TestCase):
         self.assertEqual(app_mod.DECIDE_SKELETON_DELAY_S, 0.4)
 
     def test_meal_seg_font_full_labels(self) -> None:
-        import app as app_mod
+        from pathlib import Path
+
         import food_domain as fd
 
-        src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("font-size: 13px", src)
-        self.assertIn("letter-spacing: 0", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("font-size: 13px", css)
+        self.assertIn("letter-spacing: 0", css)
         self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
         labels = [fd.meal_label(k, "sv") for k in fd.MEAL_ORDER]
         self.assertEqual(labels, ["Frukost", "Lunch", "Middag", "Kvällsmål"])
@@ -128,6 +133,13 @@ class DecideSkeletonTests(unittest.TestCase):
         )
         self.assertIn("oc-food-img-ph", html2)
         self.assertIn("oc-food-ph-circle", html2)
+
+    def test_dish_assets_are_compressed(self) -> None:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent / "assets" / "dishes"
+        overs = [p.name for p in root.glob("*.jpg") if p.stat().st_size > 40_000]
+        self.assertEqual(overs, [], overs)
 
 
 if __name__ == "__main__":

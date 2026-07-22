@@ -297,9 +297,11 @@ class NutritionExecuteFlowTests(unittest.TestCase):
 
     def test_css_uses_st_key_for_lang_and_nav(self) -> None:
         import inspect
+        from pathlib import Path
+
         import app as app_mod
 
-        css_src = inspect.getsource(app_mod.inject_css)
+        css_src = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         self.assertIn("st-key-oc_lang_bar", css_src)
         self.assertIn("st-key-oc_nav_bar", css_src)
         lang_src = inspect.getsource(app_mod.lang_bar)

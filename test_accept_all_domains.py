@@ -221,21 +221,9 @@ class AppAcceptUiTests(unittest.TestCase):
 
     def test_css_chip_rules_override_ghost_secondary(self) -> None:
         """Regression: grid chips are ghost borders, not underlined secondary links."""
-        import app as app_mod
-        from unittest import mock
+        from pathlib import Path
 
-        captured: list[str] = []
-
-        class FakeSt:
-            def markdown(self, body, **kwargs):
-                captured.append(str(body))
-
-            def __getattr__(self, name):
-                return lambda *a, **k: None
-
-        with mock.patch.object(app_mod, "st", FakeSt()):
-            app_mod.inject_css()
-        css = "\n".join(captured)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         self.assertIn("stHorizontalBlock", css)
         self.assertIn("stButtonGroup", css)
         self.assertIn(

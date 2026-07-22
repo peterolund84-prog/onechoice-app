@@ -312,6 +312,35 @@ def resolve_dish_image_bytes(
         return None
 
 
+def resolve_dish_image_b64(
+    title: str,
+    category_hint: str | None = None,
+    *,
+    root: Path | None = None,
+) -> str | None:
+    """Return base64-encoded JPEG for a dish, or None. Cached per process via Streamlit."""
+    import base64
+
+    def _encode(t: str, h: str | None, root_s: str | None) -> str | None:
+        r = Path(root_s) if root_s else None
+        raw = resolve_dish_image_bytes(t, h, root=r)
+        if not raw:
+            return None
+        return base64.b64encode(raw).decode("ascii")
+
+    root_s = str(root) if root is not None else None
+    try:
+        import streamlit as st
+
+        @st.cache_data(show_spinner=False)
+        def _cached(t: str, h: str | None, rs: str | None) -> str | None:
+            return _encode(t, h, rs)
+
+        return _cached(title, category_hint, root_s)
+    except Exception:
+        return _encode(title, category_hint, root_s)
+
+
 def iter_local_pack_titles(*, languages: tuple[str, ...] = ("sv", "en")) -> list[str]:
     """Every dish title local packs / meal candidates can produce (finite set)."""
     import food_domain as fd

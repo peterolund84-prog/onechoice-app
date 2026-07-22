@@ -176,11 +176,9 @@ class AuthUiTests(unittest.TestCase):
         self.assertIn("auth cookie script-run reset skipped", src)
 
     def test_home_domain_cards_css_kills_underline(self) -> None:
-        from streamlit.testing.v1 import AppTest
+        from pathlib import Path
 
-        at = AppTest.from_file("app.py", default_timeout=60)
-        at.run()
-        css = " ".join(str(m.value or "") for m in at.markdown)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         self.assertIn("st-key-home_domain_", css)
         # Domain card buttons must explicitly kill underline
         self.assertIn(
@@ -188,8 +186,6 @@ class AuthUiTests(unittest.TestCase):
             css,
         )
         # Global secondary must not force underline on all buttons
-        secondary_block = css.split("baseButton-secondary")[1][:400] if "baseButton-secondary" in css else ""
-        # After our fix, first secondary rule should say text-decoration: none
         self.assertIn("text-decoration: none !important", css)
 
 if __name__ == "__main__":

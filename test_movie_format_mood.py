@@ -266,14 +266,23 @@ class MovieUiChipTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Format", body)
         self.assertIn("Läge", body)
-        # Card header must reflect movie suggestion format, not static domain label.
-        self.assertIn("AVSNITT", body)
-        self.assertNotIn("FILM", body)
+        # Card is painted via st.html (not markdown) — assert the renderer + session ctx.
         cur = at.session_state["current"] or {}
         ctx = cur.get("context") if isinstance(cur, dict) else {}
         ctx = ctx or {}
         self.assertEqual(ctx.get("format"), "avsnitt")
         self.assertEqual(ctx.get("mood"), "avkopplat")
+        import app as app_mod
+
+        card = app_mod._render_movie_card_html(
+            language="sv",
+            suggestion=str(cur.get("suggestion") or ""),
+            justification=str(cur.get("justification") or ""),
+            ctx=ctx,
+        )
+        self.assertIn("AVSNITT", card)
+        self.assertNotIn(">FILM<", card)
+        self.assertNotIn('class="label oc-movie-kind">FILM', card)
 
 
 if __name__ == "__main__":

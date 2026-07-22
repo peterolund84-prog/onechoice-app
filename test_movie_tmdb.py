@@ -149,9 +149,19 @@ class MovieTmdbUiTests(unittest.TestCase):
             at.query_params["domain"] = "movie"
             at.run()
 
-            body = " ".join(str(m.value or "") for m in at.markdown)
-            self.assertNotIn('<img class="oc-movie-poster"', body)
-            self.assertIn("★", body)
+            cur = at.session_state["current"] or {}
+            ctx = cur.get("context") if isinstance(cur, dict) else {}
+            ctx = ctx or {}
+            import app as app_mod
+
+            card = app_mod._render_movie_card_html(
+                language="sv",
+                suggestion=str(cur.get("suggestion") or ""),
+                justification=str(cur.get("justification") or ""),
+                ctx=ctx,
+            )
+            self.assertNotIn('<img class="oc-movie-poster"', card)
+            self.assertIn("★", card)
 
 
 if __name__ == "__main__":
