@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-skel-home-leak-v68-20260722"
+BUILD_ID = "quiet-decide-status-v69-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -200,14 +200,14 @@ I18N = {
         "favorite_remove": "Ta bort favorit",
         "cook_tonight": "Laga ikväll",
         "deciding": "Bestämmer…",
-        "decide_status_1": "Kollar vad du åt senast…",
-        "decide_status_2": "Väljer efter tid och väder…",
-        "decide_status_3": "Sätter ihop receptet…",
-        "decide_status_4": "Nästan klart…",
-        "fridge_status_1": "Läser av kylen…",
-        "fridge_status_2": "Ser vad som går att laga…",
-        "fridge_status_3": "Sätter ihop receptet…",
-        "fridge_status_4": "Nästan klart…",
+        "decide_status_1": "Bestämmer…",
+        "decide_status_2": "Bestämmer…",
+        "decide_status_3": "Bestämmer…",
+        "decide_status_4": "Bestämmer…",
+        "fridge_status_1": "Bestämmer…",
+        "fridge_status_2": "Bestämmer…",
+        "fridge_status_3": "Bestämmer…",
+        "fridge_status_4": "Bestämmer…",
         "decide_timeout": "Det tog för lång tid — försök igen",
         "history_status_shown": "Visat",
         "history_status_accepted": "Genomfört",
@@ -388,14 +388,14 @@ I18N = {
         "favorite_remove": "Remove favorite",
         "cook_tonight": "Cook tonight",
         "deciding": "Deciding…",
-        "decide_status_1": "Checking what you ate last…",
-        "decide_status_2": "Matching time and weather…",
-        "decide_status_3": "Putting the recipe together…",
-        "decide_status_4": "Almost ready…",
-        "fridge_status_1": "Reading the fridge…",
-        "fridge_status_2": "Seeing what you can cook…",
-        "fridge_status_3": "Putting the recipe together…",
-        "fridge_status_4": "Almost ready…",
+        "decide_status_1": "Deciding…",
+        "decide_status_2": "Deciding…",
+        "decide_status_3": "Deciding…",
+        "decide_status_4": "Deciding…",
+        "fridge_status_1": "Deciding…",
+        "fridge_status_2": "Deciding…",
+        "fridge_status_3": "Deciding…",
+        "fridge_status_4": "Deciding…",
         "decide_timeout": "That took too long — try again",
         "history_status_shown": "Shown",
         "history_status_accepted": "Done",
@@ -2026,7 +2026,7 @@ body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card) {{
     visibility: hidden !important;
 }}
 /* Streamlit delta-merge / bfcache can leave decide skeleton on Hem
-   ("Sätter ihop receptet…" above Bestäm åt mig). Kill it whenever home is up. */
+   (status line above Bestäm åt mig). Kill it whenever home is up. */
 body:has(.st-key-home_hero) .st-key-decide_slot,
 body:has(.st-key-home_hero) .oc-skel-card,
 body:has(.st-key-home_hero) [data-oc-deciding],
@@ -2451,8 +2451,6 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {{
 }}
 .oc-skel-bar.is-title {{ height: 22px; margin-bottom: 16px; }}
 .oc-skel-status {{
-    position: relative;
-    height: 1.4em;
     margin: 14px auto 0;
     max-width: 22rem;
     text-align: center;
@@ -2460,23 +2458,6 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {{
     font-size: 13px !important;
     color: var(--oc-muted) !important;
     font-weight: 500 !important;
-}}
-.oc-skel-status span {{
-    position: absolute;
-    left: 0; right: 0;
-    opacity: 0;
-    animation: oc-status-cycle 8.8s linear infinite;
-}}
-.oc-skel-status span:nth-child(1) {{ animation-delay: 0s; }}
-.oc-skel-status span:nth-child(2) {{ animation-delay: 2.2s; }}
-.oc-skel-status span:nth-child(3) {{ animation-delay: 4.4s; }}
-.oc-skel-status span:nth-child(4) {{ animation-delay: 6.6s; }}
-@keyframes oc-status-cycle {{
-    0% {{ opacity: 0; }}
-    3% {{ opacity: 1; }}
-    22% {{ opacity: 1; }}
-    25% {{ opacity: 0; }}
-    100% {{ opacity: 0; }}
 }}
 @keyframes oc-card-arrive {{
     from {{ opacity: 0; }}
@@ -5189,26 +5170,14 @@ DECIDE_SKELETON_DELAY_S = 0.4
 DECIDE_TIMEOUT_S = 20.0
 
 
-def _decide_status_messages(*, fridge_mode: bool) -> tuple[str, str, str, str]:
-    if fridge_mode:
-        return (
-            t("fridge_status_1"),
-            t("fridge_status_2"),
-            t("fridge_status_3"),
-            t("fridge_status_4"),
-        )
-    return (
-        t("decide_status_1"),
-        t("decide_status_2"),
-        t("decide_status_3"),
-        t("decide_status_4"),
-    )
+def _decide_status_line(*, fridge_mode: bool = False) -> str:
+    """One quiet line — no cycling copy about history/time/weather."""
+    return t("deciding")
 
 
 def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
     """Full-width decision-card placeholder — never inside a columns cell."""
-    msgs = _decide_status_messages(fridge_mode=fridge_mode)
-    status = "".join(f"<span>{html.escape(m)}</span>" for m in msgs)
+    status = html.escape(_decide_status_line(fridge_mode=fridge_mode))
     # key=decide_slot keeps this in the same full-width host as the real card
     with st.container(key="decide_slot"):
         st.html(

@@ -79,14 +79,20 @@ class DecideSkeletonTests(unittest.TestCase):
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn("oc-skel-shimmer", src)
         self.assertIn("oc-skel-status", src)
-        self.assertIn("oc-status-cycle", src)
         self.assertIn("oc-card-arrive", src)
         self.assertIn("_render_decide_skeleton", src)
         self.assertIn("_await_decide_with_skeleton", src)
+        self.assertIn("_decide_status_line", src)
         self.assertIn("DECIDE_TIMEOUT_S = 20.0", src)
         self.assertIn("DECIDE_SKELETON_DELAY_S = 0.4", src)
-        self.assertIn("Kollar vad du åt senast", src)
-        self.assertIn("Läser av kylen", src)
+        # Quiet single line — no cycling copy about history/time/weather
+        self.assertNotIn("oc-status-cycle", src)
+        self.assertNotIn('"decide_status_1": "Kollar', src)
+        self.assertNotIn("Checking what you ate last", src)
+        self.assertNotIn("Matching time and weather", src)
+        self.assertNotIn("Putting the recipe together", src)
+        self.assertIn('"deciding": "Bestämmer…"', src)
+        self.assertEqual(app_mod._decide_status_line(), "Bestämmer…")
 
     def test_habit_meals_also_use_time_based_skeleton(self) -> None:
         import app as app_mod
