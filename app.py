@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "handlingslista-cta-v39-20260722"
+BUILD_ID = "lista-klart-lifecycle-v40-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -171,6 +171,8 @@ I18N = {
         "list_title": "Inköpslista",
         "list_empty": "Listan är tom. Bestäm middag, bocka i vad du behöver och tryck Skapa lista.",
         "list_add_placeholder": "Lägg till...",
+        "list_done": "Klart",
+        "list_clear_done": "Rensa klara",
         "list_added_badge": "Tillagt i din lista ✓",
         "list_go": "Öppna listan",
         "list_create": "Skapa lista",
@@ -337,6 +339,8 @@ I18N = {
         "list_title": "Shopping list",
         "list_empty": "Your list is empty. Pick dinner, check what you need, then Create list.",
         "list_add_placeholder": "Add...",
+        "list_done": "Done",
+        "list_clear_done": "Clear done",
         "list_added_badge": "Added to your list ✓",
         "list_go": "Open list",
         "list_create": "Create list",
@@ -2475,17 +2479,26 @@ a.oc-shop-row.checked .oc-shop-name {{
     padding: 0.2rem 0.4rem !important;
     width: auto !important;
 }}
-/* Persistent Lista tab keeps strikethrough for purchased items */
+/* Persistent Lista tab — Klart section + shared checklist chrome */
 /* Streamlit bordered container used as premium shop card */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) {{
     background: #fff !important;
     border: 1px solid rgba(0, 0, 0, 0.06) !important;
     border-radius: 14px !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-    padding: 4px 0 2px !important;
+    padding: 0 0 2px !important;
     margin: 0 0 1.1rem !important;
 }}
-.oc-shop-pick-marker {{ display: none !important; height: 0 !important; margin: 0 !important; }}
+.oc-shop-pick-marker {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
+/* Kill phantom gap from hidden marker element-container (execute + lista) */
+div[data-testid="element-container"]:has(.oc-shop-pick-marker) {{
+    display: none !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}}
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-shop-title {{
     font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--oc-muted); font-weight: 600; margin: 8px 16px 4px;
@@ -2500,6 +2513,15 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-se
     font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--oc-muted); font-weight: 600;
     margin: 12px 16px 2px;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-sec-label:first-of-type,
+.st-key-lista_shop_card .oc-sec-label:first-of-type {{
+    margin-top: 4px !important;
+}}
+.st-key-lista_shop_card .oc-klart-label {{
+    margin-top: 16px !important;
+    padding-top: 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
 }}
 /* Shared checklist rows (execute + lista) — 44px, left-aligned, no link chrome */
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-testid="stCheckbox"],
@@ -2540,18 +2562,54 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-
     border: none !important;
     padding: 0 !important;
 }}
+.st-key-lista_add_row [data-testid="stWidgetLabel"],
+.st-key-lista_add_row label[data-testid="stWidgetLabel"],
+.st-key-lista_add_row [data-baseweb="form-control-label"] {{
+    display: none !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
 .st-key-lista_add_row [data-testid="stHorizontalBlock"] {{
     gap: 8px !important;
     align-items: center !important;
+}}
+.st-key-lista_add_row [data-testid="stTextInput"] input,
+.st-key-lista_add_row input {{
+    min-height: 48px !important;
+    height: 48px !important;
 }}
 .st-key-lista_add_row div.stButton > button,
 .st-key-lista_add_row [data-testid="stFormSubmitButton"] button {{
     text-decoration: none !important;
     border-radius: 12px !important;
-    min-height: 44px !important;
+    min-height: 48px !important;
+    height: 48px !important;
     border: 1px solid rgba(0, 0, 0, 0.08) !important;
     background: #fff !important;
     color: var(--oc-ink) !important;
+}}
+.st-key-lista_klart_hdr {{
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+.st-key-lista_klart_hdr [data-testid="stHorizontalBlock"] {{
+    align-items: center !important;
+    gap: 8px !important;
+}}
+.st-key-lista_klart_hdr div.stButton > button,
+.st-key-lista_klart_hdr button[data-testid="baseButton-secondary"] {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    text-decoration: underline !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    min-height: 28px !important;
+    height: auto !important;
+    padding: 0.2rem 0.4rem !important;
+    justify-content: flex-end !important;
 }}
 /* Legacy toggle markers kept for persistent lista page */
 .oc-shop-tog-marker {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
@@ -4942,7 +5000,7 @@ def _render_shop_toggle_button(
 
 
 def render_persistent_shopping_list() -> None:
-    """Lista tab — same checklist card chrome as execute (checkbox rows)."""
+    """Lista tab — active aisles + Klart section (checked leave their category)."""
     _flush_shopping_pending_writes()
     items = _load_shopping_items(force=True)
     if not items:
@@ -4954,6 +5012,29 @@ def render_persistent_shopping_list() -> None:
     import shopping_items as si
 
     grouped = si.group_items(items)
+    done = si.checked_items(items)
+
+    def _row_checkbox(row: dict[str, Any]) -> None:
+        iid = int(row.get("id") or 0)
+        name = str(row.get("name") or "")
+        checked = bool(row.get("checked"))
+        wkey = f"lista_chk_{iid}"
+        if wkey not in st.session_state:
+            st.session_state[wkey] = checked
+        elif bool(st.session_state.get(wkey)) != checked:
+            # Cache moved item between aisle ↔ Klart — sync widget state
+            st.session_state[wkey] = checked
+
+        def _on_toggle(item_id: int = iid, wk: str = wkey) -> None:
+            new_val = bool(st.session_state.get(wk, False))
+            _optimistic_toggle_shopping_item(item_id, checked=new_val)
+
+        st.checkbox(
+            name,
+            key=wkey,
+            on_change=_on_toggle,
+        )
+
     with st.container(border=True, key="lista_shop_card"):
         st.markdown(
             '<div class="oc-shop-pick-marker" data-mode="lista" aria-hidden="true"></div>',
@@ -4967,22 +5048,38 @@ def render_persistent_shopping_list() -> None:
                 unsafe_allow_html=True,
             )
             for row in rows:
-                iid = int(row.get("id") or 0)
-                name = str(row.get("name") or "")
-                checked = bool(row.get("checked"))
-                wkey = f"lista_chk_{iid}"
-                if wkey not in st.session_state:
-                    st.session_state[wkey] = checked
+                _row_checkbox(row)
 
-                def _on_toggle(item_id: int = iid, wk: str = wkey) -> None:
-                    new_val = bool(st.session_state.get(wk, False))
-                    _optimistic_toggle_shopping_item(item_id, checked=new_val)
-
-                st.checkbox(
-                    name,
-                    key=wkey,
-                    on_change=_on_toggle,
-                )
+        if done:
+            n_done = len(done)
+            with st.container(key="lista_klart_hdr"):
+                head_l, head_r = st.columns([3, 1], gap="small")
+                with head_l:
+                    st.markdown(
+                        f'<div class="oc-sec-label oc-klart-label">'
+                        f'{html.escape(t("list_done"))} ({n_done})</div>',
+                        unsafe_allow_html=True,
+                    )
+                with head_r:
+                    if st.button(
+                        t("list_clear_done"),
+                        key="lista_clear_done",
+                        type="secondary",
+                        use_container_width=True,
+                    ):
+                        uid = _shopping_list_user_id()
+                        if uid:
+                            try:
+                                db.clear_checked_shopping_items(uid)
+                            except Exception as exc:
+                                log.warning("clear checked shopping failed: %s", exc)
+                            for row in done:
+                                iid = int(row.get("id") or 0)
+                                st.session_state.pop(f"lista_chk_{iid}", None)
+                            st.session_state.shopping_list_cache = None
+                        st.rerun()
+            for row in done:
+                _row_checkbox(row)
 
 
 def render_decision_shopping_added(
@@ -7030,7 +7127,7 @@ def page_lista() -> None:
         st.caption(t("list_guest_login_hint"))
     with st.container(key="lista_add_row"):
         with st.form("shop_add_form", clear_on_submit=True):
-            cols = st.columns([5, 1], gap="small")
+            cols = st.columns([4, 1], gap="small")
             with cols[0]:
                 added = st.text_input(
                     t("list_add_placeholder"),

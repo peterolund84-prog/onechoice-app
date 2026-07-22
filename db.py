@@ -1316,6 +1316,39 @@ def merge_shopping_from_decision(
     return added
 
 
+def clear_checked_shopping_items(
+    user_id: str,
+    *,
+    path: Path | str | None = None,
+) -> int:
+    """Delete all checked items for a user (manual 'Rensa klara')."""
+    if _shopping_use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        try:
+            return store.clear_checked_shopping_items(
+                user_id, access_token=at, refresh_token=rt
+            )
+        except Exception as exc:
+            if _shopping_table_missing(exc):
+                _mark_shopping_sqlite_fallback(exc)
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return clear_checked_shopping_items(
+                    user_id, path=_shopping_sqlite_path()
+                )
+            raise
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            """
+            DELETE FROM shopping_items
+            WHERE user_id = ? AND checked = 1
+            """,
+            (user_id,),
+        )
+        return int(cur.rowcount or 0)
+
+
 def toggle_shopping_item(
     user_id: str,
     item_id: int,
