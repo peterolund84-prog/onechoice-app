@@ -373,9 +373,10 @@ class FridgeUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
+        labels = [b.label or "" for b in at.button]
+        self.assertIn("Fota kylen", labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("Fota kylen", body)
-        self.assertIn("fridge=1", body)
+        self.assertNotIn("fridge=1", body)
 
     def test_confirm_inventory_then_decide(self) -> None:
         from streamlit.testing.v1 import AppTest

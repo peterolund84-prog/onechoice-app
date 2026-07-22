@@ -100,6 +100,45 @@ class AuthBootTests(unittest.TestCase):
                 at.run()
                 self.assertEqual(at.session_state["page"], "auth")
 
+    def test_home_domain_click_preserves_auth(self) -> None:
+        """Regression: domain taps must not wipe Supabase session (no anchor reload)."""
+        from streamlit.testing.v1 import AppTest
+
+        fake_decision = mock.MagicMock()
+        fake_decision.ok = True
+        fake_decision.domain = "food"
+        fake_decision.decision_id = "dec-1"
+        fake_decision.route_log_id = None
+        fake_decision.needs_domain_pick = False
+        fake_decision.ui_message = None
+        fake_decision.refused = False
+        fake_decision.to_dict.return_value = {
+            "domain": "food",
+            "suggestion": "Test",
+            "justification": "test",
+            "decision_id": "dec-1",
+            "context": {},
+        }
+        with mock.patch("supabase_client.is_configured", return_value=True):
+            with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                with mock.patch("db.ensure_user", return_value={"user_id": "uid-1"}):
+                    with mock.patch("db.set_auth"):
+                        with mock.patch("pipeline.decide", return_value=fake_decision):
+                            at = AppTest.from_file("app.py", default_timeout=90)
+                            at.run()
+                            at.session_state["access_token"] = "at"
+                            at.session_state["refresh_token"] = "rt"
+                            at.session_state["user_id"] = "uid-1"
+                            at.session_state["guest_mode"] = False
+                            at.session_state["page"] = "home"
+                            at.session_state["_auth_cookie_checked"] = True
+                            at.run()
+                            mat = next(b for b in at.button if b.label == "Mat")
+                            mat.click().run()
+                            self.assertNotEqual(at.session_state["page"], "auth")
+                            self.assertEqual(at.session_state["access_token"], "at")
+                            self.assertEqual(at.session_state["user_id"], "uid-1")
+
 
 if __name__ == "__main__":
     unittest.main()

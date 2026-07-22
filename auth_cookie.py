@@ -23,8 +23,12 @@ def _cookie_secure() -> bool:
 
 def get_cookie_manager():
     import extra_streamlit_components as stx
+    import streamlit as st
 
-    return stx.CookieManager(key="oc_auth_cm")
+    key = "_oc_cookie_manager"
+    if key not in st.session_state:
+        st.session_state[key] = stx.CookieManager(key="oc_auth_cm")
+    return st.session_state[key]
 
 
 def _encode(tokens: dict[str, str]) -> str:

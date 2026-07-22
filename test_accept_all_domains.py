@@ -324,9 +324,12 @@ class AppAcceptUiTests(unittest.TestCase):
         at.run()
         self.assertFalse(at.exception)
         body = " ".join(str(m.value or "") for m in at.markdown)
+        labels = [b.label or "" for b in at.button]
         for needle in ("Mat", "Kläder", "Träning"):
-            self.assertIn(needle, body, f"missing domain card {needle}")
-        self.assertIn("oc-domain-card", body)
+            self.assertIn(needle, labels, f"missing domain button {needle}")
+        for needle in ("Mat", "Kläder", "Träning"):
+            self.assertNotIn(f'href="?domain={needle.lower()}"', body)
+        self.assertNotIn('href="?domain=', body)
 
 
 if __name__ == "__main__":
