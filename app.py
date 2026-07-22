@@ -660,6 +660,17 @@ def _render_movie_card_html(
     )
 
 
+def _food_portion_label(n: Any, language: str | None = None) -> str:
+    """Shared pluralization: '1 portion' / '2 portioner' (and EN servings)."""
+    try:
+        n_i = int(n)
+    except (TypeError, ValueError):
+        n_i = 1
+    if n_i <= 1:
+        return t("food_meta_portion_one")
+    return t("food_meta_portions").format(n=n_i)
+
+
 def _food_meta_line(
     *,
     language: str,
@@ -689,14 +700,7 @@ def _food_meta_line(
         portions = ctx["recipe"].get("portioner") or ctx["recipe"].get("portions")
     if portions is None:
         portions = 1
-    try:
-        n_p = int(portions)
-        if n_p <= 1:
-            bits.append(t("food_meta_portion_one"))
-        else:
-            bits.append(t("food_meta_portions").format(n=n_p))
-    except (TypeError, ValueError):
-        bits.append(t("food_meta_portion_one"))
+    bits.append(_food_portion_label(portions, language))
 
     n_buy = _shop_item_count(shop if isinstance(shop, dict) else ctx.get("shopping"))
     if n_buy > 0:
@@ -713,6 +717,7 @@ def _render_food_card_html(
     lock_label_html: str | None = None,
     lock_body_html: str | None = None,
     share_corner_html: str = "",
+    fav_corner_html: str = "",
     arrive: bool = False,
 ) -> str:
     """Pre-lock / lock food card: resolved dish image + title + justification + meta."""
@@ -753,10 +758,12 @@ def _render_food_card_html(
     )
     lock_html = lock_label_html or ""
     share_html = share_corner_html or ""
+    fav_html = fav_corner_html or ""
     arrive_cls = " oc-card-arrive" if arrive else ""
 
     return (
         f'<div class="oc-decision oc-food-decision{arrive_cls}">'
+        f"{fav_html}"
         f"{share_html}"
         f"{img_html}"
         '<div class="oc-food-body">'
@@ -1642,9 +1649,20 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 
 .oc-share-corner {{
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 12px;
+    right: 12px;
     z-index: 4;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+}}
+.oc-fav-corner {{
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 4;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+}}
+.oc-food-decision {{
+    position: relative !important;
 }}
 /* Global icon-only buttons — glyph only, invisible 40px tap target */
 .oc-icon-btn,
@@ -1654,7 +1672,11 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 .oc-share-icon-btn,
 .oc-share-icon-btn:hover,
 .oc-share-icon-btn:focus,
-.oc-share-icon-btn:active {{
+.oc-share-icon-btn:active,
+.oc-fav-icon-btn,
+.oc-fav-icon-btn:hover,
+.oc-fav-icon-btn:focus,
+.oc-fav-icon-btn:active {{
     background: transparent !important;
     background-color: transparent !important;
     border: none !important;
@@ -1674,69 +1696,35 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     -webkit-tap-highlight-color: transparent !important;
     font-size: 0 !important;
     line-height: 0 !important;
+    text-decoration: none !important;
 }}
 .oc-share-icon-btn {{
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E") !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.92)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
     background-position: center !important;
     background-size: 20px 20px !important;
 }}
 .oc-share-icon-btn:active {{ opacity: 0.7; }}
-.oc-icon-btn svg {{ width: 20px; height: 20px; stroke-width: 1.5; }}
-.oc-icon-btn.active {{ color: #4F46E5 !important; }}
-.st-key-exec_food_host {{ position: relative !important; }}
-.st-key-exec_fav_corner {{
-    position: absolute !important;
-    top: 8px !important;
-    left: 8px !important;
-    z-index: 5 !important;
-    width: 40px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-}}
-/* Streamlit heart buttons — execute card corner (Historik heart is HTML glyph) */
-.st-key-exec_fav_corner div.stButton > button,
-.st-key-exec_fav_corner button {{
-    background: transparent !important;
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    width: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+.oc-fav-icon-btn {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.92)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
     background-position: center !important;
     background-size: 20px 20px !important;
-    color: transparent !important;
-    font-size: 0 !important;
-    line-height: 0 !important;
-    overflow: hidden !important;
-    text-indent: -9999px !important;
-    white-space: nowrap !important;
-    transition: background-image 150ms ease, color 150ms ease !important;
 }}
-.st-key-exec_fav_corner div.stButton > button p,
-.st-key-exec_fav_corner div.stButton > button span,
-.st-key-exec_fav_corner div.stButton > button div {{
-    font-size: 0 !important;
-    line-height: 0 !important;
-    color: transparent !important;
-    opacity: 0 !important;
-    width: 0 !important;
+.oc-fav-icon-btn.is-on {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5' stroke='%234F46E5' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+}}
+.oc-icon-btn svg {{ width: 20px; height: 20px; stroke-width: 1.5; }}
+.oc-icon-btn.active {{ color: #4F46E5 !important; }}
+.st-key-exec_food_host {{ position: relative !important; }}
+/* Legacy Streamlit heart host — collapsed; fav lives inside card HTML now */
+.st-key-exec_fav_corner {{
+    display: none !important;
     height: 0 !important;
+    width: 0 !important;
     overflow: hidden !important;
     margin: 0 !important;
     padding: 0 !important;
-}}
-.st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button {{
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5' stroke='%234F46E5' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
-    color: #4F46E5 !important;
 }}
 .st-key-hist_seg {{ margin: 0 0 12px !important; }}
 /* Meal segmented control — same construction as footer nav (columns + buttons).
@@ -1752,6 +1740,24 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+}}
+/* Hard kill: result/meal CTAs must never paint outside the result page
+   (defends against Streamlit remounting stale keyed widgets after nav). */
+body:not(:has(.oc-result)) .st-key-result_primary_btn,
+body:not(:has(.oc-result)) .st-key-result_secondary_btn,
+body:not(:has(.oc-result)) [class*="st-key-food_go_for_it"],
+body:not(:has(.oc-result)) [class*="st-key-reroll_btn"],
+body:not(:has(.oc-result)) [class*="st-key-do_it_primary"],
+body:not(:has(.oc-result)) [class*="st-key-meal_seg_"],
+body:not(:has(.oc-result)) .st-key-meal_seg {{
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
 }}
 /* Decision page: header → 24px → content (kill the ~270px dead band) */
 .block-container:has(.oc-result) {{
@@ -3423,6 +3429,7 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     margin: 0.35rem 0 0.5rem !important;
     line-height: 1.15 !important;
 }}
+.oc-exec-meta-slot {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
 .oc-exec-meta {{
     display: flex;
     flex-wrap: wrap;
@@ -5840,27 +5847,23 @@ def _toggle_favorite_by_id(decision_id: int, *, currently: bool) -> bool:
         return currently
 
 
-def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> None:
+def _favorite_corner_html(decision_id: int | None, *, is_favorite: bool) -> str:
+    """Heart control INSIDE the food card (top-left), mirroring share top-right."""
     if not decision_id:
-        return
-    # Marker class for filled heart CSS (Streamlit keys can't be dynamic for CSS)
-    marker = "oc-fav-on" if is_favorite else "oc-fav-off"
-    st.markdown(
-        f'<div class="{marker}" aria-hidden="true"></div>',
-        unsafe_allow_html=True,
+        return ""
+    on_cls = " is-on" if is_favorite else ""
+    aria = html.escape(t("favorite_remove") if is_favorite else t("favorite_add"))
+    href = html.escape(f"?fav={int(decision_id)}")
+    return (
+        f'<span class="oc-fav-corner">'
+        f'<a class="oc-icon-btn oc-fav-icon-btn{on_cls}" href="{href}" '
+        f'aria-label="{aria}" data-oc-fav="{int(decision_id)}"></a></span>'
     )
-    with st.container(key="exec_fav_corner"):
-        help_lbl = t("favorite_remove") if is_favorite else t("favorite_add")
-        if st.button(
-            "\u200b",
-            key=f"fav_toggle_{int(decision_id)}",
-            use_container_width=True,
-            type="secondary",
-            help=help_lbl,
-        ):
-            _toggle_decision_favorite(int(decision_id))
-            st.rerun()
 
+
+def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> None:
+    """Deprecated — visible heart is HTML inside the card (`_favorite_corner_html`)."""
+    return
 
 
 def _hist_local_dt(created_at: Any):
@@ -6971,7 +6974,7 @@ def render_recipe_block(
     nutrition_html = ""
     if show_nutrition is None:
         show_nutrition = True
-    if show_nutrition and include_ingredients:
+    if show_nutrition:
         line, has_vals = _nutrition_display_line(recipe)
         if has_vals:
             nutrition_html = f'<p class="oc-nutrition">{html.escape(line)}</p>'
@@ -7087,6 +7090,27 @@ def _clear_guest_query_param() -> None:
 
 def page_home() -> None:
     import router as rt
+
+    # Drop result CTA keys before painting home (orphan remount class).
+    for _k in (
+        "food_go_for_it",
+        "reroll_btn",
+        "do_it_primary",
+        "fridge_cook_accept",
+        "fridge_shop_escape",
+        "handla_reopen",
+        "eat_reopen",
+        "do_it_locked",
+        "fridge_reopen",
+        "fridge_shop_reopen",
+        "meal_seg_frukost",
+        "meal_seg_lunch",
+        "meal_seg_middag",
+        "meal_seg_kvallsmal",
+        "meal_seg_choice",
+        "meal_pills",
+    ):
+        st.session_state.pop(_k, None)
 
     # Locked decision in play → resume it. Chooser only for an explicit start-over.
     force_chooser = bool(_session_pop("_force_home_chooser", False))
@@ -7738,6 +7762,11 @@ def page_result() -> None:
     food_cook = _is_food_cook(cur)
 
     if show_lock_card:
+        # Accepted food cook → execute is the only locked surface (no pre-lock CTAs).
+        if accepted and food_cook:
+            st.session_state.page = "execute"
+            st.rerun()
+            return
         share_corner = _safe_decision_share_button_html(cur, key="share_lock_icon")
         title = (
             t("locked_title").format(suggestion=suggestion)
@@ -7836,12 +7865,9 @@ def page_result() -> None:
                 ):
                     open_execute_now(cur)
             else:
-                # Frukost / kvällsmål — reopen recipe view (no shopping list)
-                label = cur.get("execution_label") or (
-                    "Ät nu" if language == "sv" else "Eat now"
-                )
-                if st.button(label, type="primary", use_container_width=True, key="eat_reopen"):
-                    open_execute_now(cur)
+                # Frukost / kvällsmål — recipe on execute is the endpoint (no CTA here)
+                open_execute_now(cur)
+                return
         else:
             exec_url = cur.get("execution_url")
             exec_label = cur.get("execution_label") or t("do_it")
@@ -8293,6 +8319,24 @@ def page_execute() -> None:
     """Execution view: food shopping/recipe OR workout player."""
     # Clear sticky error so Handla always gets a clean paint
     st.session_state.ui_error = None
+    # Pre-lock CTAs must never remount on the locked path.
+    for _k in (
+        "food_go_for_it",
+        "reroll_btn",
+        "do_it_primary",
+        "fridge_cook_accept",
+        "fridge_shop_escape",
+        "handla_reopen",
+        "eat_reopen",
+        "do_it_locked",
+        "meal_seg_frukost",
+        "meal_seg_lunch",
+        "meal_seg_middag",
+        "meal_seg_kvallsmal",
+        "meal_seg_choice",
+        "meal_pills",
+    ):
+        st.session_state.pop(_k, None)
 
     render_top_chrome()
     cur = st.session_state.get("current") or {}
@@ -8401,8 +8445,10 @@ def page_execute() -> None:
         except Exception:
             pass
     with st.container(key="exec_food_host"):
-        _render_favorite_toggle(int(did) if did else None, is_favorite=is_fav)
-        # Same dish image as pre-lock card — not a title-only stub
+        fav_corner = _favorite_corner_html(
+            int(did) if did else None, is_favorite=is_fav
+        )
+        # Same dish image as pre-lock card — heart + share overlay the image
         _paint_html(
             _render_food_card_html(
                 language=language,
@@ -8413,6 +8459,7 @@ def page_execute() -> None:
                     f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
                 ),
                 share_corner_html=share_corner,
+                fav_corner_html=fav_corner,
             )
         )
 
@@ -8473,15 +8520,11 @@ def page_execute() -> None:
             recipe = fd.reheat_execution_recipe(
                 suggestion, language=st.session_state.get("language", "sv")
             )
-            render_food_recipe(recipe)
-            if st.button(
-                t("back_to_decision"),
-                type="secondary",
-                use_container_width=True,
-                key="exec_back_leftover",
-            ):
-                st.session_state.page = "result"
-                st.rerun()
+            render_food_recipe(
+                recipe,
+                show_nutrition=_profile_show_nutrition(),
+            )
+            # No CTA — recipe steps are the endpoint for frukost/kvällsmål
             nav()
             try:
                 _flush_db_accept()
@@ -8516,6 +8559,59 @@ def page_execute() -> None:
 
     import shopping as shop_mod
     import shopping_compat as shop_compat
+
+    # Frukost / kvällsmål — no shopping list; recipe steps are the endpoint.
+    try:
+        import food_domain as fd
+
+        allow_shop = fd.show_shopping(meal_type)
+    except Exception:
+        allow_shop = True
+    if not allow_shop:
+        shop = None
+        if not isinstance(recipe, dict) or not recipe.get("steps"):
+            try:
+                import recipe_engine as reng
+
+                recipe = reng.materialize_recipe(
+                    suggestion,
+                    seed_ings,
+                    meal_type=meal_type,
+                    active_minutes=active_mins,
+                    language=st.session_state.get("language", "sv"),
+                    grok_api_key="",
+                    allow_llm=False,
+                )
+            except Exception:
+                recipe = shop_mod.build_recipe(
+                    suggestion,
+                    seed_ings,
+                    meal_type=meal_type,
+                    active_minutes=active_mins,
+                    language=st.session_state.get("language", "sv"),
+                    grok_api_key="",
+                )
+        if isinstance(recipe, dict):
+            try:
+                recipe = shop_mod.ensure_recipe_nutrition(
+                    recipe, suggestion=suggestion, allow_estimate=True
+                )
+            except Exception:
+                pass
+        render_food_recipe(
+            recipe if isinstance(recipe, dict) else None,
+            show_nutrition=_profile_show_nutrition(),
+        )
+        st.markdown(
+            '<div class="oc-exec-meta-slot" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
+        nav()
+        try:
+            _flush_db_accept()
+        except Exception:
+            pass
+        return
 
     # Prefer recipe/shopping already on the decision — do NOT re-call Grok here
     # (that was adding 45–90s after Handla & laga). Local catalog only as fill-in.
@@ -8589,8 +8685,9 @@ def page_execute() -> None:
                 grok_api_key="",
             )
 
-    # Meta row: time · portions · nutrition (per portion)
-    meta_bits: list[str] = []
+    # Card already shows time · portions — no duplicate visible meta.
+    # Keep a zero-height markdown slot here: removing this node entirely
+    # leaves Streamlit AppTest with ghost shop_chk widgets after nav.
     if isinstance(recipe, dict):
         try:
             import shopping as shopping_mod
@@ -8602,30 +8699,10 @@ def page_execute() -> None:
             )
         except Exception:
             pass
-        mins = recipe.get("active_minutes") or recipe.get("total_minutes")
-        if mins is not None:
-            try:
-                meta_bits.append(f"⏱ {t('recipe_mins').format(mins=int(mins))}")
-            except Exception:
-                pass
-        portions = recipe.get("portioner") or recipe.get("portions")
-        if portions:
-            try:
-                n = int(portions)
-                if language == "en":
-                    meta_bits.append(f"{n} servings")
-                else:
-                    meta_bits.append(f"{n} portioner")
-            except (TypeError, ValueError):
-                pass
-        nut_line, has_nut = _nutrition_display_line(recipe)
-        if has_nut:
-            meta_bits.append(nut_line)
-    if meta_bits:
-        st.markdown(
-            f'<div class="oc-exec-meta">{html.escape(" · ".join(meta_bits))}</div>',
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        '<div class="oc-exec-meta-slot" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
 
     did = _active_decision_id(cur)
     try:
@@ -8648,6 +8725,7 @@ def page_execute() -> None:
             recipe if isinstance(recipe, dict) else None,
             ings_fallback,
             include_ingredients=False,
+            show_nutrition=_profile_show_nutrition(),
         )
     except Exception as exc:
         log.warning("recipe render failed: %s", exc)
@@ -8662,14 +8740,6 @@ def page_execute() -> None:
     except Exception as exc:
         log.warning("sticky CTA render failed: %s", exc)
 
-    if st.button(
-        t("back_to_decision"),
-        type="secondary",
-        use_container_width=True,
-        key="exec_back",
-    ):
-        st.session_state.page = "result"
-        st.rerun()
     nav()
 
     # Safety net if accept was deferred earlier in the page
@@ -9149,6 +9219,18 @@ def handle_query_params() -> None:
         st.session_state.page = nav_q
         try:
             del st.query_params["nav"]
+        except Exception:
+            pass
+        st.rerun()
+
+    fav_q = _qp_one(qp.get("fav"))
+    if fav_q is not None:
+        try:
+            _toggle_decision_favorite(int(fav_q))
+        except (TypeError, ValueError) as exc:
+            log.warning("invalid fav toggle %r: %s", fav_q, exc)
+        try:
+            del st.query_params["fav"]
         except Exception:
             pass
         st.rerun()
