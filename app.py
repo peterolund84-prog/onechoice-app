@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "post-auth-regressions-v29-20260722"
+BUILD_ID = "design-drift-lista-nav-v30-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -908,9 +908,10 @@ button[data-testid="baseButton-primary"] {{
     box-shadow: none !important;
     font-family: "Inter", sans-serif !important;
 }}
-/* Link-style secondary outside chip grids */
+/* Link-style secondary outside chip grids / nav / cards */
 div.stButton > button[data-testid="baseButton-secondary"],
-div.stButton > button[kind="secondary"] {{
+div.stButton > button[kind="secondary"],
+div.stButton > button[data-testid="stBaseButton-secondary"] {{
     background: transparent !important; color: var(--oc-muted) !important;
     border: none !important; box-shadow: none !important;
     border-radius: 0 !important; font-weight: 500 !important;
@@ -919,12 +920,13 @@ div.stButton > button[kind="secondary"] {{
     text-underline-offset: 3px !important;
     font-family: "Inter", sans-serif !important;
 }}
-/* Non-home chip rows (occasion / meal) — ghost borders, no shadows, no accent fill */
-div[data-testid="stHorizontalBlock"] div.stButton > button,
-div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
-div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
-div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
-div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+/* Occasion / meal chip rows ONLY — never nav, never lista, never domain cards */
+.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button,
+.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
+.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
+.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button,
+.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
+.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {{
     background: transparent !important;
     color: var(--oc-ink) !important;
     border: 1px solid var(--oc-border) !important;
@@ -939,8 +941,8 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     padding: 0.5rem 0.75rem !important;
     font-family: "Inter", sans-serif !important;
 }}
-div[data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
-div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
+.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
+.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {{
     background: transparent !important;
     color: var(--oc-ink) !important;
     font-weight: 600 !important;
@@ -2422,6 +2424,58 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) .oc-se
     color: var(--oc-muted); font-weight: 600;
     margin: 12px 16px 2px;
 }}
+/* Shared checklist rows (execute + lista) — 44px, left-aligned, no link chrome */
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-testid="stCheckbox"],
+.st-key-lista_shop_card [data-testid="stCheckbox"],
+.st-key-exec_shop_card [data-testid="stCheckbox"] {{
+    min-height: 44px !important;
+    margin: 0 !important;
+    padding: 0 16px !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+    display: flex !important;
+    align-items: center !important;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-testid="stCheckbox"] label,
+.st-key-lista_shop_card [data-testid="stCheckbox"] label,
+.st-key-exec_shop_card [data-testid="stCheckbox"] label {{
+    font-family: "Inter", sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+}}
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-testid="stCheckbox"] label[data-checked="true"] p,
+.st-key-lista_shop_card [data-testid="stCheckbox"] label[data-checked="true"] p,
+.st-key-lista_shop_card [data-testid="stCheckbox"]:has(input:checked) label p,
+.st-key-exec_shop_card [data-testid="stCheckbox"]:has(input:checked) label p,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-testid="stCheckbox"]:has(input:checked) label p {{
+    text-decoration: line-through !important;
+    color: var(--oc-muted) !important;
+    opacity: 0.5 !important;
+}}
+.st-key-lista_add_row {{
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+}}
+.st-key-lista_add_row [data-testid="stForm"] {{
+    border: none !important;
+    padding: 0 !important;
+}}
+.st-key-lista_add_row [data-testid="stHorizontalBlock"] {{
+    gap: 8px !important;
+    align-items: center !important;
+}}
+.st-key-lista_add_row div.stButton > button,
+.st-key-lista_add_row [data-testid="stFormSubmitButton"] button {{
+    text-decoration: none !important;
+    border-radius: 12px !important;
+    min-height: 44px !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    background: #fff !important;
+    color: var(--oc-ink) !important;
+}}
 /* Legacy toggle markers kept for persistent lista page */
 .oc-shop-tog-marker {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
 .oc-shop-tog-marker + div[data-testid="stHorizontalBlock"],
@@ -2552,25 +2606,71 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     border-radius: 0 !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
+    text-decoration: none !important;
 }}
 .st-key-oc_lang_bar button[aria-checked="true"],
 .st-key-oc_lang_pills button[aria-checked="true"] {{
     color: var(--oc-ink) !important;
     font-weight: 600 !important;
 }}
-.st-key-oc_nav_bar button,
-.st-key-oc_nav_pills button {{
+/* Glass nav MUST win over global secondary/underline + any column pill chrome */
+.st-key-oc_nav_bar,
+.st-key-oc_nav_bar [data-testid="stHorizontalBlock"],
+.st-key-oc_nav_bar [data-testid="stVerticalBlock"],
+.st-key-oc_nav_bar [data-testid="stVerticalBlockBorderWrapper"] {{
     background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    gap: 0.15rem !important;
+}}
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton,
+.st-key-oc_nav_bar [class*="st-key-nav_"] {{
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+}}
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button,
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-secondary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-secondary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-primary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="secondary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"] {{
+    width: 100% !important;
+    background: transparent !important;
+    background-color: transparent !important;
     border: none !important;
     border-radius: 999px !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    min-height: 3rem !important;
+    height: auto !important;
+    padding: 0.3rem 0.35rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.15rem !important;
+    line-height: 1.1 !important;
+    text-decoration: none !important;
+    text-underline-offset: unset !important;
 }}
-.st-key-oc_nav_bar button[aria-checked="true"],
-.st-key-oc_nav_pills button[aria-checked="true"] {{
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-primary"] {{
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
     background: rgba(59, 59, 196, 0.12) !important;
+    background-color: rgba(59, 59, 196, 0.12) !important;
+}}
+/* Lista unchecked-count badge (trailing · N in label) */
+.st-key-nav_lista div.stButton > button {{
+    position: relative !important;
 }}
 </style>
         """,
@@ -3262,16 +3362,28 @@ def lang_bar() -> None:
         )
 
 
+def _unchecked_shopping_count() -> int:
+    """Unchecked items on the persistent list — drives Lista nav badge."""
+    try:
+        items = _load_shopping_items()
+    except Exception:
+        return 0
+    return sum(1 for r in items if not bool(r.get("checked")))
+
+
 def nav() -> None:
-    """Fixed bottom nav — session-safe buttons (explicit page routing)."""
+    """Fixed bottom glass nav — ONE shared component; no view may restyle it."""
     page = st.session_state.page
     highlight = "home" if page in ("home", "result", "execute", "fridge", "ambiguous") else page
     options = ("home", "lista", "history", "profile")
     if highlight not in options:
         highlight = "home"
+    unchecked = _unchecked_shopping_count() if highlight != "auth" else 0
     labels = {
         "home": t("home"),
-        "lista": t("list_nav"),
+        "lista": (
+            f"{t('list_nav')} · {unchecked}" if unchecked > 0 else t("list_nav")
+        ),
         "history": t("history"),
         "profile": t("profile"),
     }
@@ -3283,6 +3395,11 @@ def nav() -> None:
     }
 
     with st.container(key="oc_nav_bar"):
+        # Marker so AppTest can assert identical nav chrome across pages
+        st.markdown(
+            '<div class="oc-nav-chrome" data-oc-nav="glass" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
         cols = st.columns(len(options), gap="small")
         for col, key in zip(cols, options):
             with col:
@@ -4447,7 +4564,11 @@ def _flush_shopping_pending_writes() -> None:
     st.session_state.shopping_pending_writes = remaining
 
 
-def _optimistic_toggle_shopping_item(item_id: int) -> None:
+def _optimistic_toggle_shopping_item(
+    item_id: int,
+    *,
+    checked: bool | None = None,
+) -> None:
     items = _load_shopping_items()
     target: dict[str, Any] | None = None
     for row in items:
@@ -4456,7 +4577,12 @@ def _optimistic_toggle_shopping_item(item_id: int) -> None:
             break
     if not target:
         return
-    new_checked = not bool(target.get("checked"))
+    if checked is None:
+        new_checked = not bool(target.get("checked"))
+    else:
+        new_checked = bool(checked)
+        if bool(target.get("checked")) == new_checked:
+            return
     target["checked"] = new_checked
     if new_checked:
         from datetime import datetime, timezone
@@ -4502,8 +4628,9 @@ def _render_shop_toggle_button(
 
 
 def render_persistent_shopping_list() -> None:
+    """Lista tab — same checklist card chrome as execute (checkbox rows)."""
     _flush_shopping_pending_writes()
-    items = _load_shopping_items()
+    items = _load_shopping_items(force=True)
     if not items:
         st.markdown(
             f'<p class="oc-meta">{html.escape(t("list_empty"))}</p>',
@@ -4513,12 +4640,14 @@ def render_persistent_shopping_list() -> None:
     import shopping_items as si
 
     grouped = si.group_items(items)
-    with st.container(border=True):
+    with st.container(border=True, key="lista_shop_card"):
         st.markdown(
-            '<div class="oc-shop-pick-marker" aria-hidden="true"></div>',
+            '<div class="oc-shop-pick-marker" data-mode="lista" aria-hidden="true"></div>',
             unsafe_allow_html=True,
         )
         for section, rows in grouped.items():
+            if not rows:
+                continue
             st.markdown(
                 f'<div class="oc-sec-label">{html.escape(section)}</div>',
                 unsafe_allow_html=True,
@@ -4527,14 +4656,19 @@ def render_persistent_shopping_list() -> None:
                 iid = int(row.get("id") or 0)
                 name = str(row.get("name") or "")
                 checked = bool(row.get("checked"))
-                mark = "✓  " if checked else "○  "
-                if _render_shop_toggle_button(
-                    label=f"{mark}{name}",
-                    key=f"shop_toggle_{iid}",
-                    checked=checked,
-                ):
-                    _optimistic_toggle_shopping_item(iid)
-                    st.rerun()
+                wkey = f"lista_chk_{iid}"
+                if wkey not in st.session_state:
+                    st.session_state[wkey] = checked
+
+                def _on_toggle(item_id: int = iid, wk: str = wkey) -> None:
+                    new_val = bool(st.session_state.get(wk, False))
+                    _optimistic_toggle_shopping_item(item_id, checked=new_val)
+
+                st.checkbox(
+                    name,
+                    key=wkey,
+                    on_change=_on_toggle,
+                )
 
 
 def render_decision_shopping_added(
@@ -4575,13 +4709,15 @@ def render_execute_sticky_cta(shop: dict[str, Any] | None) -> None:
     checked_n = _count_checked_shop_items(shop, did)
     with st.container(key="exec_sticky_cta"):
         if already:
-            href = html.escape(_qp_href(nav="lista"), quote=True)
-            st.markdown(
-                f'<p class="oc-list-confirm">'
-                f'{html.escape(t("list_added_badge").replace("✓", "").strip())} ✓'
-                f' · <a href="{href}">{html.escape(t("list_go"))}</a></p>',
-                unsafe_allow_html=True,
-            )
+            # Session-safe — never use ?nav= anchors here
+            if st.button(
+                t("list_added_open") + " →",
+                type="primary",
+                use_container_width=True,
+                key="exec_open_lista",
+            ):
+                st.session_state.page = "lista"
+                st.rerun()
         else:
             label = t("list_add_n").format(n=checked_n)
             if st.button(
@@ -6541,25 +6677,31 @@ def page_lista() -> None:
     )
     if st.session_state.guest_mode:
         st.caption(t("list_guest_login_hint"))
-    with st.form("shop_add_form", clear_on_submit=True):
-        added = st.text_input(
-            t("list_add_placeholder"),
-            label_visibility="collapsed",
-            key="shop_add_input",
-        )
-        if st.form_submit_button("＋", use_container_width=True):
-            uid = _shopping_list_user_id()
-            if uid and str(added or "").strip():
-                try:
-                    db.add_manual_shopping_item(
-                        uid,
-                        str(added).strip(),
-                        grok_api_key=resolve_grok_api_key(),
-                    )
-                    st.session_state.shopping_list_cache = None
-                except Exception as exc:
-                    log.warning("manual shopping add failed: %s", exc)
-                st.rerun()
+    with st.container(key="lista_add_row"):
+        with st.form("shop_add_form", clear_on_submit=True):
+            cols = st.columns([5, 1], gap="small")
+            with cols[0]:
+                added = st.text_input(
+                    t("list_add_placeholder"),
+                    label_visibility="collapsed",
+                    key="shop_add_input",
+                    placeholder=t("list_add_placeholder"),
+                )
+            with cols[1]:
+                submitted = st.form_submit_button("＋", use_container_width=True)
+            if submitted:
+                uid = _shopping_list_user_id()
+                if uid and str(added or "").strip():
+                    try:
+                        db.add_manual_shopping_item(
+                            uid,
+                            str(added).strip(),
+                            grok_api_key=resolve_grok_api_key(),
+                        )
+                        st.session_state.shopping_list_cache = None
+                    except Exception as exc:
+                        log.warning("manual shopping add failed: %s", exc)
+                    st.rerun()
     err = st.session_state.get("shopping_list_error")
     if err:
         st.warning(t("list_error"))

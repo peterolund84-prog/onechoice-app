@@ -188,14 +188,26 @@ def infer_dish_category(suggestion: str, *, meta: dict | None = None) -> str:
 
 
 def dish_image_path(category: str, *, root: Path | None = None) -> Path:
-    """Resolve local jpg path; missing file → generic.jpg."""
+    """Resolve local jpg path; missing/invalid category → generic.jpg."""
     base = root or Path(__file__).resolve().parent / "assets" / "dishes"
     cat = normalize_dish_category(category)
+    if cat not in DISH_CATEGORY_SET:
+        cat = "generic"
     candidate = base / f"{cat}.jpg"
     if candidate.is_file():
         return candidate
     generic = base / "generic.jpg"
     return generic if generic.is_file() else candidate
+
+
+def manifest_category_ids(*, root: Path | None = None) -> frozenset[str]:
+    """Category ids that have a jpg on disk (excluding MANIFEST)."""
+    base = root or Path(__file__).resolve().parent / "assets" / "dishes"
+    if not base.is_dir():
+        return frozenset()
+    return frozenset(
+        p.stem for p in base.glob("*.jpg") if p.is_file() and p.stem in DISH_CATEGORY_SET
+    )
 
 
 def dish_image_bytes(category: str, *, root: Path | None = None) -> bytes | None:
