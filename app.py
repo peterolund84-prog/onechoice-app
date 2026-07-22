@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-domain-ghost-v65-20260722"
+BUILD_ID = "fix-scroll-wipe-flash-v66-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -4159,6 +4159,9 @@ def _oc_pending_nav_runtime_html() -> str:
     iframe→parent access is flaky on Cloud, and a wash inside .block-container
     dims with Streamlit's running opacity (Mat → faded home ghost).
     CSS `html.oc-pending body::before` is the real wash; JS only toggles the class.
+
+    Arm on click only (not pointerdown) — mobile scroll starts with pointerdown
+    on buttons and would flash the wipe for a frame.
     """
     bg = "#FAFAF7"
     return f"""
@@ -4229,25 +4232,38 @@ def _oc_pending_nav_runtime_html() -> str:
     if (t.closest('[data-testid="stTextArea"]')) return true;
     return false;
   }}
-  function onPointer(e) {{
+  // Click only — pointerdown fires at the start of every mobile scroll when
+  // the finger lands on a button/card, which blanked the page for a frame.
+  function onClick(e) {{
     var t = e.target && e.target.closest && e.target.closest(
-      'button, [role="button"], a[href^="?"], [class*="st-key-home_domain_"]'
+      'button, [role="button"], a[href^="?"]'
     );
     if (!t || shouldIgnore(t)) return;
     arm();
   }}
+  // Belt: if wipe is up and the user scrolls (no Streamlit run), drop it.
+  function onScrollCancel() {{
+    if (!doc.documentElement.classList.contains("oc-pending")) return;
+    if (isRunning()) return;
+    disarm();
+  }}
 
-  // Reinstall every injection — Streamlit remounts can drop listeners while
-  // leaving a stale "bound" flag that would permanently disable the wipe.
   try {{
-    if (window.__ocPendingPtr) {{
-      doc.removeEventListener("pointerdown", window.__ocPendingPtr, true);
-      doc.removeEventListener("click", window.__ocPendingPtr, true);
+    if (window.__ocPendingClick) {{
+      doc.removeEventListener("click", window.__ocPendingClick, true);
+    }}
+    if (window.__ocPendingScrollCancel) {{
+      doc.removeEventListener("touchmove", window.__ocPendingScrollCancel, true);
+      doc.removeEventListener("wheel", window.__ocPendingScrollCancel, true);
+      window.removeEventListener("scroll", window.__ocPendingScrollCancel, true);
     }}
   }} catch (e) {{}}
-  window.__ocPendingPtr = onPointer;
-  doc.addEventListener("pointerdown", onPointer, true);
-  doc.addEventListener("click", onPointer, true);
+  window.__ocPendingClick = onClick;
+  window.__ocPendingScrollCancel = onScrollCancel;
+  doc.addEventListener("click", onClick, true);
+  doc.addEventListener("touchmove", onScrollCancel, {{ capture: true, passive: true }});
+  doc.addEventListener("wheel", onScrollCancel, {{ capture: true, passive: true }});
+  window.addEventListener("scroll", onScrollCancel, true);
 
   function onStateChange() {{
     syncLift();
@@ -4260,7 +4276,6 @@ def _oc_pending_nav_runtime_html() -> str:
     try {{ clearTimeout(window.__ocDisarmTimer); }} catch (e) {{}}
     window.__ocDisarmTimer = setTimeout(function() {{
       if (!isRunning()) {{
-        // Prefer lifting over disarm while skeleton is still painting in.
         if (hasSkeleton()) {{ syncLift(); disarm(); }}
         else disarm();
       }}
@@ -4270,9 +4285,12 @@ def _oc_pending_nav_runtime_html() -> str:
   function watchApp() {{
     var a = appEl();
     if (!a) return;
+    // Avoid reconnect thrash — scroll/DOM noise must not rebind constantly.
+    if (window.__ocPendingAppObsTarget === a && window.__ocPendingAppObs) return;
     if (window.__ocPendingAppObs) {{
       try {{ window.__ocPendingAppObs.disconnect(); }} catch (e) {{}}
     }}
+    window.__ocPendingAppObsTarget = a;
     window.__ocPendingAppObs = new MutationObserver(onStateChange);
     window.__ocPendingAppObs.observe(a, {{ attributes: true, attributeFilter: ["data-test-script-state"] }});
     onStateChange();
@@ -4281,9 +4299,11 @@ def _oc_pending_nav_runtime_html() -> str:
   if (window.__ocPendingDomObs) {{
     try {{ window.__ocPendingDomObs.disconnect(); }} catch (e) {{}}
   }}
+  // Only watch for decide-skeleton arrival while pending — not every DOM tweak.
   window.__ocPendingDomObs = new MutationObserver(function() {{
-    watchApp();
+    if (!doc.documentElement.classList.contains("oc-pending")) return;
     syncLift();
+    watchApp();
   }});
   window.__ocPendingDomObs.observe(doc.documentElement, {{ childList: true, subtree: true }});
 }})();

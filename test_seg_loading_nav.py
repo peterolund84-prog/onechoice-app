@@ -148,12 +148,15 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         html = app_mod._oc_pending_nav_runtime_html()
         self.assertIn("oc-pending", html)
         self.assertIn("oc-nav-wipe", html)
-        self.assertIn("pointerdown", html)
         self.assertIn("__ocDisarmTimer", html)
-        self.assertIn("__ocPendingPtr", html)
+        self.assertIn("__ocPendingClick", html)
+        self.assertIn("__ocPendingScrollCancel", html)
         self.assertIn("isRunning", html)
         self.assertIn("rerunRequested", html)
-        self.assertIn('st-key-home_domain_', html)
+        # Click only — pointerdown blanks the page when scrolling over buttons
+        self.assertIn('addEventListener("click"', html)
+        self.assertNotIn('addEventListener("pointerdown"', html)
+        self.assertIn("touchmove", html)
         # Must target the app document (st.html), not assume iframe→parent
         self.assertIn('[data-testid="stApp"]', html)
 
