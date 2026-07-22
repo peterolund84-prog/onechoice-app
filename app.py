@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-scroll-wipe-flash-v66-20260722"
+BUILD_ID = "fix-decide-dup-slot-v67-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -5271,17 +5271,11 @@ def page_deciding() -> None:
         st.session_state.page = "home"
         st.rerun()
         return
-    # Evict the previous decision card from the viewport before any wait.
-    # If we're replacing an on-screen suggestion, show the full skeleton now
-    # (time-based delay only applies when there is nothing to hide).
-    cur = st.session_state.get("current")
-    replacing = isinstance(cur, dict) and bool(cur.get("suggestion"))
-    if replacing:
-        _render_decide_skeleton(fridge_mode=bool(st.session_state.get("fridge_mode")))
-        st.session_state["_decide_skel_painted"] = True
-    else:
-        _render_decide_evictor()
-        st.session_state["_decide_skel_painted"] = False
+    # Paint decide_slot EXACTLY once this run. Remounting skeleton later
+    # (time-based await) raises StreamlitDuplicateElementKey → ui_error
+    # ("Något gick fel") after Bestäm åt mig / domain taps on a cold home.
+    _render_decide_skeleton(fridge_mode=bool(st.session_state.get("fridge_mode")))
+    st.session_state["_decide_skel_painted"] = True
     st.session_state["_decide_in_slot"] = True
     run_decision(
         question=str(pending.get("question") or ""),
