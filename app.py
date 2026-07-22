@@ -49,7 +49,7 @@ Button → transition:
   [result] "Nytt förslag"  (only if not accepted and not reroll-locked)
         → run_decision(reroll=True)
 
-  [execute] food: checklist selection → "Lägg till i listan (N)" merges checked items
+  [execute] food: checklist selection → "Lägg till i handlingslista (N)" merges checked items
         → badge when merged; "Öppna listan" → page=lista
         → deferred accept also merges shopping from context (after shop is stored)
 
@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "hide-chooser-after-valj-v38-20260722"
+BUILD_ID = "handlingslista-cta-v39-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -175,7 +175,7 @@ I18N = {
         "list_go": "Öppna listan",
         "list_create": "Skapa lista",
         "list_create_hint": "Bocka i det du behöver",
-        "list_add_n": "Lägg till i listan ({n})",
+        "list_add_n": "Lägg till i handlingslista ({n})",
         "list_added_open": "Tillagt ✓ · Öppna listan",
         "list_skip_hint": "hoppa över om du har",
         "list_mark_all": "Markera alla",
@@ -341,7 +341,7 @@ I18N = {
         "list_go": "Open list",
         "list_create": "Create list",
         "list_create_hint": "Check what you need",
-        "list_add_n": "Add to list ({n})",
+        "list_add_n": "Add to shopping list ({n})",
         "list_added_open": "Added ✓ · Open list",
         "list_skip_hint": "skip if you have it",
         "list_mark_all": "Select all",
