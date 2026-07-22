@@ -31,10 +31,22 @@ class DishCategoryTests(unittest.TestCase):
         self.assertEqual(fcat.infer_dish_category("Sallad med tonfisk"), "sallad")
         self.assertEqual(fcat.infer_dish_category("Tuna salad"), "sallad")
         self.assertEqual(fcat.infer_dish_category("Grillad lax"), "fisk")
+        # Lentil identity beats stew/soup form — was beef-stew gryta.jpg
+        self.assertEqual(fcat.infer_dish_category("Etiopisk linsgryta"), "linser")
+        self.assertEqual(fcat.infer_dish_category("Linsgryta"), "linser")
+        self.assertEqual(fcat.infer_dish_category("Röd linssoppa"), "linser")
+        self.assertEqual(
+            fcat.infer_dish_category(
+                "Etiopisk linsgryta", meta={"dish_category": "gryta"}
+            ),
+            "linser",
+        )
+        self.assertEqual(fcat.infer_dish_category("Kycklinggryta"), "kyckling")
         self.assertEqual(
             fcat.dish_image_path("sallad").name,
             "sallad.jpg",
         )
+        self.assertEqual(fcat.dish_image_path("linser").name, "linser.jpg")
 
     def test_image_path_never_broken(self) -> None:
         for cat in ("pasta", "generic", "not-a-real-category"):

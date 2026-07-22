@@ -21,7 +21,7 @@ Local photos under `assets/dishes/{category}.jpg`.
 | korv.jpg | Sausage | ok |
 | kyckling.jpg | Chicken | ok |
 | **lasagne.jpg** | Lasagne (was gratang duplicate) | **replaced 2026-07-22** |
-| **linser.jpg** | Lentil dal (was soup duplicate) | **replaced 2026-07-22** |
+| **linser.jpg** | Lentil dal (was soup duplicate) | **replaced 2026-07-22** — also used for linsgryta / linssoppa (pulse identity beats gryta/soppa cues) |
 | matlada.jpg | Lunchbox | ok |
 | musli.jpg | Muesli | ok |
 | nudlar.jpg | Noodles | ok |

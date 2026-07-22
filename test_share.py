@@ -263,9 +263,12 @@ class ShareLandingUiTests(unittest.TestCase):
         share = db.ensure_public_share(dict(cur), language="sv")
         self.assertTrue(share.get("token"))
         self.assertIn("ref=share", sd.share_path(token=share["token"], decision_id=did))
-        # Lock card share icon
+        # Lock card share control (readable label — not bare ↗)
         labels = [b.label or "" for b in at.button]
-        self.assertIn("↗", labels)
+        self.assertTrue(
+            any("Dela" in lab or "Share" in lab for lab in labels),
+            labels,
+        )
 
     def test_food_decision_and_execute_expose_share(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -287,13 +290,16 @@ class ShareLandingUiTests(unittest.TestCase):
         mat.click().run()
         self.assertEqual(at.session_state["page"], "result")
         labels = [b.label or "" for b in at.button]
-        self.assertIn("↗", labels, labels)
+        self.assertTrue(
+            any("Dela" in lab or "Share" in lab for lab in labels),
+            labels,
+        )
         go = next(b for b in at.button if (b.label or "") == "Gör det")
         go.click().run()
         self.assertEqual(at.session_state["page"], "execute")
         labels = [b.label or "" for b in at.button]
         self.assertTrue(
-            any(lab in ("Dela", "↗") or lab == "Share" for lab in labels),
+            any("Dela" in lab or "Share" in lab for lab in labels),
             labels,
         )
 

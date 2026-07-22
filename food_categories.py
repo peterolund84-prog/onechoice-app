@@ -177,15 +177,27 @@ def normalize_dish_category(raw: str | None) -> str:
 def infer_dish_category(suggestion: str, *, meta: dict | None = None) -> str:
     """Pick category from meta.dish_category or suggestion cues."""
     meta = meta if isinstance(meta, dict) else {}
+    s = (suggestion or "").lower()
+    # Pulse identity beats stew/soup form words — "Etiopisk linsgryta" is
+    # lentils, not beef stew (gryta.jpg). Same for linssoppa vs creamy soup.
+    lentil_hit = any(
+        cue in s for cue in ("lins", "lentil", "dal", "misir")
+    )
+
     explicit = meta.get("dish_category") or meta.get("category")
     if explicit is not None and str(explicit).strip() != "":
-        return normalize_dish_category(str(explicit))
-    s = (suggestion or "").lower()
+        cat = normalize_dish_category(str(explicit))
+        if lentil_hit and cat in ("gryta", "soppa", "generic"):
+            return "linser"
+        return cat
+
     # Dish-form words beat protein cues — "Sallad med tonfisk" is a salad, not fisk.jpg (salmon).
     if "sallad" in s or "salad" in s:
         return "sallad"
     if "smörgås" in s or "smorgas" in s or "macka" in s or "sandwich" in s:
         return "smorgas"
+    if lentil_hit:
+        return "linser"
     for cue, cat in sorted(_CATEGORY_CUES, key=lambda x: len(x[0]), reverse=True):
         if cue in s:
             return cat

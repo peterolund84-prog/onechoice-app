@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "share-everywhere-v33-20260722"
+BUILD_ID = "share-visible-linsgryta-v34-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1659,39 +1659,50 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     border: 1px solid var(--oc-border);
 }}
 .oc-share-row {{
-    display: flex; justify-content: flex-end; margin: 0 0 0.15rem;
-    min-height: 2rem;
+    display: flex; justify-content: flex-end; margin: 0 0 0.35rem;
+    min-height: 2.2rem;
 }}
 .oc-share-row + div[data-testid="element-container"] div.stButton {{
     display: flex !important;
     justify-content: flex-end !important;
 }}
 .oc-share-row + div[data-testid="element-container"] div.stButton > button,
-div[data-testid="element-container"]:has(.oc-share-row) + div[data-testid="element-container"] div.stButton > button {{
+div[data-testid="element-container"]:has(.oc-share-row) + div[data-testid="element-container"] div.stButton > button,
+[class*="st-key-share_btn_"] div.stButton > button {{
     width: auto !important;
-    min-width: 2.4rem !important;
-    min-height: 2.4rem !important;
-    padding: 0.35rem 0.65rem !important;
-    font-size: 1.05rem !important;
+    min-width: 4.5rem !important;
+    min-height: 2.5rem !important;
+    padding: 0.4rem 0.85rem !important;
+    font-size: 0.95rem !important;
     font-weight: 600 !important;
-    color: var(--oc-muted) !important;
+    color: var(--oc-ink) !important;
     text-decoration: none !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    background: #fff !important;
+    box-shadow: none !important;
 }}
 .st-key-lista_share_row {{
     margin: 0 0 8px !important;
     padding: 0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+}}
+.st-key-lista_share_row div.stButton {{
+    display: flex !important;
+    justify-content: flex-end !important;
 }}
 .st-key-lista_share_row div.stButton > button {{
     width: auto !important;
-    min-height: 2.2rem !important;
-    padding: 0.25rem 0.6rem !important;
+    min-height: 2.4rem !important;
+    padding: 0.35rem 0.85rem !important;
     font-size: 0.92rem !important;
-    font-weight: 500 !important;
-    color: var(--oc-muted) !important;
-    text-decoration: underline !important;
-    text-underline-offset: 3px !important;
-    background: transparent !important;
-    border: none !important;
+    font-weight: 600 !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 999px !important;
+    background: #fff !important;
     box-shadow: none !important;
 }}
 /* Public share landing — wordmark only, no lang bar / bottom nav */
@@ -3221,7 +3232,11 @@ def render_share(
 ) -> None:
     """Universal share control — Web Share API with copy-to-clipboard fallback."""
     safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
-    btn_label = "↗" if icon else (label or t("share"))
+    # Always show readable "Dela" — bare ↗ was invisible in the wild
+    if icon:
+        btn_label = f"↗ {label or t('share')}"
+    else:
+        btn_label = label or t("share")
     btn_key = f"share_btn_{safe_key}"
     armed_key = f"_share_armed_{safe_key}"
 
@@ -3275,7 +3290,8 @@ def render_share_for_decision(
 ) -> None:
     """Share a decision — public link + domain copy. Builds snapshot only on tap."""
     safe_key = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in key)
-    btn_label = "↗" if icon else t("share")
+    # Always show readable "Dela" — bare ↗ was invisible in the wild
+    btn_label = f"↗ {t('share')}" if icon else t("share")
     btn_key = f"share_btn_{safe_key}"
     armed_key = f"_share_armed_{safe_key}"
 
