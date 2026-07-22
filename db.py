@@ -1380,15 +1380,15 @@ def delete_shopping_items(
                 return delete_shopping_items(
                     user_id, ids, path=_shopping_sqlite_path()
                 )
-            # Still try sqlite so Rensa klara never no-ops when cloud delete fails
-            log.warning("supabase delete shopping items failed — trying sqlite: %s", exc)
+            # Do NOT pretend sqlite deleted cloud rows — Rensa klara would look
+            # fixed until the next supabase reload. Mirror locally, then re-raise.
+            log.warning("supabase delete shopping items failed: %s", exc)
             try:
                 _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
-                return delete_shopping_items(
-                    user_id, ids, path=_shopping_sqlite_path()
-                )
+                delete_shopping_items(user_id, ids, path=_shopping_sqlite_path())
             except Exception:
-                raise
+                pass
+            raise
     placeholders = ",".join("?" for _ in ids)
     with get_conn(path) as conn:
         cur = conn.execute(

@@ -180,7 +180,7 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         clear_btn = next(
             b
             for b in at.button
-            if getattr(b, "key", None) in ("lista_clear_done_btn", "lista_clear_done")
+            if getattr(b, "key", None) == "lista_clear_done_btn"
             or (b.label or "") == "Rensa klara"
         )
         clear_btn.click().run()
@@ -200,6 +200,32 @@ class ListaKlartLifecycleTests(unittest.TestCase):
             ),
             "Rensa klara should disappear once Klart is empty",
         )
+
+    def test_rensa_klara_flushes_pending_before_delete(self) -> None:
+        """Optimistic check must hit DB before clear, else clear_checked no-ops."""
+        at = self._boot_lista(seed=[("spenat", "frukt & grönt"), ("mjölk", "mejeri")])
+        boxes = list(at.checkbox)
+        first = boxes[0].label
+        boxes[0].check().run()
+        cache = self._cache(at)
+        target = next(r for r in cache if str(r["name"]) == first)
+        iid = int(target["id"])
+        # Simulate: UI shows checked, but write-behind never landed on disk
+        db.toggle_shopping_item(self.UID, iid, False)
+        at.session_state["shopping_pending_writes"] = [{"id": iid, "checked": True}]
+        at.session_state["shopping_list_cache"] = [
+            {**dict(r), "checked": True} if int(r["id"]) == iid else dict(r)
+            for r in cache
+        ]
+        # Deferred clear path (same as on_click → page_lista start)
+        at.session_state["_lista_clear_ids"] = [iid]
+        at.session_state["_lista_clear_request"] = True
+        at.run()
+        self.assertFalse(at.exception)
+        names = {r["name"] for r in db.list_shopping_items(self.UID)}
+        self.assertNotIn(first, names)
+        cache = self._cache(at)
+        self.assertNotIn(first, {str(r["name"]) for r in cache})
 
     def test_rensa_klara_deletes_by_id_even_if_db_still_unchecked(self) -> None:
         """Optimistic check may not have flushed — still delete the row by id."""

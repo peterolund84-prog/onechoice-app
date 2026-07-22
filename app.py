@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "lista-rensa-klara-v2-v43-20260722"
+BUILD_ID = "lista-rensa-klara-v3-v45-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2598,31 +2598,42 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-
     gap: 8px !important;
 }}
 .st-key-lista_clear_done {{
-    margin: 4px 0 8px !important;
-    padding: 0 8px !important;
+    margin: 8px 0 12px !important;
+    padding: 0 !important;
 }}
-.st-key-lista_clear_done div.stButton {{
+.st-key-lista_clear_done [data-testid="stForm"] {{
+    border: none !important;
+    padding: 0 !important;
+}}
+.st-key-lista_clear_done div.stButton,
+.st-key-lista_clear_done [data-testid="stFormSubmitButton"] {{
     width: 100% !important;
     margin: 0 !important;
 }}
 .st-key-lista_clear_done div.stButton > button,
+.st-key-lista_clear_done [data-testid="stFormSubmitButton"] button,
 .st-key-lista_clear_done button[data-testid="baseButton-secondary"],
-.st-key-lista_clear_done button[data-testid="stBaseButton-secondary"] {{
-    background: transparent !important;
-    border: none !important;
+.st-key-lista_clear_done button[data-testid="stBaseButton-secondary"],
+.st-key-lista_clear_done button[data-testid="baseButton-primary"],
+.st-key-lista_clear_done button[data-testid="stBaseButton-primary"] {{
+    background: #fff !important;
+    border: 1px solid rgba(0, 0, 0, 0.14) !important;
     box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    text-decoration: underline !important;
-    text-underline-offset: 3px !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    min-height: 44px !important;
-    height: 44px !important;
-    padding: 0.5rem 0.75rem !important;
+    color: var(--oc-ink) !important;
+    text-decoration: none !important;
+    font-size: 15px !important;
+    font-weight: 600 !important;
+    min-height: 48px !important;
+    height: 48px !important;
+    padding: 0.65rem 1rem !important;
     justify-content: center !important;
     width: 100% !important;
+    border-radius: 12px !important;
     cursor: pointer !important;
+    pointer-events: auto !important;
     -webkit-tap-highlight-color: transparent !important;
+    position: relative !important;
+    z-index: 20 !important;
 }}
 /* legacy narrow-column clear btn styles kept harmless */
 .st-key-lista_klart_hdr div.stButton > button,
@@ -4970,38 +4981,84 @@ def _flush_shopping_pending_writes() -> None:
     st.session_state.shopping_pending_writes = remaining
 
 
-def _clear_done_shopping_items(done: list[dict[str, Any]]) -> None:
-    """Rensa klara — delete by id (not checked=1) so optimistic checks still vanish."""
+def _clear_done_shopping_items(done: list[dict[str, Any]]) -> int:
+    """Rensa klara — delete Klart rows by id (and checked=1 as backup).
+
+    Order matters: flush optimistic check-writes first so cloud rows are
+    actually checked, then DELETE by id. Never drop pending toggles before
+    flush — that made clear_checked find zero rows when DELETE was blocked.
+
+    Always applies local tombstones so the UI clears even if remote lags.
+    Returns number of ids requested.
+    """
     ids = [int(r.get("id") or 0) for r in done if int(r.get("id") or 0) > 0]
     if not ids:
-        return
+        return 0
     id_set = set(ids)
-    # Drop write-behind toggles that would resurrect checked rows after delete
+    # 1) Persist optimistic checks so cloud DELETE / clear_checked can see them
+    _flush_shopping_pending_writes()
+    # 2) Drop any remaining write-behind for these ids (do not resurrect)
     pending = list(st.session_state.get("shopping_pending_writes") or [])
     st.session_state.shopping_pending_writes = [
         p for p in pending if int(p.get("id") or 0) not in id_set
     ]
+    # 3) Tombstones + local cache — UI must clear this paint
     tombs = set(int(i) for i in (st.session_state.get("_lista_tombstones") or []))
     tombs |= id_set
-    st.session_state._lista_tombstones = sorted(tombs)
+    st.session_state["_lista_tombstones"] = sorted(tombs)
     cached = st.session_state.get("shopping_list_cache")
     if isinstance(cached, list):
         st.session_state.shopping_list_cache = [
             r for r in cached if int(r.get("id") or 0) not in id_set
         ]
+    else:
+        st.session_state.shopping_list_cache = []
     for iid in ids:
         st.session_state.pop(f"lista_chk_{iid}", None)
     uid = _ensure_shopping_user()
     if not uid:
-        return
+        return len(ids)
+    # 4) Cloud/sqlite delete by id, then belt-and-suspenders clear_checked
+    err: str | None = None
     try:
         db.delete_shopping_items(uid, ids)
     except Exception as exc:
         log.warning("delete shopping items by id failed: %s", exc)
-        try:
-            db.clear_checked_shopping_items(uid)
-        except Exception as exc2:
-            log.warning("clear checked shopping fallback failed: %s", exc2)
+        err = str(exc)[:160]
+    try:
+        db.clear_checked_shopping_items(uid)
+    except Exception as exc2:
+        log.warning("clear checked shopping fallback failed: %s", exc2)
+        if not err:
+            err = str(exc2)[:160]
+    # Verify remote no longer returns these ids
+    try:
+        left = {
+            int(r.get("id") or 0)
+            for r in db.list_shopping_items(uid)
+            if int(r.get("id") or 0) in id_set
+        }
+        if not left:
+            err = None
+            st.session_state.shopping_list_cache = None
+    except Exception as exc3:
+        log.warning("post-clear shopping verify failed: %s", exc3)
+    if err:
+        st.session_state["_lista_clear_error"] = err
+    else:
+        st.session_state.pop("_lista_clear_error", None)
+    return len(ids)
+
+
+def _request_clear_done_shopping_items() -> None:
+    """on_click: stash Klart ids and ask page_lista to clear before widgets."""
+    ids = [
+        int(i)
+        for i in (st.session_state.get("_lista_clear_ids_ready") or [])
+        if int(i) > 0
+    ]
+    st.session_state["_lista_clear_ids"] = ids
+    st.session_state["_lista_clear_request"] = True
 
 
 def _apply_lista_tombstones(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -5130,6 +5187,11 @@ def render_persistent_shopping_list() -> None:
             on_change=_on_toggle,
         )
 
+    err = st.session_state.get("_lista_clear_error")
+    if err:
+        st.warning(t("list_error"))
+        st.caption(html.escape(str(err)[:160]))
+
     with st.container(border=True, key="lista_shop_card"):
         st.markdown(
             '<div class="oc-shop-pick-marker" data-mode="lista" aria-hidden="true"></div>',
@@ -5155,21 +5217,20 @@ def render_persistent_shopping_list() -> None:
             for row in done:
                 _row_checkbox(row)
 
-    # Outside the card — full-width tap target (column header was untappable on mobile)
+    # Outside the card — full-width button + on_click (forms inside the card
+    # were unreliable on mobile; deferred clear runs at page_lista start).
     if done:
+        st.session_state["_lista_clear_ids_ready"] = [
+            int(r.get("id") or 0) for r in done if int(r.get("id") or 0) > 0
+        ]
         with st.container(key="lista_clear_done"):
-            if st.button(
+            st.button(
                 t("list_clear_done"),
                 key="lista_clear_done_btn",
-                type="secondary",
+                type="primary",
                 use_container_width=True,
-            ):
-                _clear_done_shopping_items(done)
-                try:
-                    safe_toast(f'{t("list_clear_done")} · {n_done}')
-                except Exception:
-                    pass
-                st.rerun()
+                on_click=_request_clear_done_shopping_items,
+            )
 
 
 def render_decision_shopping_added(
@@ -7198,6 +7259,20 @@ def page_execute() -> None:
 
 
 def page_lista() -> None:
+    # Honour clear request before any widgets — set by Rensa klara form
+    if st.session_state.pop("_lista_clear_request", False):
+        ids = [
+            int(i)
+            for i in (st.session_state.pop("_lista_clear_ids", None) or [])
+            if int(i) > 0
+        ]
+        if ids:
+            n = _clear_done_shopping_items([{"id": i} for i in ids])
+            try:
+                safe_toast(f'{t("list_clear_done")} · {n}')
+            except Exception:
+                pass
+
     render_top_chrome()
     require_auth_context()
     head_l, head_r = st.columns([3, 1], gap="small")
