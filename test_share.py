@@ -49,7 +49,8 @@ def _assert_share_icon(test: unittest.TestCase, at, *, where: str) -> None:
     body = _html_blobs(at)
     test.assertIn('data-oc-share="icon"', body, where)
     test.assertIn("ocNativeShare", body, where)
-    test.assertIn("onclick=", body, where)
+    test.assertIn("__ocSharePayloads", body, where)
+    test.assertIn("__ocShareClickBound", body, where)
     # No floating Dela pills
     labels = [b.label or "" for b in at.button]
     test.assertFalse(
@@ -372,13 +373,17 @@ class ShareLandingUiTests(unittest.TestCase):
             key="unit",
         )
         self.assertIn('data-oc-share="icon"', html_btn)
-        self.assertIn("onclick=", html_btn)
-        self.assertIn("ocNativeShare", html_btn)
+        self.assertIn("__ocSharePayloads", html_btn)
         self.assertIn("oc-share-icon-btn", html_btn)
+        # Icon is CSS background (not inline SVG that DOMPurify strips → white box)
+        src = Path(app_mod.__file__).read_text(encoding="utf-8")
+        self.assertIn("data:image/svg+xml", src)
+        self.assertIn(".oc-share-icon-btn", src)
         runtime = app_mod._oc_share_runtime_html()
         self.assertIn("navigator.share", runtime)
         self.assertIn("oc-share-toast", runtime)
         self.assertIn("web-share", runtime)
+        self.assertIn("__ocShareClickBound", runtime)
 
 
 if __name__ == "__main__":
