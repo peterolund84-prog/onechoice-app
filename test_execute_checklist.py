@@ -112,7 +112,7 @@ class ExecuteChecklistUi(unittest.TestCase):
         self.assertEqual(checked, 2)
 
         labels = [b.label or "" for b in at.button]
-        self.assertTrue(any("Lägg till i listan (2)" in lab for lab in labels), labels)
+        self.assertTrue(any("Lägg till i handlingslista (2)" in lab for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-shop-pick-marker", body)
         self.assertNotIn('href="?shop_check=', body)
@@ -127,7 +127,7 @@ class ExecuteChecklistUi(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "execute")
 
         for b in at.button:
-            if b.label and "Lägg till i listan (2)" in b.label:
+            if b.label and "Lägg till i handlingslista (2)" in b.label:
                 b.click().run()
                 break
         else:

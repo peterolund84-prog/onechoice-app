@@ -72,7 +72,7 @@ class HappyPathSmokeTest(unittest.TestCase):
             self.assertEqual(at.session_state["page"], "execute")
 
         add_btn = next(
-            b for b in at.button if b.label and "Lägg till i listan (3)" in b.label
+            b for b in at.button if b.label and "Lägg till i handlingslista (3)" in b.label
         )
         add_btn.click().run()
         self.assertFalse(at.exception)

@@ -229,7 +229,7 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertIsNone(at.session_state["shopping_merged_for"])
         labels = [b.label or "" for b in at.button]
         self.assertTrue(
-            any("Lägg till i listan" in lab for lab in labels),
+            any("Lägg till i handlingslista" in lab for lab in labels),
             labels,
         )
         self.assertFalse(any("Skapa lista" in lab for lab in labels), labels)
@@ -244,7 +244,7 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertIn("per portion", body.lower())
         # Selection starts empty — CTA disabled at (0) or absent count
         self.assertTrue(
-            any("Lägg till i listan (0)" in lab for lab in labels)
+            any("Lägg till i handlingslista (0)" in lab for lab in labels)
             or any(getattr(b, "disabled", False) for b in at.button if b.label and "Lägg till" in b.label),
             labels,
         )
@@ -257,11 +257,11 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "execute")
         labels = [b.label or "" for b in at.button]
         self.assertTrue(
-            any("Lägg till i listan" in lab and "(0)" not in lab for lab in labels),
+            any("Lägg till i handlingslista" in lab and "(0)" not in lab for lab in labels),
             labels,
         )
         for b in at.button:
-            if b.label and "Lägg till i listan" in b.label and "(0)" not in b.label:
+            if b.label and "Lägg till i handlingslista" in b.label and "(0)" not in b.label:
                 b.click().run()
                 break
         # Stay on execute; CTA morphs to confirmation open-list button
