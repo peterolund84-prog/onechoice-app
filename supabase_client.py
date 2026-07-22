@@ -124,6 +124,22 @@ def restore_session(access_token: str, refresh_token: str) -> Client:
     return client
 
 
+def refresh_session(refresh_token: str) -> dict[str, Any]:
+    """Exchange refresh token for a new session."""
+    client = get_client()
+    res = client.auth.refresh_session(refresh_token)
+    user = res.user
+    session = res.session
+    if user is None or session is None:
+        raise RuntimeError("Session refresh failed — log in again.")
+    return {
+        "user_id": user.id,
+        "email": user.email,
+        "access_token": session.access_token,
+        "refresh_token": session.refresh_token,
+    }
+
+
 def sign_out(access_token: str | None = None, refresh_token: str | None = None) -> None:
     try:
         client = get_client()
