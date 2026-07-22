@@ -110,7 +110,11 @@ def group_items(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
 
 
 def checked_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Checked rows for the Klart section — most recently checked first."""
+    """Checked rows for the Klart section — most recently checked first.
+
+    Kept as a module-level helper so Lista can split aisles vs Klart without
+    Streamlit Cloud serving a stale shopping_items module mid-redeploy.
+    """
     done = [row for row in items if bool(row.get("checked"))]
     done.sort(key=_checked_at_key, reverse=True)
     return done
