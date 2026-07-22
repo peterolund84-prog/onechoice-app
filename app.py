@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "lista-klart-lifecycle-v40-20260722"
+BUILD_ID = "lista-checked-items-reload-v41-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -5009,7 +5009,13 @@ def render_persistent_shopping_list() -> None:
             unsafe_allow_html=True,
         )
         return
+    import importlib
+
     import shopping_items as si
+
+    # Streamlit Cloud can hot-reload app.py before shopping_items — refresh if stale.
+    if not hasattr(si, "checked_items"):
+        si = importlib.reload(si)
 
     grouped = si.group_items(items)
     done = si.checked_items(items)
