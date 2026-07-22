@@ -241,6 +241,35 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         self.assertNotIn("banan", names)
         self.assertIn("ost", names)
 
+    def test_clear_error_flag_never_exposes_raw_exception(self) -> None:
+        at = self._boot_lista(seed=[("spenat", "frukt & grönt")])
+        at.session_state["_lista_clear_error"] = True
+        at.session_state["shopping_list_error"] = True
+        at.run()
+        self.assertFalse(at.exception)
+        body = self._body(at)
+        captions = " ".join(str(c.value or "") for c in at.caption)
+        blob = body + " " + captions
+        self.assertNotIn("AttributeError", blob)
+        self.assertNotIn("delete_shopping_items", blob)
+        self.assertNotIn("module 'db'", blob)
+
+    def test_ensure_db_shopping_api_reloads_missing_delete(self) -> None:
+        import importlib
+
+        import app as app_mod
+
+        # Simulate Streamlit stale module (attr missing until reload)
+        if hasattr(db, "delete_shopping_items"):
+            delattr(db, "delete_shopping_items")
+        self.assertFalse(hasattr(db, "delete_shopping_items"))
+        app_mod.db = db
+        app_mod._ensure_db_shopping_api()
+        self.assertTrue(hasattr(app_mod.db, "delete_shopping_items"))
+        # Keep process healthy for other tests
+        importlib.reload(db)
+        app_mod.db = db
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "lista-rensa-klara-v3-v45-20260722"
+BUILD_ID = "lista-delete-api-v46-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -4579,7 +4579,7 @@ def _merge_to_buy_into_list(
         return 0
     uid = _ensure_shopping_user()
     if not uid:
-        st.session_state.shopping_list_error = "no user"
+        _flag_shopping_list_error("no user")
         return 0
     try:
         rows = db.merge_shopping_from_decision(uid, decision_id, to_buy)
@@ -4609,8 +4609,7 @@ def _merge_to_buy_into_list(
                 pass
             return len(rows or [])
         except Exception as exc2:
-            log.warning("merge shopping retry failed: %s", exc2)
-            st.session_state.shopping_list_error = str(exc2)[:180]
+            _flag_shopping_list_error(exc2)
             return 0
 
 
@@ -4940,7 +4939,60 @@ def _shopping_list_user_id() -> str | None:
     return str(uid) if uid else None
 
 
+def _ensure_db_shopping_api() -> None:
+    """Streamlit Cloud can hot-reload app.py while keeping a stale `db` module.
+
+    Production saw AttributeError: module 'db' has no attribute
+    'delete_shopping_items' after partial deploys — reload until shopping APIs
+    are present.
+    """
+    global db
+    import importlib
+
+    required = (
+        "delete_shopping_items",
+        "clear_checked_shopping_items",
+        "purge_stale_checked_shopping_items",
+        "list_shopping_items",
+        "toggle_shopping_item",
+        "add_manual_shopping_item",
+        "merge_shopping_from_decision",
+    )
+    if all(hasattr(db, name) for name in required):
+        return
+    missing = [name for name in required if not hasattr(db, name)]
+    log.warning("stale db module missing %s — reloading db (+ supabase_store)", missing)
+    db = importlib.reload(db)
+    try:
+        import supabase_store as store
+
+        importlib.reload(store)
+    except Exception as exc:
+        log.warning("supabase_store reload skipped: %s", exc)
+    still = [name for name in required if not hasattr(db, name)]
+    if still:
+        raise AttributeError(f"db shopping API still missing after reload: {still}")
+
+
+def _flag_shopping_list_error(exc: BaseException | str | None = None) -> None:
+    """Mark shopping error for UI — raw details stay in server logs only."""
+    if isinstance(exc, BaseException):
+        log.warning("shopping list error: %s", exc)
+    elif exc:
+        log.warning("shopping list error: %s", exc)
+    st.session_state.shopping_list_error = True
+
+
+def _show_shopping_list_error() -> None:
+    """Yellow friendly warning only — never render exception text to users."""
+    if st.session_state.get("shopping_list_error") or st.session_state.get(
+        "_lista_clear_error"
+    ):
+        st.warning(t("list_error"))
+
+
 def _load_shopping_items(*, force: bool = False) -> list[dict[str, Any]]:
+    _ensure_db_shopping_api()
     cached = st.session_state.get("shopping_list_cache")
     if not force and isinstance(cached, list):
         return _apply_lista_tombstones(cached)
@@ -4991,6 +5043,7 @@ def _clear_done_shopping_items(done: list[dict[str, Any]]) -> int:
     Always applies local tombstones so the UI clears even if remote lags.
     Returns number of ids requested.
     """
+    _ensure_db_shopping_api()
     ids = [int(r.get("id") or 0) for r in done if int(r.get("id") or 0) > 0]
     if not ids:
         return 0
@@ -5019,18 +5072,17 @@ def _clear_done_shopping_items(done: list[dict[str, Any]]) -> int:
     if not uid:
         return len(ids)
     # 4) Cloud/sqlite delete by id, then belt-and-suspenders clear_checked
-    err: str | None = None
+    failed = False
     try:
         db.delete_shopping_items(uid, ids)
     except Exception as exc:
         log.warning("delete shopping items by id failed: %s", exc)
-        err = str(exc)[:160]
+        failed = True
     try:
         db.clear_checked_shopping_items(uid)
     except Exception as exc2:
         log.warning("clear checked shopping fallback failed: %s", exc2)
-        if not err:
-            err = str(exc2)[:160]
+        failed = True
     # Verify remote no longer returns these ids
     try:
         left = {
@@ -5039,12 +5091,13 @@ def _clear_done_shopping_items(done: list[dict[str, Any]]) -> int:
             if int(r.get("id") or 0) in id_set
         }
         if not left:
-            err = None
+            failed = False
             st.session_state.shopping_list_cache = None
     except Exception as exc3:
         log.warning("post-clear shopping verify failed: %s", exc3)
-    if err:
-        st.session_state["_lista_clear_error"] = err
+        failed = True
+    if failed:
+        st.session_state["_lista_clear_error"] = True
     else:
         st.session_state.pop("_lista_clear_error", None)
     return len(ids)
@@ -5190,7 +5243,6 @@ def render_persistent_shopping_list() -> None:
     err = st.session_state.get("_lista_clear_error")
     if err:
         st.warning(t("list_error"))
-        st.caption(html.escape(str(err)[:160]))
 
     with st.container(border=True, key="lista_shop_card"):
         st.markdown(
@@ -5249,7 +5301,6 @@ def render_decision_shopping_added(
     err = st.session_state.get("shopping_list_error")
     if err:
         st.warning(t("list_error"))
-        st.caption(html.escape(str(err)[:160]))
 
     if getattr(db, "_SHOPPING_FORCE_SQLITE", False):
         st.caption(t("list_local_note"))
@@ -5301,7 +5352,7 @@ def render_execute_sticky_cta(shop: dict[str, Any] | None) -> None:
                         pass
                     st.session_state.shopping_list_error = None
                 elif not st.session_state.get("shopping_list_error"):
-                    st.session_state.shopping_list_error = t("list_error")
+                    st.session_state.shopping_list_error = True
                 st.rerun()
 
 
@@ -7318,7 +7369,6 @@ def page_lista() -> None:
     err = st.session_state.get("shopping_list_error")
     if err:
         st.warning(t("list_error"))
-        st.caption(html.escape(str(err)[:160]))
     items = _load_shopping_items()
     if not items:
         st.markdown(

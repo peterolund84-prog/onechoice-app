@@ -1355,7 +1355,12 @@ def delete_shopping_items(
     *,
     path: Path | str | None = None,
 ) -> int:
-    """Delete specific shopping rows by id (Rensa klara uses the Klart id list)."""
+    """Delete specific shopping rows by id (Rensa klara uses the Klart id list).
+
+    Dual-routed like other shopping helpers: Supabase when configured, else
+    SQLite. Always scopes DELETE to user_id so one user cannot remove another's
+    rows. Returns the number of rows deleted (sqlite) / verified removed (cloud).
+    """
     ids = [int(i) for i in item_ids if int(i) > 0]
     if not ids:
         return 0
