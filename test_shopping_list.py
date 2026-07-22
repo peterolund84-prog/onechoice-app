@@ -164,13 +164,31 @@ class PersistentShoppingListTests(unittest.TestCase):
         uid = self.user["id"]
         a = db.upsert_shopping_item(uid, "gurka", "frukt & grönt", path=self.db_path)
         b = db.upsert_shopping_item(uid, "grädde", "mejeri", path=self.db_path)
+        c = db.upsert_shopping_item(uid, "pasta", "skafferi", path=self.db_path)
         self.assertIsNotNone(a)
         self.assertIsNotNone(b)
+        self.assertIsNotNone(c)
         n = db.delete_shopping_items(
             uid, [int(a["id"]), int(b["id"])], path=self.db_path  # type: ignore[index]
         )
         self.assertEqual(n, 2)
-        self.assertEqual(db.list_shopping_items(uid, path=self.db_path), [])
+        left = db.list_shopping_items(uid, path=self.db_path)
+        self.assertEqual(len(left), 1)
+        self.assertEqual(left[0]["name"], "pasta")
+        # Wrong user must not delete another user's rows
+        other = db.ensure_user(language="sv", path=self.db_path)
+        n0 = db.delete_shopping_items(
+            other["id"], [int(c["id"])], path=self.db_path  # type: ignore[index]
+        )
+        self.assertEqual(n0, 0)
+        self.assertEqual(len(db.list_shopping_items(uid, path=self.db_path)), 1)
+
+    def test_delete_shopping_items_api_exists(self) -> None:
+        self.assertTrue(callable(getattr(db, "delete_shopping_items", None)))
+        self.assertTrue(callable(getattr(db, "clear_checked_shopping_items", None)))
+        self.assertTrue(
+            callable(getattr(db, "purge_stale_checked_shopping_items", None))
+        )
 
     def test_accept_flow_merges_from_pipeline(self) -> None:
         uid = self.user["id"]
