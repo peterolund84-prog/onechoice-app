@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "favorite-kwarg-reload-v49-20260722"
+BUILD_ID = "historik-card-favorite-v50-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -190,7 +190,7 @@ I18N = {
         "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
         "history_seg_favorites": "Favoriter",
         "history_seg_history": "Historik",
-        "history_favorites_empty": "Inga favoriter ännu — tryck hjärtat på en rätt.",
+        "history_favorites_empty": "Inga favoriter ännu — tryck hjärtat på en rad i Historik.",
         "favorite_add": "Spara som favorit",
         "favorite_remove": "Ta bort favorit",
         "cook_tonight": "Laga ikväll",
@@ -365,7 +365,7 @@ I18N = {
         "history_hint": "Decisions you took — open for recipe and list.",
         "history_seg_favorites": "Favorites",
         "history_seg_history": "History",
-        "history_favorites_empty": "No favorites yet — tap the heart on a dish.",
+        "history_favorites_empty": "No favorites yet — tap the heart on a History row.",
         "favorite_add": "Save favorite",
         "favorite_remove": "Remove favorite",
         "cook_tonight": "Cook tonight",
@@ -1833,7 +1833,7 @@ body:has(.oc-share-landing) .st-key-oc_nav_bar,
 }}
 .oc-rerolls i.used {{ opacity: 0.22; background: var(--oc-muted); }}
 .oc-rerolls i.current {{ opacity: 1; background: var(--oc-ink); box-shadow: none !important; }}
-.oc-shop, .oc-recipe, .oc-error, .oc-hist, .oc-pro {{
+.oc-shop, .oc-recipe, .oc-error, .oc-pro {{
     background: #fff; border-radius: 20px;
     box-shadow: none !important;
     border: 1px solid var(--oc-border);
@@ -1933,10 +1933,53 @@ div[data-testid="stCheckbox"] label {{
     color: var(--oc-muted); font-weight: 600; margin: 0.85rem 0 0.35rem;
 }}
 .oc-hist {{
-    padding: 1rem 1.1rem; margin-bottom: 0.7rem;
+    padding: 0;
+    margin-bottom: 0;
+    border: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
 }}
 .oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.2rem; color: var(--oc-ink); }}
 .oc-hist span {{ font-size: 0.9rem; color: var(--oc-muted); }}
+/* History row card — title + Öppna + heart in one bordered block */
+div[class*="st-key-hist_card_"] {{
+    margin: 0 0 0.75rem !important;
+}}
+div[class*="st-key-hist_card_"] [data-testid="stVerticalBlockBorderWrapper"] {{
+    padding: 0.85rem 1rem !important;
+}}
+div[class*="st-key-hist_fav_"] {{
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+div[class*="st-key-hist_fav_"] div.stButton > button,
+div[class*="st-key-hist_fav_"] button {{
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 1px solid rgba(0, 0, 0, 0.08) !important;
+    border-radius: 12px !important;
+    background-color: #fff !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5c57' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 20px 20px !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    box-shadow: none !important;
+}}
+div[class*="st-key-hist_card_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] div.stButton > button,
+div[class*="st-key-hist_card_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] button {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231a1a1a' stroke='%231a1a1a' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+}}
+div[class*="st-key-hist_card_"] div[class*="st-key-hist_open_"] div.stButton > button,
+div[class*="st-key-hist_card_"] div[class*="st-key-fav_cook_"] div.stButton > button,
+div[class*="st-key-hist_card_"] div[class*="st-key-fav_open_"] div.stButton > button {{
+    min-height: 44px !important;
+}}
 .oc-pro {{
     padding: 2rem 1.5rem; text-align: center; margin-top: 1.5rem;
 }}
@@ -5016,6 +5059,17 @@ def _toggle_decision_favorite(decision_id: int) -> None:
         log.warning("favorite toggle failed: %s", exc)
 
 
+def _toggle_favorite_by_id(decision_id: int, *, currently: bool) -> bool:
+    """Toggle favorite from Historik list (no active decision required)."""
+    _ensure_db_api()
+    try:
+        row = db.set_decision_favorite(int(decision_id), not currently)
+        return bool(row.get("favorite"))
+    except Exception as exc:
+        log.warning("history favorite toggle failed: %s", exc)
+        return currently
+
+
 def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> None:
     if not decision_id:
         return
@@ -5035,6 +5089,78 @@ def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> No
         ):
             _toggle_decision_favorite(int(decision_id))
             st.rerun()
+
+
+def _render_history_row(row: dict[str, Any], *, mode: str = "history") -> None:
+    """One bordered card: title/meta + Öppna (+ Laga ikväll) + heart."""
+    rid = row.get("id")
+    if rid is None:
+        return
+    rid_i = int(rid)
+    is_fav = bool(row.get("favorite"))
+    suggestion = str(row.get("suggestion") or "")
+    status = str(row.get("status") or "")
+    status_lbl = _history_status_label(status)
+    when = str(row.get("created_at") or "")
+    if "T" in when:
+        when = when.replace("T", " ")[:16]
+    meta = f"{when} · {status_lbl} · {domain_label(row.get('domain') or '')}"
+
+    with st.container(border=True, key=f"hist_card_{mode}_{rid_i}"):
+        marker = "oc-fav-on" if is_fav else "oc-fav-off"
+        st.markdown(
+            f'<div class="{marker}" aria-hidden="true"></div>',
+            unsafe_allow_html=True,
+        )
+        title_col, fav_col = st.columns([5, 1], gap="small")
+        with title_col:
+            st.markdown(
+                f'<div class="oc-hist"><strong>{html.escape(suggestion)}</strong>'
+                f"<span>{html.escape(meta)}</span></div>",
+                unsafe_allow_html=True,
+            )
+        with fav_col:
+            with st.container(key=f"hist_fav_{mode}_{rid_i}"):
+                label = t("favorite_remove") if is_fav else t("favorite_add")
+                if st.button(
+                    label,
+                    key=f"hist_fav_btn_{mode}_{rid_i}",
+                    use_container_width=True,
+                    type="secondary",
+                ):
+                    _toggle_favorite_by_id(rid_i, currently=is_fav)
+                    st.rerun()
+        if mode == "favorites":
+            open_col, cook_col = st.columns(2, gap="small")
+            with open_col:
+                with st.container(key=f"fav_open_{rid_i}"):
+                    if st.button(
+                        t("history_open"),
+                        key=f"fav_open_btn_{rid_i}",
+                        use_container_width=True,
+                        type="secondary",
+                    ):
+                        _restore_decision_from_row(row)
+                        st.rerun()
+            with cook_col:
+                with st.container(key=f"fav_cook_{rid_i}"):
+                    if st.button(
+                        t("cook_tonight"),
+                        key=f"fav_cook_btn_{rid_i}",
+                        use_container_width=True,
+                        type="primary",
+                    ):
+                        _cook_favorite_tonight(row)
+        else:
+            with st.container(key=f"hist_open_{rid_i}"):
+                if st.button(
+                    t("history_open"),
+                    key=f"hist_open_btn_{rid_i}",
+                    use_container_width=True,
+                    type="secondary",
+                ):
+                    _restore_decision_from_row(row)
+                    st.rerun()
 
 
 def _cook_favorite_tonight(row: dict[str, Any]) -> None:
@@ -7670,29 +7796,7 @@ def page_history() -> None:
             st.info(t("history_favorites_empty"))
         else:
             for r in rows:
-                rid = r.get("id")
-                st.markdown(
-                    _favorite_card_html(r, st.session_state.get("language", "sv")),
-                    unsafe_allow_html=True,
-                )
-                cols = st.columns(2, gap="small")
-                with cols[0]:
-                    if rid is not None and st.button(
-                        t("history_open"),
-                        key=f"fav_open_{rid}",
-                        use_container_width=True,
-                        type="secondary",
-                    ):
-                        _restore_decision_from_row(r)
-                        st.rerun()
-                with cols[1]:
-                    if rid is not None and st.button(
-                        t("cook_tonight"),
-                        key=f"fav_cook_{rid}",
-                        use_container_width=True,
-                        type="primary",
-                    ):
-                        _cook_favorite_tonight(r)
+                _render_history_row(r, mode="favorites")
         nav()
         return
 
@@ -7708,26 +7812,7 @@ def page_history() -> None:
         st.info(t("history_empty"))
     else:
         for r in rows:
-            rid = r.get("id")
-            status = str(r.get("status") or "")
-            status_lbl = _history_status_label(status)
-            when = str(r.get("created_at") or "")
-            if "T" in when:
-                when = when.replace("T", " ")[:16]
-            st.markdown(
-                f'<div class="oc-hist"><strong>{html.escape(str(r.get("suggestion") or ""))}</strong>'
-                f'<span>{html.escape(when)} · {html.escape(status_lbl)} · '
-                f'{html.escape(domain_label(r.get("domain") or ""))}</span></div>',
-                unsafe_allow_html=True,
-            )
-            if rid is not None and st.button(
-                t("history_open"),
-                key=f"hist_open_{rid}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                _restore_decision_from_row(r)
-                st.rerun()
+            _render_history_row(r, mode="history")
     nav()
 
 

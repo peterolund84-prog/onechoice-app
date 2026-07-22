@@ -134,5 +134,47 @@ class FavoritesAppTest(unittest.TestCase):
         )
 
 
+    def test_history_row_has_open_and_favorite_controls(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        with mock.patch("supabase_client.is_configured", return_value=True):
+            with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                with mock.patch("db._use_supabase", return_value=False):
+                    at = AppTest.from_file("app.py", default_timeout=120)
+                    at.run()
+                    uid = "uid-hist-card"
+                    at.session_state["access_token"] = "hist-at"
+                    at.session_state["refresh_token"] = "hist-rt"
+                    at.session_state["user_id"] = uid
+                    at.session_state["guest_mode"] = False
+                    at.session_state["_auth_cookie_checked"] = True
+                    db._SHOPPING_FORCE_SQLITE = True
+                    db._ensure_sqlite_user(uid)
+                    row = db.create_decision(
+                        user_id=uid,
+                        domain="food",
+                        question="test",
+                        suggestion="Krämig tomatsås-pasta",
+                        justification="x",
+                        status="shown",
+                        context={"meal_type": "middag"},
+                    )
+                    at.session_state["page"] = "history"
+                    at.run()
+        self.assertFalse(at.exception)
+        keys = {getattr(b, "key", None) for b in at.button}
+        rid = int(row["id"])
+        self.assertIn(f"hist_open_btn_{rid}", keys)
+        self.assertIn(f"hist_fav_btn_history_{rid}", keys)
+        # Toggle favorite from history
+        fav_btn = next(b for b in at.button if getattr(b, "key", None) == f"hist_fav_btn_history_{rid}")
+        fav_btn.click().run()
+        self.assertFalse(at.exception)
+        listed = db.list_decisions(uid, favorite=True)
+        self.assertEqual(len(listed), 1)
+        self.assertEqual(listed[0]["suggestion"], "Krämig tomatsås-pasta")
+        db._SHOPPING_FORCE_SQLITE = False
+
+
 if __name__ == "__main__":
     unittest.main()
