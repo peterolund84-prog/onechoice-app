@@ -11,6 +11,11 @@ from typing import Any
 
 COOKIE_NAME = "oc_auth"
 COOKIE_MAX_AGE_DAYS = 30
+COOKIE_COMPONENT_KEY = "oc_auth_cm"
+
+# One CookieManager per Streamlit worker process — never store in session_state
+# (object may not round-trip) and never instantiate twice (duplicate widget key).
+_COOKIE_MANAGER: Any = None
 
 
 def _cookie_secure() -> bool:
@@ -22,13 +27,14 @@ def _cookie_secure() -> bool:
 
 
 def get_cookie_manager():
+    """Return the singleton CookieManager (mounts the component once per process)."""
+    global _COOKIE_MANAGER
+    if _COOKIE_MANAGER is not None:
+        return _COOKIE_MANAGER
     import extra_streamlit_components as stx
-    import streamlit as st
 
-    key = "_oc_cookie_manager"
-    if key not in st.session_state:
-        st.session_state[key] = stx.CookieManager(key="oc_auth_cm")
-    return st.session_state[key]
+    _COOKIE_MANAGER = stx.CookieManager(key=COOKIE_COMPONENT_KEY)
+    return _COOKIE_MANAGER
 
 
 def _encode(tokens: dict[str, str]) -> str:
@@ -55,6 +61,7 @@ def set_auth_cookie(access_token: str, refresh_token: str) -> None:
     manager.set(
         COOKIE_NAME,
         _encode({"at": access_token, "rt": refresh_token}),
+        key="oc_auth_set",
         expires_at=expires,
         max_age=COOKIE_MAX_AGE_DAYS * 86400,
         path="/",
@@ -66,7 +73,7 @@ def set_auth_cookie(access_token: str, refresh_token: str) -> None:
 def clear_auth_cookie() -> None:
     manager = get_cookie_manager()
     try:
-        manager.delete(COOKIE_NAME)
+        manager.delete(COOKIE_NAME, key="oc_auth_del")
     except Exception:
         pass
 
@@ -81,7 +88,9 @@ def read_auth_cookie() -> dict[str, str] | None:
         dict with at/rt — stored tokens
     """
     manager = get_cookie_manager()
-    cookies = manager.get_all()
+    # Use cookies from the single getAll mount in CookieManager.__init__.
+    # manager.get_all() registers a second widget and can cause duplicate keys.
+    cookies = manager.cookies
     if cookies is None:
         return None
     raw = cookies.get(COOKIE_NAME)

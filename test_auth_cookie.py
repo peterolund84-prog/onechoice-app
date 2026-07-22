@@ -15,6 +15,44 @@ class AuthCookieUnitTests(unittest.TestCase):
         parsed = ac._decode(raw)
         self.assertEqual(parsed, {"at": "access", "rt": "refresh"})
 
+    def test_get_cookie_manager_singleton(self) -> None:
+        import auth_cookie as ac
+
+        ac._COOKIE_MANAGER = None
+        calls: list[str] = []
+
+        class FakeCM:
+            cookies: dict[str, str] = {}
+
+            def __init__(self, key: str = "init") -> None:
+                calls.append(key)
+
+        with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
+            m1 = ac.get_cookie_manager()
+            m2 = ac.get_cookie_manager()
+        self.assertIs(m1, m2)
+        self.assertEqual(calls, [ac.COOKIE_COMPONENT_KEY])
+
+    def test_read_auth_cookie_uses_init_cookies_not_get_all(self) -> None:
+        import auth_cookie as ac
+
+        ac._COOKIE_MANAGER = None
+        payload = ac._encode({"at": "a", "rt": "r"})
+
+        class FakeCM:
+            def __init__(self, key: str = "init") -> None:
+                self.cookies = {ac.COOKIE_NAME: payload}
+                self.get_all_calls = 0
+
+            def get_all(self, key: str = "get_all") -> dict[str, str]:
+                self.get_all_calls += 1
+                return self.cookies
+
+        with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
+            out = ac.read_auth_cookie()
+        self.assertEqual(out, {"at": "a", "rt": "r"})
+        self.assertEqual(ac.get_cookie_manager().get_all_calls, 0)
+
     def test_refresh_session_wrapper(self) -> None:
         import supabase_client as sb
 
