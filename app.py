@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "skel-seg-layout-v61-20260722"
+BUILD_ID = "fix-nav-ghost-v63-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2011,11 +2011,47 @@ body:not(:has(.oc-result)) .st-key-meal_seg {{
     width: 100% !important;
     max-width: 100% !important;
 }}
-/* No page-wide dim while deciding — keep chrome crisp */
-body:has(.oc-skel-card) [data-testid="stStatusWidget"],
-body:has(.oc-skel-card) [data-testid="stDecoration"] {{
+/* While deciding / skeleton is up: hide ANY prior real decision card
+   (Streamlit can leave the previous run's card dimmed underneath). */
+body:has([data-oc-deciding]) .oc-decision:not(.oc-skel-card),
+body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card) {{
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
+    visibility: hidden !important;
+}}
+/* No page-wide dim while deciding — keep chrome crisp */
+body:has(.oc-skel-card) [data-testid="stStatusWidget"],
+body:has(.oc-skel-card) [data-testid="stDecoration"],
+body:has([data-oc-deciding]) [data-testid="stStatusWidget"],
+body:has([data-oc-deciding]) [data-testid="stDecoration"] {{
+    opacity: 0 !important;
+    pointer-events: none !important;
+}}
+.oc-deciding-root {{
+    display: none !important;
+}}
+/* General nav ghost wipe: on click we arm html.oc-pending so the prior page
+   cannot sit dimmed under the next run. Skeleton is exempt (decide loading). */
+html.oc-pending .block-container::after {{
+    content: "";
+    position: fixed;
+    top: calc(52px + env(safe-area-inset-top));
+    left: 0;
+    right: 0;
+    bottom: calc(72px + env(safe-area-inset-bottom));
+    background: var(--oc-bg) !important;
+    z-index: 9000;
+    pointer-events: none;
+}}
+html.oc-pending:has(.oc-skel-card) .block-container::after,
+html.oc-pending:has([data-oc-deciding]) .block-container::after {{
+    display: none !important;
 }}
 .oc-hist-date {{
     font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
@@ -2322,6 +2358,9 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {{
     pointer-events: none !important;
     opacity: 1 !important;
     filter: none !important;
+    background: #fff !important;
+    position: relative !important;
+    z-index: 5 !important;
 }}
 .oc-skel-shimmer {{
     background: linear-gradient(
@@ -4069,6 +4108,86 @@ def _share_icon_button_html(
     )
 
 
+def _oc_pending_nav_runtime_html() -> str:
+    """Blank prior page content on click until the next Streamlit run finishes.
+
+    Streamlit keeps the old UI (often dimmed) visible while a rerun is in flight.
+    That reads as 'ghosting' when tapping nav / Nytt förslag / domain cards.
+    """
+    return """<script>
+(function() {
+  if (window.__ocPendingNavBound) return;
+  window.__ocPendingNavBound = true;
+
+  function appEl() {
+    return document.querySelector('[data-testid="stApp"]');
+  }
+  function scriptState() {
+    var a = appEl();
+    return a ? (a.getAttribute("data-test-script-state") || "") : "";
+  }
+  function isRunning() {
+    var s = scriptState();
+    return s === "running" || s === "rerunRequested";
+  }
+  function arm() {
+    document.documentElement.classList.add("oc-pending");
+  }
+  function disarm() {
+    document.documentElement.classList.remove("oc-pending");
+  }
+
+  document.addEventListener("click", function(e) {
+    var t = e.target && e.target.closest && e.target.closest(
+      'button, [role="button"], a[href^="?"]'
+    );
+    if (!t) return;
+    if (t.closest(".st-key-oc_lang_bar") || t.closest('[class*="st-key-oc_lang"]')) return;
+    if (t.closest('[data-testid="stCheckbox"]')) return;
+    if (t.closest('[data-testid="stTextInput"]')) return;
+    if (t.closest('[data-testid="stNumberInput"]')) return;
+    arm();
+  }, true);
+
+  function onStateChange() {
+    if (!document.documentElement.classList.contains("oc-pending")) return;
+    if (!isRunning()) disarm();
+  }
+
+  var appObs = null;
+  function watchApp() {
+    var a = appEl();
+    if (!a) return;
+    if (appObs) appObs.disconnect();
+    appObs = new MutationObserver(onStateChange);
+    appObs.observe(a, { attributes: true, attributeFilter: ["data-test-script-state"] });
+    onStateChange();
+  }
+  watchApp();
+  new MutationObserver(watchApp).observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+})();
+</script>"""
+
+
+def inject_app_runtime() -> None:
+    """One-shot parent-frame helpers (nav wipe). Safe to call every run."""
+    try:
+        st.html(
+            _oc_pending_nav_runtime_html(),
+            unsafe_allow_javascript=True,
+        )
+    except TypeError:
+        try:
+            st.html(_oc_pending_nav_runtime_html())
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
 def _oc_share_runtime_html() -> str:
     """Parent-frame JS: native share in the tap handler + transient clipboard toast."""
     import json as _json
@@ -4917,6 +5036,7 @@ def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
     # key=decide_slot keeps this in the same full-width host as the real card
     with st.container(key="decide_slot"):
         st.html(
+            '<div class="oc-deciding-root" data-oc-deciding="1" aria-hidden="true"></div>'
             '<div class="oc-decision oc-food-decision oc-skel-card">'
             '<div class="oc-food-img oc-skel-shimmer" aria-hidden="true"></div>'
             '<div class="oc-food-body">'
@@ -4928,14 +5048,45 @@ def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
         )
 
 
-def _await_decide_with_skeleton(fut, *, fridge_mode: bool, delay_s: float = DECIDE_SKELETON_DELAY_S, timeout_s: float = DECIDE_TIMEOUT_S):
+def _render_decide_evictor() -> None:
+    """Immediate opaque slot — evicts the previous decision card before any wait."""
+    with st.container(key="decide_slot"):
+        st.html(
+            '<div class="oc-deciding-root" data-oc-deciding="1" aria-hidden="true"></div>'
+            '<div class="oc-decision oc-food-decision oc-skel-card oc-skel-evict" aria-hidden="true">'
+            '<div class="oc-food-img" style="background:#f3f3f0"></div>'
+            '<div class="oc-food-body">'
+            '<div class="oc-skel-bar is-title" style="width:70%;opacity:0.35"></div>'
+            '<div class="oc-skel-bar" style="width:50%;opacity:0.25"></div>'
+            "</div></div>"
+        )
+
+
+def _await_decide_with_skeleton(
+    fut,
+    *,
+    fridge_mode: bool,
+    delay_s: float = DECIDE_SKELETON_DELAY_S,
+    timeout_s: float = DECIDE_TIMEOUT_S,
+    immediate: bool = False,
+):
     """Wait for decide; show skeleton only if it takes longer than delay_s.
 
     Time-based — never assume which code path is fast. Under delay_s the
     skeleton never appears (no flash). After delay_s it paints and we keep
     waiting until timeout_s total.
+
+    immediate=True: paint skeleton now (replacing an on-screen card — no flash
+    risk, only ghost risk if we wait).
     """
     from concurrent.futures import TimeoutError as FuturesTimeout
+
+    if immediate:
+        _render_decide_skeleton(fridge_mode=fridge_mode)
+        try:
+            return fut.result(timeout=max(0.05, timeout_s)), True
+        except FuturesTimeout:
+            raise
 
     try:
         return fut.result(timeout=max(0.0, delay_s)), False
@@ -4974,6 +5125,17 @@ def page_deciding() -> None:
         st.session_state.page = "home"
         st.rerun()
         return
+    # Evict the previous decision card from the viewport before any wait.
+    # If we're replacing an on-screen suggestion, show the full skeleton now
+    # (time-based delay only applies when there is nothing to hide).
+    cur = st.session_state.get("current")
+    replacing = isinstance(cur, dict) and bool(cur.get("suggestion"))
+    if replacing:
+        _render_decide_skeleton(fridge_mode=bool(st.session_state.get("fridge_mode")))
+        st.session_state["_decide_skel_painted"] = True
+    else:
+        _render_decide_evictor()
+        st.session_state["_decide_skel_painted"] = False
     st.session_state["_decide_in_slot"] = True
     run_decision(
         question=str(pending.get("question") or ""),
@@ -5133,12 +5295,20 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
 
     try:
         # Time-based skeleton for EVERY path: paint only if decide takes >400ms.
+        # When page_deciding already painted a skeleton to evict an on-screen
+        # card, just wait — do not remount decide_slot (duplicate key).
+        already = bool(st.session_state.pop("_decide_skel_painted", False))
         with ThreadPoolExecutor(max_workers=1) as pool:
             fut = pool.submit(_call_decide)
             try:
-                result, _shown = _await_decide_with_skeleton(
-                    fut, fridge_mode=fridge_mode
-                )
+                if already:
+                    result = fut.result(timeout=max(0.05, DECIDE_TIMEOUT_S))
+                    _shown = True
+                else:
+                    result, _shown = _await_decide_with_skeleton(
+                        fut,
+                        fridge_mode=fridge_mode,
+                    )
             except FuturesTimeout:
                 log.warning("decide timed out after %.0fs", DECIDE_TIMEOUT_S)
                 st.session_state.ui_error = True
@@ -9557,6 +9727,7 @@ def main() -> None:
     except Exception as exc:
         log.warning("db API ensure failed: %s", exc)
     inject_css()
+    inject_app_runtime()
     require_auth_context()
 
     # Resolve a WORKING LLM model once per session (probes candidate list).
