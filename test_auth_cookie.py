@@ -15,10 +15,11 @@ class AuthCookieUnitTests(unittest.TestCase):
         parsed = ac._decode(raw)
         self.assertEqual(parsed, {"at": "access", "rt": "refresh"})
 
-    def test_get_cookie_manager_singleton(self) -> None:
+    def test_get_cookie_manager_reuses_within_script_ctx(self) -> None:
         import auth_cookie as ac
 
         ac._COOKIE_MANAGER = None
+        ac._COOKIE_MANAGER_CTX_ID = None
         calls: list[str] = []
 
         class FakeCM:
@@ -28,16 +29,64 @@ class AuthCookieUnitTests(unittest.TestCase):
                 calls.append(key)
 
         with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
-            m1 = ac.get_cookie_manager()
-            m2 = ac.get_cookie_manager()
+            with mock.patch.object(ac, "_script_ctx_id", return_value=101):
+                m1 = ac.get_cookie_manager()
+                m2 = ac.get_cookie_manager()
         self.assertIs(m1, m2)
         self.assertEqual(calls, [ac.COOKIE_COMPONENT_KEY])
 
-    def test_read_auth_cookie_uses_init_cookies_not_get_all(self) -> None:
+    def test_get_cookie_manager_remounts_on_new_script_ctx(self) -> None:
         import auth_cookie as ac
 
         ac._COOKIE_MANAGER = None
+        ac._COOKIE_MANAGER_CTX_ID = None
+        calls: list[str] = []
+
+        class FakeCM:
+            cookies: dict[str, str] = {}
+
+            def __init__(self, key: str = "init") -> None:
+                calls.append(key)
+
+        with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
+            with mock.patch.object(ac, "_script_ctx_id", side_effect=[1, 2]):
+                m1 = ac.get_cookie_manager()
+                m2 = ac.get_cookie_manager()
+        self.assertIsNot(m1, m2)
+        self.assertEqual(calls, [ac.COOKIE_COMPONENT_KEY, ac.COOKIE_COMPONENT_KEY])
+
+    def test_quiet_set_auth_cookie_skips_component_set(self) -> None:
+        import auth_cookie as ac
+
+        ac._COOKIE_MANAGER = None
+        ac._COOKIE_MANAGER_CTX_ID = None
+        set_calls: list[str] = []
+
+        class FakeCM:
+            def __init__(self, key: str = "init") -> None:
+                self.cookies: dict[str, str] = {}
+
+            def set(self, *args, **kwargs) -> None:
+                set_calls.append("set")
+
+        with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
+            with mock.patch.object(ac, "_script_ctx_id", return_value=7):
+                with mock.patch.object(ac, "_paint_cookie_js") as paint:
+                    ac.set_auth_cookie("at", "rt", quiet=True)
+        self.assertEqual(set_calls, [])
+        paint.assert_called_once()
+        snippet = paint.call_args[0][0]
+        self.assertIn("document.cookie", snippet)
+        self.assertIn(ac.COOKIE_NAME, snippet)
+
+    def test_read_auth_cookie_uses_init_cookies_not_get_all(self) -> None:
+        import auth_cookie as ac
+        import streamlit as st
+
+        ac._COOKIE_MANAGER = None
+        ac._COOKIE_MANAGER_CTX_ID = None
         payload = ac._encode({"at": "a", "rt": "r"})
+        st.session_state["_oc_cookie_component_ready"] = True
 
         class FakeCM:
             def __init__(self, key: str = "init") -> None:
@@ -49,9 +98,32 @@ class AuthCookieUnitTests(unittest.TestCase):
                 return self.cookies
 
         with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
-            out = ac.read_auth_cookie()
-        self.assertEqual(out, {"at": "a", "rt": "r"})
-        self.assertEqual(ac.get_cookie_manager().get_all_calls, 0)
+            with mock.patch.object(ac, "_script_ctx_id", return_value=3):
+                out = ac.read_auth_cookie()
+                self.assertEqual(out, {"at": "a", "rt": "r"})
+                self.assertEqual(ac.get_cookie_manager().get_all_calls, 0)
+
+    def test_read_auth_cookie_waits_one_frame(self) -> None:
+        import auth_cookie as ac
+        import streamlit as st
+
+        ac._COOKIE_MANAGER = None
+        ac._COOKIE_MANAGER_CTX_ID = None
+
+        class FakeCM:
+            def __init__(self, key: str = "init") -> None:
+                self.cookies = {}
+
+        # Fresh session flag
+        if "_oc_cookie_component_ready" in st.session_state:
+            del st.session_state["_oc_cookie_component_ready"]
+
+        with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
+            with mock.patch.object(ac, "_script_ctx_id", return_value=9):
+                first = ac.read_auth_cookie()
+                second = ac.read_auth_cookie()
+        self.assertIsNone(first)
+        self.assertEqual(second, {})
 
     def test_refresh_session_wrapper(self) -> None:
         import supabase_client as sb
@@ -126,7 +198,7 @@ class AuthBootTests(unittest.TestCase):
                                 ) as apply:
                                     waiting = app_mod._try_restore_auth_from_cookie()
         self.assertFalse(waiting)
-        apply.assert_called_once_with(sess)
+        apply.assert_called_once_with(sess, persist_cookie="quiet")
 
     def test_domain_query_on_auth_page_does_not_bypass_login(self) -> None:
         from streamlit.testing.v1 import AppTest

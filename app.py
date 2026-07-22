@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "historik-row-fix-v53-20260722"
+BUILD_ID = "fix-double-load-v54-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -3168,8 +3168,15 @@ def _is_authenticated() -> bool:
     )
 
 
-def _apply_auth_session(sess: dict[str, Any]) -> None:
-    """Mirror Supabase session into session_state + DB."""
+def _apply_auth_session(sess: dict[str, Any], *, persist_cookie: str = "set") -> None:
+    """
+    Mirror Supabase session into session_state + DB.
+
+    persist_cookie:
+      "set" — CookieManager.set (login/signup; may trigger one component rerun)
+      "quiet" — document.cookie only (reload restore; no extra Streamlit rerun)
+      "skip" — memory/session only
+    """
     import auth_cookie as ac
 
     st.session_state.user_id = sess["user_id"]
@@ -3184,6 +3191,13 @@ def _apply_auth_session(sess: dict[str, Any]) -> None:
         language=st.session_state.language,
         email=sess.get("email"),
     )
+    if persist_cookie == "skip":
+        return
+    if persist_cookie == "quiet":
+        ac.set_auth_cookie(
+            sess["access_token"], sess["refresh_token"], quiet=True
+        )
+        return
     ac.set_auth_cookie(sess["access_token"], sess["refresh_token"])
 
 
@@ -3237,7 +3251,9 @@ def _try_restore_auth_from_cookie() -> bool:
         return False
     try:
         sess = sb.refresh_session(rt)
-        _apply_auth_session(sess)
+        # quiet cookie write — CookieManager.set on restore caused a second
+        # full home paint (extra Streamlit rerun) on every reload.
+        _apply_auth_session(sess, persist_cookie="quiet")
     except Exception as exc:
         log.warning("auth cookie refresh failed: %s", exc)
         ac.clear_auth_cookie()
