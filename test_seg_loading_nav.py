@@ -140,13 +140,22 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn("html.oc-pending", src)
-        self.assertIn("__ocPendingNavBound", src)
+        self.assertIn("html.oc-pending body::before", src)
+        self.assertIn("#oc-nav-wipe", src)
         self.assertIn("inject_app_runtime", src)
         self.assertIn("data-test-script-state", src)
+        self.assertIn("unsafe_allow_javascript", src)
         html = app_mod._oc_pending_nav_runtime_html()
         self.assertIn("oc-pending", html)
+        self.assertIn("oc-nav-wipe", html)
+        self.assertIn("pointerdown", html)
+        self.assertIn("__ocDisarmTimer", html)
+        self.assertIn("__ocPendingPtr", html)
         self.assertIn("isRunning", html)
         self.assertIn("rerunRequested", html)
+        self.assertIn('st-key-home_domain_', html)
+        # Must target the app document (st.html), not assume iframe→parent
+        self.assertIn('[data-testid="stApp"]', html)
 
     def test_run_decision_always_uses_time_based_await(self) -> None:
         import app as app_mod
