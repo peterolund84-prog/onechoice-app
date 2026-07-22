@@ -1349,6 +1349,44 @@ def clear_checked_shopping_items(
         return int(cur.rowcount or 0)
 
 
+def delete_shopping_items(
+    user_id: str,
+    item_ids: list[int],
+    *,
+    path: Path | str | None = None,
+) -> int:
+    """Delete specific shopping rows by id (Rensa klara uses the Klart id list)."""
+    ids = [int(i) for i in item_ids if int(i) > 0]
+    if not ids:
+        return 0
+    if _shopping_use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        try:
+            return store.delete_shopping_items(
+                user_id, ids, access_token=at, refresh_token=rt
+            )
+        except Exception as exc:
+            if _shopping_table_missing(exc):
+                _mark_shopping_sqlite_fallback(exc)
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return delete_shopping_items(
+                    user_id, ids, path=_shopping_sqlite_path()
+                )
+            raise
+    placeholders = ",".join("?" for _ in ids)
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            f"""
+            DELETE FROM shopping_items
+            WHERE user_id = ? AND id IN ({placeholders})
+            """,
+            (user_id, *ids),
+        )
+        return int(cur.rowcount or 0)
+
+
 def toggle_shopping_item(
     user_id: str,
     item_id: int,

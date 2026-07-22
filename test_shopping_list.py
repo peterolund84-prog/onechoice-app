@@ -160,6 +160,18 @@ class PersistentShoppingListTests(unittest.TestCase):
         self.assertEqual(cleared, 1)
         self.assertEqual(db.list_shopping_items(uid, path=self.db_path), [])
 
+    def test_delete_shopping_items_by_ids(self) -> None:
+        uid = self.user["id"]
+        a = db.upsert_shopping_item(uid, "gurka", "frukt & grönt", path=self.db_path)
+        b = db.upsert_shopping_item(uid, "grädde", "mejeri", path=self.db_path)
+        self.assertIsNotNone(a)
+        self.assertIsNotNone(b)
+        n = db.delete_shopping_items(
+            uid, [int(a["id"]), int(b["id"])], path=self.db_path  # type: ignore[index]
+        )
+        self.assertEqual(n, 2)
+        self.assertEqual(db.list_shopping_items(uid, path=self.db_path), [])
+
     def test_accept_flow_merges_from_pipeline(self) -> None:
         uid = self.user["id"]
         r = pipeline.decide(

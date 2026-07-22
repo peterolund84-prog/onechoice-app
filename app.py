@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "lista-checked-items-reload-v41-20260722"
+BUILD_ID = "lista-rensa-klara-fix-v42-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2598,18 +2598,23 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-
     gap: 8px !important;
 }}
 .st-key-lista_klart_hdr div.stButton > button,
-.st-key-lista_klart_hdr button[data-testid="baseButton-secondary"] {{
+.st-key-lista_klart_hdr button[data-testid="baseButton-secondary"],
+.st-key-lista_klart_hdr button[data-testid="stBaseButton-secondary"] {{
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
     text-decoration: underline !important;
+    text-underline-offset: 3px !important;
     font-size: 13px !important;
     font-weight: 500 !important;
-    min-height: 28px !important;
+    min-height: 44px !important;
     height: auto !important;
-    padding: 0.2rem 0.4rem !important;
+    padding: 0.55rem 0.5rem !important;
     justify-content: flex-end !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
 }}
 /* Legacy toggle markers kept for persistent lista page */
 .oc-shop-tog-marker {{ display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }}
@@ -4899,7 +4904,7 @@ def _shopping_list_user_id() -> str | None:
 def _load_shopping_items(*, force: bool = False) -> list[dict[str, Any]]:
     cached = st.session_state.get("shopping_list_cache")
     if not force and isinstance(cached, list):
-        return cached
+        return _apply_lista_tombstones(cached)
     uid = _ensure_shopping_user()
     if not uid:
         return []
@@ -4914,6 +4919,7 @@ def _load_shopping_items(*, force: bool = False) -> list[dict[str, Any]]:
             items = db.list_shopping_items(uid)
         except Exception:
             items = list(cached) if isinstance(cached, list) else []
+    items = _apply_lista_tombstones(items)
     st.session_state.shopping_list_cache = items
     return items
 
@@ -4934,6 +4940,61 @@ def _flush_shopping_pending_writes() -> None:
             log.warning("shopping write-behind failed id=%s: %s", op.get("id"), exc)
             remaining.append(op)
     st.session_state.shopping_pending_writes = remaining
+
+
+def _clear_done_shopping_items(done: list[dict[str, Any]]) -> None:
+    """Rensa klara — delete by id (not checked=1) so optimistic checks still vanish."""
+    ids = [int(r.get("id") or 0) for r in done if int(r.get("id") or 0) > 0]
+    if not ids:
+        return
+    id_set = set(ids)
+    # Drop write-behind toggles that would resurrect checked rows after delete
+    pending = list(st.session_state.get("shopping_pending_writes") or [])
+    st.session_state.shopping_pending_writes = [
+        p for p in pending if int(p.get("id") or 0) not in id_set
+    ]
+    tombs = set(int(i) for i in (st.session_state.get("_lista_tombstones") or []))
+    tombs |= id_set
+    st.session_state._lista_tombstones = sorted(tombs)
+    cached = st.session_state.get("shopping_list_cache")
+    if isinstance(cached, list):
+        st.session_state.shopping_list_cache = [
+            r for r in cached if int(r.get("id") or 0) not in id_set
+        ]
+    for iid in ids:
+        st.session_state.pop(f"lista_chk_{iid}", None)
+    uid = _ensure_shopping_user()
+    if not uid:
+        return
+    try:
+        db.delete_shopping_items(uid, ids)
+    except Exception as exc:
+        log.warning("delete shopping items by id failed: %s", exc)
+        try:
+            db.clear_checked_shopping_items(uid)
+        except Exception as exc2:
+            log.warning("clear checked shopping fallback failed: %s", exc2)
+
+
+def _apply_lista_tombstones(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Hide rows Rensa klara already removed (covers slow/failed remote DELETE)."""
+    tombs = {int(i) for i in (st.session_state.get("_lista_tombstones") or []) if int(i) > 0}
+    if not tombs:
+        return items
+    # Retry delete for ids the backend still returns
+    still = [int(r.get("id") or 0) for r in items if int(r.get("id") or 0) in tombs]
+    if still:
+        uid = _shopping_list_user_id()
+        if uid:
+            try:
+                db.delete_shopping_items(uid, still)
+            except Exception as exc:
+                log.warning("tombstone retry delete failed: %s", exc)
+    kept = [r for r in items if int(r.get("id") or 0) not in tombs]
+    present = {int(r.get("id") or 0) for r in items}
+    # Forget tombstones once the backend no longer returns them
+    st.session_state._lista_tombstones = sorted(tombs & present)
+    return kept
 
 
 def _optimistic_toggle_shopping_item(
@@ -5058,6 +5119,10 @@ def render_persistent_shopping_list() -> None:
 
         if done:
             n_done = len(done)
+            # Persist ids for on_click — callback runs before body on next interaction
+            st.session_state["_lista_done_ids"] = [
+                int(r.get("id") or 0) for r in done if int(r.get("id") or 0) > 0
+            ]
             with st.container(key="lista_klart_hdr"):
                 head_l, head_r = st.columns([3, 1], gap="small")
                 with head_l:
@@ -5067,23 +5132,23 @@ def render_persistent_shopping_list() -> None:
                         unsafe_allow_html=True,
                     )
                 with head_r:
-                    if st.button(
+
+                    def _on_clear_done() -> None:
+                        ids = [
+                            int(i)
+                            for i in (st.session_state.get("_lista_done_ids") or [])
+                            if int(i) > 0
+                        ]
+                        rows = [{"id": i} for i in ids]
+                        _clear_done_shopping_items(rows)
+
+                    st.button(
                         t("list_clear_done"),
                         key="lista_clear_done",
                         type="secondary",
                         use_container_width=True,
-                    ):
-                        uid = _shopping_list_user_id()
-                        if uid:
-                            try:
-                                db.clear_checked_shopping_items(uid)
-                            except Exception as exc:
-                                log.warning("clear checked shopping failed: %s", exc)
-                            for row in done:
-                                iid = int(row.get("id") or 0)
-                                st.session_state.pop(f"lista_chk_{iid}", None)
-                            st.session_state.shopping_list_cache = None
-                        st.rerun()
+                        on_click=_on_clear_done,
+                    )
             for row in done:
                 _row_checkbox(row)
 
