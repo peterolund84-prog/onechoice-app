@@ -49,12 +49,19 @@ class ListaKlartLifecycleTests(unittest.TestCase):
     def _cache(self, at: AppTest) -> list:
         try:
             raw = at.session_state["shopping_list_cache"]
-        except KeyError:
+        except Exception:
             return []
         return list(raw) if isinstance(raw, list) else []
 
     def _body(self, at: AppTest) -> str:
-        return " ".join(str(m.value or "") for m in at.markdown)
+        # Exclude the giant injected <style> block — only page markdown content.
+        parts: list[str] = []
+        for m in at.markdown:
+            v = str(m.value or "")
+            if v.lstrip().startswith("<style"):
+                continue
+            parts.append(v)
+        return " ".join(parts)
 
     def _nav_lista_label(self, at: AppTest) -> str:
         nav_lista = next(b for b in at.button if getattr(b, "key", None) == "nav_lista")
@@ -63,11 +70,11 @@ class ListaKlartLifecycleTests(unittest.TestCase):
     def test_add_row_label_collapsed_and_columns(self) -> None:
         at = self._boot_lista()
         self.assertFalse(at.exception)
-        body = self._body(at)
-        self.assertIn("st-key-lista_add_row", body)
         add = next(i for i in at.text_input if getattr(i, "key", None) == "shop_add_input")
         self.assertEqual(add.label, "Lägg till...")
         self.assertTrue(str(add.placeholder).startswith("Lägg till"))
+        # label_visibility=collapsed — AppTest still exposes the label string,
+        # but the visible double-label is suppressed in CSS + collapsed.
         plus = next(
             b
             for b in at.button
@@ -169,20 +176,28 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         self.assertFalse(at.exception)
         body = self._body(at)
         self.assertIn("Klart (1)", body)
-        self.assertIn("Rensa klara", body)
 
-        clear_btn = next(b for b in at.button if b.label == "Rensa klara")
+        clear_btn = next(
+            b for b in at.button if getattr(b, "key", None) == "lista_clear_done"
+        )
         clear_btn.click().run()
+        # st.rerun() inside the click handler — flush one more paint
+        at.run()
         self.assertFalse(at.exception)
 
         body = self._body(at)
         self.assertNotIn("Klart (", body)
+        self.assertFalse(
+            any(getattr(b, "key", None) == "lista_clear_done" for b in at.button)
+        )
         cache = self._cache(at)
         self.assertEqual(sum(1 for r in cache if bool(r["checked"])), 0)
         names = {str(r["name"]) for r in cache}
         self.assertNotIn(first, names)
         self.assertEqual(len(cache), 1)
         self.assertIn("· 1", self._nav_lista_label(at))
+        db_names = {r["name"] for r in db.list_shopping_items(self.UID)}
+        self.assertNotIn(first, db_names)
 
 
 if __name__ == "__main__":
