@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "historik-redesign-icons-v51-20260722"
+BUILD_ID = "historik-row-polish-v52-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1665,7 +1665,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     margin: 0 !important;
     padding: 0 !important;
 }}
-/* Streamlit heart buttons — same chrome-free rule as .oc-icon-btn */
+/* Streamlit heart buttons — same chrome-free rule as .oc-icon-btn; glyph only */
 .st-key-exec_fav_corner div.stButton > button,
 .st-key-exec_fav_corner button,
 div[class*="st-key-hist_fav_"] div.stButton > button,
@@ -1677,6 +1677,7 @@ div[class*="st-key-hist_fav_"] button {{
     padding: 0 !important;
     width: 40px !important;
     min-width: 40px !important;
+    max-width: 40px !important;
     height: 40px !important;
     min-height: 40px !important;
     margin: 0 !important;
@@ -1687,7 +1688,27 @@ div[class*="st-key-hist_fav_"] button {{
     background-size: 20px 20px !important;
     color: transparent !important;
     font-size: 0 !important;
+    line-height: 0 !important;
+    overflow: hidden !important;
+    text-indent: -9999px !important;
+    white-space: nowrap !important;
     transition: background-image 150ms ease, color 150ms ease !important;
+}}
+.st-key-exec_fav_corner div.stButton > button p,
+.st-key-exec_fav_corner div.stButton > button span,
+.st-key-exec_fav_corner div.stButton > button div,
+div[class*="st-key-hist_fav_"] div.stButton > button p,
+div[class*="st-key-hist_fav_"] div.stButton > button span,
+div[class*="st-key-hist_fav_"] div.stButton > button div {{
+    font-size: 0 !important;
+    line-height: 0 !important;
+    color: transparent !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }}
 .st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button,
 div[class*="st-key-hist_row_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] div.stButton > button {{
@@ -1701,38 +1722,151 @@ div[class*="st-key-hist_row_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] di
     font-family: "Inter", sans-serif !important;
 }}
 .oc-hist-date:first-child {{ margin-top: 0.35rem; }}
+/* Group card: 16px side inset so thumbs never kiss the frame */
 div[class*="st-key-hist_group_"] {{ margin: 0 0 0.85rem !important; padding: 0 !important; }}
 div[class*="st-key-hist_group_"] [data-testid="stVerticalBlockBorderWrapper"] {{
-    padding: 0.15rem 0.5rem 0.15rem 0.65rem !important;
+    padding: 4px 16px !important;
 }}
+div[class*="st-key-hist_group_"] [data-testid="stVerticalBlockBorderWrapper"] > div {{
+    gap: 0 !important;
+}}
+/* 64px content-box row; inset hairline starts at text column (iOS list) */
 div[class*="st-key-hist_row_"] {{
-    margin: 0 !important; padding: 0 !important; min-height: 64px !important;
-    border-bottom: 1px solid var(--oc-border) !important;
-}}
-div[class*="st-key-hist_group_"] div[class*="st-key-hist_row_"]:last-of-type {{
+    margin: 0 !important;
+    padding: 10px 0 !important;
+    height: 64px !important;
+    min-height: 64px !important;
+    max-height: 64px !important;
+    box-sizing: border-box !important;
     border-bottom: none !important;
+    position: relative !important;
+    overflow: visible !important;
+}}
+div[class*="st-key-hist_row_"]:not(:last-of-type)::after {{
+    content: "";
+    position: absolute;
+    left: calc(44px + 12px);
+    right: 0;
+    bottom: 0;
+    height: 1px;
+    background: var(--oc-border);
+    pointer-events: none;
 }}
 div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] {{
-    align-items: center !important; min-height: 64px !important; gap: 10px !important;
+    align-items: center !important;
+    height: 44px !important;
+    min-height: 44px !important;
+    gap: 12px !important;
+    flex-wrap: nowrap !important;
+    position: relative !important;
+    padding-right: 40px !important;
+    box-sizing: border-box !important;
 }}
-.oc-hist-thumb {{
-    width: 44px; height: 44px; object-fit: cover; border-radius: 10px; display: block;
-    background: #eee;
+div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div {{
+    padding: 0 !important;
 }}
-.oc-hist-text {{ min-width: 0; padding: 0.2rem 0; pointer-events: none; }}
+/* Col 1: fixed 44px thumb */
+div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {{
+    flex: 0 0 44px !important;
+    width: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+}}
+/* Col 2: flexible text — heart overlaid so long titles fit at 390px */
+div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {{
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+}}
+/* Col 3: fixed 40px heart overlay */
+div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {{
+    position: absolute !important;
+    right: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    z-index: 3 !important;
+}}
+/* Image IS the element — no plate/wrapper chrome */
+.oc-row-thumb {{
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
+    display: block;
+    flex: none;
+    background: transparent !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+}}
+.oc-row-thumb-ph {{
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(79, 70, 229, 0.08);
+    box-shadow: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+}}
+.oc-row-thumb-ph svg {{
+    width: 18px;
+    height: 18px;
+    stroke: rgba(79, 70, 229, 0.55);
+    fill: none;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}}
+div[class*="st-key-hist_row_"] [data-testid="stImage"],
+div[class*="st-key-hist_row_"] [data-testid="stImage"] > div,
+div[class*="st-key-hist_row_"] figure,
+div[class*="st-key-hist_row_"] .stMarkdown {{
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+}}
+.oc-hist-text {{
+    min-width: 0;
+    padding: 0;
+    pointer-events: none;
+    overflow: hidden;
+}}
 .oc-hist-title {{
-    font-size: 0.95rem; font-weight: 600; color: var(--oc-ink); line-height: 1.25;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--oc-ink);
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: -0.015em;
+    padding-right: 4px;
     font-family: "Inter", sans-serif !important;
 }}
 .oc-hist-meta {{
-    font-size: 13px; color: var(--oc-muted); line-height: 1.3; margin-top: 2px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 13px;
+    color: var(--oc-muted);
+    line-height: 1.3;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     font-family: "Inter", sans-serif !important;
 }}
 /* Full-row tap target — invisible over title/meta */
 div[class*="st-key-hist_body_"] {{
     position: relative !important; margin: 0 !important; padding: 0 !important; min-width: 0 !important;
+    height: 44px !important;
 }}
 div[class*="st-key-hist_open_"] {{
     position: absolute !important; inset: 0 !important; z-index: 2 !important;
@@ -1742,7 +1876,7 @@ div[class*="st-key-hist_open_"] div.stButton,
 div[class*="st-key-hist_open_"] div.stButton > button,
 div[class*="st-key-hist_open_"] button {{
     background: transparent !important; border: none !important; box-shadow: none !important;
-    width: 100% !important; height: 100% !important; min-height: 64px !important;
+    width: 100% !important; height: 100% !important; min-height: 44px !important;
     margin: 0 !important; padding: 0 !important; border-radius: 0 !important;
     opacity: 0 !important; color: transparent !important; font-size: 0 !important;
 }}
@@ -5085,12 +5219,13 @@ def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> No
         unsafe_allow_html=True,
     )
     with st.container(key="exec_fav_corner"):
-        label = t("favorite_remove") if is_favorite else t("favorite_add")
+        help_lbl = t("favorite_remove") if is_favorite else t("favorite_add")
         if st.button(
-            label,
+            "\u200b",
             key=f"fav_toggle_{int(decision_id)}",
             use_container_width=True,
             type="secondary",
+            help=help_lbl,
         ):
             _toggle_decision_favorite(int(decision_id))
             st.rerun()
@@ -5142,6 +5277,19 @@ def _hist_time_meta(row: dict[str, Any], language: str) -> str:
     return clock or domain
 
 
+def _hist_generic_placeholder_html() -> str:
+    """44px tonal circle + fork — used when dish_category is generic/missing."""
+    return (
+        '<div class="oc-row-thumb-ph" aria-hidden="true">'
+        '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
+        '<path d="M5 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3"/>'
+        '<path d="M7 12v9"/>'
+        '<path d="M15 3v9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2z"/>'
+        '<path d="M17 12v9"/>'
+        "</svg></div>"
+    )
+
+
 def _hist_thumb_html(row: dict[str, Any]) -> str:
     import base64
 
@@ -5155,12 +5303,14 @@ def _hist_thumb_html(row: dict[str, Any]) -> str:
             suggestion,
             meta={**(ctx or {}), "dish_category": (ctx or {}).get("dish_category")},
         )
+    if cat == "generic" or not cat:
+        return _hist_generic_placeholder_html()
     raw = fcat.dish_image_bytes(cat)
     if not raw:
-        return '<div class="oc-hist-thumb" aria-hidden="true"></div>'
+        return _hist_generic_placeholder_html()
     b64 = base64.b64encode(raw).decode("ascii")
     return (
-        f'<img class="oc-hist-thumb" src="data:image/jpeg;base64,{b64}" alt=""/>'
+        f'<img class="oc-row-thumb" src="data:image/jpeg;base64,{b64}" alt=""/>'
     )
 
 
@@ -5222,7 +5372,7 @@ def _render_history_row(row: dict[str, Any], *, mode: str = "history") -> None:
             f'<div class="{marker}" aria-hidden="true"></div>',
             unsafe_allow_html=True,
         )
-        thumb_c, body_c, fav_c = st.columns([0.7, 4.5, 0.7], gap="small")
+        thumb_c, body_c, fav_c = st.columns([44, 260, 40], gap="small")
         with thumb_c:
             st.markdown(_hist_thumb_html(row), unsafe_allow_html=True)
         with body_c:
@@ -5254,12 +5404,13 @@ def _render_history_row(row: dict[str, Any], *, mode: str = "history") -> None:
                         st.rerun()
         with fav_c:
             with st.container(key=f"hist_fav_{mode}_{rid_i}"):
-                label = t("favorite_remove") if is_fav else t("favorite_add")
+                help_lbl = t("favorite_remove") if is_fav else t("favorite_add")
                 if st.button(
-                    label,
+                    "\u200b",
                     key=f"hist_fav_btn_{mode}_{rid_i}",
                     use_container_width=True,
                     type="secondary",
+                    help=help_lbl,
                 ):
                     _toggle_favorite_by_id(rid_i, currently=is_fav)
                     st.rerun()
