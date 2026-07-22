@@ -24,12 +24,15 @@ class MealSegFullLabelTests(unittest.TestCase):
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn(".st-key-meal_seg", src)
-        self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", src)
-        self.assertIn("height: 30px", src)  # active pill fills segment
+        # Four equal columns via flex: 1 1 0 (button track — not st.pills)
+        self.assertIn("flex: 1 1 0 !important", src)
+        self.assertIn("height: 30px", src)  # active segment fill
         self.assertIn("height: 36px", src)  # track
         self.assertIn("text-align: center", src)
         self.assertIn("font-size: 12px", src)
         self.assertIn("letter-spacing: 0", src)
+        self.assertIn('key=f"meal_seg_{meal_key}"', src)
+        self.assertNotIn('key="meal_pills"', src)
 
 
 class DecideSlotTests(unittest.TestCase):

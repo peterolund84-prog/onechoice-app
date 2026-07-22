@@ -105,8 +105,13 @@ class NoWidgetLabelLeaksTests(unittest.TestCase):
                 msg=f"st.pills still labelled {key!r}",
             )
         self.assertNotIn('key="meal_pills"', src)
+        self.assertNotIn('key="meal_seg_choice"', src)
         # CSS must not force-show collapsed label via stPills > *
         self.assertNotIn('[data-testid="stPills"] > *', src)
+        # Meal control must be buttons, not pills
+        meal_fn = src.split("def render_meal_type_chips", 1)[1].split("def render_movie", 1)[0]
+        self.assertNotIn("st.pills(", meal_fn)
+        self.assertIn("st.button(", meal_fn)
 
     def test_no_widget_label_leaks_on_pages(self) -> None:
         at = _boot()
@@ -145,15 +150,18 @@ class NoWidgetLabelLeaksTests(unittest.TestCase):
         self.assertFalse(at.exception)
         body = _visible_text(at)
         self.assertNotIn("meal_pills", body)
-        meal = next(
+        keys = {getattr(b, "key", None) for b in at.button}
+        for mk in ("frukost", "lunch", "middag", "kvallsmal"):
+            self.assertIn(f"meal_seg_{mk}", keys)
+        labels = [str(getattr(b, "label", "") or "") for b in at.button]
+        for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
+            self.assertIn(needle, labels)
+        # No meal pills widget at all
+        meal_pill = next(
             (p for p in at.pills if "Frukost" in list(getattr(p, "options", []) or [])),
             None,
         )
-        self.assertIsNotNone(meal)
-        self.assertEqual(getattr(meal, "label", None), " ")
-        opts = list(meal.options)
-        for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
-            self.assertIn(needle, opts)
+        self.assertIsNone(meal_pill)
 
         # Movie result — format/mood pills.
         at.session_state["page"] = "result"

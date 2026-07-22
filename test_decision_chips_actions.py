@@ -19,15 +19,11 @@ class DecisionChipsActionsTests(unittest.TestCase):
         # No Måltid section label in renderer
         self.assertNotIn('html.escape("Måltid"', src)
         self.assertIn('key="meal_seg"', src)
-        # Grid ONLY on ButtonGroup — never stPills > * (re-shows collapsed label)
-        self.assertIn(
-            '.st-key-meal_seg [data-testid="stButtonGroup"] {{\n'
-            "    display: grid !important;",
-            src,
-        )
-        self.assertNotIn('[data-testid="stPills"] > *', src)
+        # Buttons — never st.pills (label-leak class)
         self.assertNotIn('key="meal_pills"', src)
-        self.assertIn('key="meal_seg_choice"', src)
+        self.assertNotIn('key="meal_seg_choice"', src)
+        self.assertIn('key=f"meal_seg_{meal_key}"', src)
+        self.assertNotIn("st.pills(", src.split("def render_meal_type_chips")[1].split("def render_movie")[0])
         # Full labels — never abbreviated chip text
         import food_domain as fd
 
@@ -48,8 +44,6 @@ class DecisionChipsActionsTests(unittest.TestCase):
         import re
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        # Footer nav still uses t("home") as a label — that's fine.
-        # Page-level buttons with Hem must be gone.
         banned_keys = (
             "back_home",
             "back_home_locked",
@@ -63,7 +57,6 @@ class DecisionChipsActionsTests(unittest.TestCase):
         )
         for key in banned_keys:
             self.assertNotIn(f'key="{key}"', src, key)
-        # No remaining st.button(t("home") ...)
         self.assertIsNone(re.search(r'st\.button\(\s*t\("home"\)', src))
 
     def test_food_result_meal_seg_and_actions(self) -> None:
@@ -96,17 +89,16 @@ class DecisionChipsActionsTests(unittest.TestCase):
         self.assertFalse(at.exception)
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertNotIn("Måltid", body)
-        meal_pills = next(
-            (p for p in at.pills if "Frukost" in list(getattr(p, "options", []) or [])),
-            None,
-        )
-        self.assertIsNotNone(meal_pills)
+        self.assertNotIn("meal_pills", body)
         keys = {getattr(b, "key", None) for b in at.button}
+        for mk in ("frukost", "lunch", "middag", "kvallsmal"):
+            self.assertIn(f"meal_seg_{mk}", keys)
+        labels = [str(getattr(b, "label", "") or "") for b in at.button]
+        for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
+            self.assertIn(needle, labels)
         self.assertIn("food_go_for_it", keys)
         self.assertIn("reroll_btn", keys)
         self.assertNotIn("back_home", keys)
-        labels = [str(getattr(b, "label", "") or "") for b in at.button]
-        # Footer nav may still say Hem; no duplicate page Hem among action keys
         page_hem = [
             b
             for b in at.button
