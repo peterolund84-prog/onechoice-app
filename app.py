@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "seg-loading-nav-v60-20260722"
+BUILD_ID = "skel-seg-layout-v61-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1733,7 +1733,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: #4F46E5 !important;
 }}
 .st-key-hist_seg {{ margin: 0 0 12px !important; }}
-/* Meal segmented control — full width, equal segments, full labels (never ellipsis) */
+/* Meal segmented control — full width track, 4 equal segments, full labels */
 .st-key-meal_seg {{
     margin: 0 0 16px !important;
     width: 100% !important;
@@ -1748,10 +1748,13 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"],
 .st-key-meal_seg [data-testid="stPills"] {{
-    display: flex !important;
-    flex-wrap: nowrap !important;
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
     width: 100% !important;
     max-width: 100% !important;
+    height: 36px !important;
+    min-height: 36px !important;
     gap: 0 !important;
     margin: 0 !important;
     padding: 3px !important;
@@ -1759,16 +1762,24 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     border-radius: 999px !important;
     box-sizing: border-box !important;
 }}
+.st-key-meal_seg [data-testid="stButtonGroup"] > *,
+.st-key-meal_seg [data-testid="stPills"] > * {{
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    display: flex !important;
+    justify-content: stretch !important;
+}}
 .st-key-meal_seg [data-testid="stButtonGroup"] button,
 .st-key-meal_seg [data-testid="stPills"] button {{
     flex: 1 1 0 !important;
     flex-basis: 0 !important;
-    width: auto !important;
+    width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
-    height: 36px !important;
-    min-height: 36px !important;
-    max-height: 36px !important;
+    height: 30px !important;
+    min-height: 30px !important;
+    max-height: 30px !important;
     margin: 0 !important;
     padding: 0 4px !important;
     border: none !important;
@@ -1784,6 +1795,9 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: clip !important;
+    text-align: center !important;
+    justify-content: center !important;
+    align-items: center !important;
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"] button p,
 .st-key-meal_seg [data-testid="stPills"] button p,
@@ -1798,6 +1812,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     font-size: inherit !important;
     letter-spacing: 0 !important;
     max-width: none !important;
+    text-align: center !important;
 }}
 @media (max-width: 420px) {{
     .st-key-meal_seg [data-testid="stButtonGroup"] button,
@@ -1814,6 +1829,27 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     background-color: #4F46E5 !important;
     color: #fff !important;
     font-weight: 600 !important;
+    width: 100% !important;
+    height: 30px !important;
+    border-radius: 999px !important;
+}}
+/* Full-width decide skeleton host — never a half column */
+.st-key-decide_slot {{
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+}}
+.st-key-decide_slot [data-testid="stVerticalBlock"],
+.st-key-decide_slot [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-decide_slot [data-testid="stElementContainer"] {{
+    width: 100% !important;
+    max-width: 100% !important;
+}}
+/* No page-wide dim while deciding — keep chrome crisp */
+body:has(.oc-skel-card) [data-testid="stStatusWidget"],
+body:has(.oc-skel-card) [data-testid="stDecoration"] {{
+    opacity: 0 !important;
+    pointer-events: none !important;
 }}
 /* Decision secondary — outlined "Nytt förslag" under primary Välj */
 .st-key-result_secondary_btn {{
@@ -2143,7 +2179,13 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {{
     100% {{ background-position: -100% 0; }}
 }}
 .oc-skel-card {{
+    width: 100% !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     pointer-events: none !important;
+    opacity: 1 !important;
+    filter: none !important;
 }}
 .oc-skel-shimmer {{
     background: linear-gradient(
@@ -4351,7 +4393,7 @@ def _go_home_chooser() -> None:
 def nav() -> None:
     """Fixed bottom glass nav — ONE shared component; no view may restyle it."""
     page = st.session_state.page
-    highlight = "home" if page in ("home", "result", "execute", "fridge", "ambiguous") else page
+    highlight = "home" if page in ("home", "result", "execute", "fridge", "ambiguous", "deciding") else page
     options = ("home", "lista", "history", "profile")
     if highlight not in options:
         highlight = "home"
@@ -4713,19 +4755,21 @@ def _decide_status_messages(*, fridge_mode: bool) -> tuple[str, str, str, str]:
 
 
 def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
-    """Placeholder matching the decision card — CSS drives status cycling."""
+    """Full-width decision-card placeholder — never inside a columns cell."""
     msgs = _decide_status_messages(fridge_mode=fridge_mode)
     status = "".join(f"<span>{html.escape(m)}</span>" for m in msgs)
-    st.html(
-        '<div class="oc-decision oc-food-decision oc-skel-card">'
-        '<div class="oc-food-img oc-skel-shimmer" aria-hidden="true"></div>'
-        '<div class="oc-food-body">'
-        '<div class="oc-skel-bar is-title" style="width:70%"></div>'
-        '<div class="oc-skel-bar" style="width:50%"></div>'
-        '<div class="oc-skel-bar" style="width:40%"></div>'
-        f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
-        "</div></div>"
-    )
+    # key=decide_slot keeps this in the same full-width host as the real card
+    with st.container(key="decide_slot"):
+        st.html(
+            '<div class="oc-decision oc-food-decision oc-skel-card">'
+            '<div class="oc-food-img oc-skel-shimmer" aria-hidden="true"></div>'
+            '<div class="oc-food-body">'
+            '<div class="oc-skel-bar is-title" style="width:70%"></div>'
+            '<div class="oc-skel-bar" style="width:50%"></div>'
+            '<div class="oc-skel-bar" style="width:40%"></div>'
+            f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
+            "</div></div>"
+        )
 
 
 def _await_decide_with_skeleton(fut, *, fridge_mode: bool, delay_s: float = DECIDE_SKELETON_DELAY_S, timeout_s: float = DECIDE_TIMEOUT_S):
@@ -4748,13 +4792,61 @@ def _await_decide_with_skeleton(fut, *, fridge_mode: bool, delay_s: float = DECI
             raise
 
 
+def _queue_decide_in_slot(
+    *,
+    question: str,
+    domain_hint: str | None,
+    reroll: bool,
+    via_router: bool,
+) -> None:
+    """Leave columns/home chrome — decide runs on a full-width deciding page."""
+    st.session_state["_pending_decide"] = {
+        "question": question,
+        "domain_hint": domain_hint,
+        "reroll": reroll,
+        "via_router": via_router,
+    }
+    st.session_state.page = "deciding"
+    st.rerun()
+
+
+def page_deciding() -> None:
+    """Full-width decision slot — skeleton / decide without home columns or dimmed cards."""
+    render_top_chrome()
+    pending = st.session_state.pop("_pending_decide", None)
+    if not isinstance(pending, dict):
+        st.session_state.page = "home"
+        st.rerun()
+        return
+    st.session_state["_decide_in_slot"] = True
+    run_decision(
+        question=str(pending.get("question") or ""),
+        domain_hint=pending.get("domain_hint"),
+        reroll=bool(pending.get("reroll")),
+        via_router=bool(pending.get("via_router")),
+    )
+
+
 def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_router: bool = False) -> None:
     """
     via_router=True: free-text path — MUST go through handle_free_text (no bypass).
     Domain chips / ambiguous picks use via_router=False with an explicit domain_hint.
+
+    Always hops to page=deciding first so the skeleton/card paints in a full-width
+    slot (never inside home domain st.columns).
     """
     import router as rt
     from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
+    # Escape column contexts (home domain grid) before any skeleton HTML.
+    if not st.session_state.pop("_decide_in_slot", False):
+        _queue_decide_in_slot(
+            question=question,
+            domain_hint=domain_hint,
+            reroll=reroll,
+            via_router=via_router,
+        )
+        return
 
     require_auth_context()
     # Guest mode must never hit Supabase RLS writes
@@ -9262,6 +9354,7 @@ def main() -> None:
         "clothes_occasion": page_clothes_occasion,
         "fridge": page_fridge,
         "shared": page_shared,
+        "deciding": page_deciding,
         "home": page_home,
     }
     page_name = st.session_state.get("page") or "home"
