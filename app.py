@@ -5198,17 +5198,20 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
 
     try:
         # Time-based skeleton for EVERY path: paint only if decide takes >400ms.
-        # Exception: when page_deciding already painted a skeleton to evict an
-        # on-screen card, just wait — do not leave the old card dimmed underneath.
+        # When page_deciding already painted a skeleton to evict an on-screen
+        # card, just wait — do not remount decide_slot (duplicate key).
         already = bool(st.session_state.pop("_decide_skel_painted", False))
         with ThreadPoolExecutor(max_workers=1) as pool:
             fut = pool.submit(_call_decide)
             try:
-                result, _shown = _await_decide_with_skeleton(
-                    fut,
-                    fridge_mode=fridge_mode,
-                    immediate=already,
-                )
+                if already:
+                    result = fut.result(timeout=max(0.05, DECIDE_TIMEOUT_S))
+                    _shown = True
+                else:
+                    result, _shown = _await_decide_with_skeleton(
+                        fut,
+                        fridge_mode=fridge_mode,
+                    )
             except FuturesTimeout:
                 log.warning("decide timed out after %.0fs", DECIDE_TIMEOUT_S)
                 st.session_state.ui_error = True

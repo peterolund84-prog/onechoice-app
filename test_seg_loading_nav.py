@@ -132,7 +132,7 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertIn("body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card)", src)
         self.assertIn("data-oc-deciding", src)
         self.assertIn("_render_decide_evictor", src)
-        self.assertIn("immediate=already", src)
+        self.assertIn("_decide_skel_painted", src)
 
     def test_run_decision_always_uses_time_based_await(self) -> None:
         import app as app_mod
