@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "hotfix-css-every-run-v72-20260722"
+BUILD_ID = "fix-result-crash-cache-v73-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -6227,6 +6227,10 @@ def page_profile() -> None:
             st.caption("AI: ej testad ännu")
     except Exception:
         pass
+    # Owner-only: last soft-recover error (never on the user-facing error card).
+    last_err = st.session_state.get("_last_ui_error")
+    if last_err:
+        st.caption(f"Senaste fel: {last_err}")
     try:
         import subprocess
 

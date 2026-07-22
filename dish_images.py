@@ -312,6 +312,26 @@ def resolve_dish_image_bytes(
         return None
 
 
+def _encode_dish_image_b64(title: str, category_hint: str, root_s: str) -> str | None:
+    """Encode dish bytes → base64. Module-level; str args only (cache-friendly)."""
+    import base64
+
+    r = Path(root_s) if root_s else None
+    hint = category_hint or None
+    raw = resolve_dish_image_bytes(title, hint, root=r)
+    if not raw:
+        return None
+    return base64.b64encode(raw).decode("ascii")
+
+
+try:
+    import streamlit as st
+
+    _cached_dish_image_b64 = st.cache_data(show_spinner=False)(_encode_dish_image_b64)
+except Exception:
+    _cached_dish_image_b64 = None  # type: ignore[assignment]
+
+
 def resolve_dish_image_b64(
     title: str,
     category_hint: str | None = None,
@@ -319,26 +339,15 @@ def resolve_dish_image_b64(
     root: Path | None = None,
 ) -> str | None:
     """Return base64-encoded JPEG for a dish, or None. Cached per process via Streamlit."""
-    import base64
-
-    def _encode(t: str, h: str | None, root_s: str | None) -> str | None:
-        r = Path(root_s) if root_s else None
-        raw = resolve_dish_image_bytes(t, h, root=r)
-        if not raw:
-            return None
-        return base64.b64encode(raw).decode("ascii")
-
-    root_s = str(root) if root is not None else None
-    try:
-        import streamlit as st
-
-        @st.cache_data(show_spinner=False)
-        def _cached(t: str, h: str | None, rs: str | None) -> str | None:
-            return _encode(t, h, rs)
-
-        return _cached(title, category_hint, root_s)
-    except Exception:
-        return _encode(title, category_hint, root_s)
+    root_s = str(root) if root is not None else ""
+    hint_s = str(category_hint) if category_hint is not None else ""
+    cached = _cached_dish_image_b64
+    if cached is not None:
+        try:
+            return cached(title, hint_s, root_s)
+        except Exception:
+            pass
+    return _encode_dish_image_b64(title, hint_s, root_s)
 
 
 def iter_local_pack_titles(*, languages: tuple[str, ...] = ("sv", "en")) -> list[str]:
