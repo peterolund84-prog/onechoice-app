@@ -112,7 +112,7 @@ class PreLockFoodCardUiTests(unittest.TestCase):
                         # Item may appear in title/justification — only fail on list chrome
                         pass
         labels = [b.label or "" for b in at.button]
-        self.assertTrue(any("Gör det" == lab or lab.startswith("Gör det") for lab in labels), labels)
+        self.assertTrue(any(lab == "Välj" or lab.startswith("Välj") for lab in labels), labels)
         self.assertTrue(any("Nytt förslag" in lab for lab in labels), labels)
         self.assertFalse(any("Handla" in lab for lab in labels), labels)
 
@@ -125,11 +125,16 @@ class PreLockFoodCardUiTests(unittest.TestCase):
         at.query_params["domain"] = "food"
         at.run()
         for b in at.button:
-            if (b.label or "") == "Gör det":
+            if (b.label or "") == "Välj":
                 b.click().run()
                 break
         self.assertTrue(at.session_state["accepted"])
         self.assertEqual(at.session_state["page"], "execute")
+        from test_share import _html_blobs
+
+        exec_body = _html_blobs(at)
+        self.assertIn("oc-food-img", exec_body)
+        self.assertIn("data:image/jpeg", exec_body)
         labels = [b.label or "" for b in at.button]
         self.assertFalse(any("Handla" in lab for lab in labels), labels)
         # Back from execute still shows locked card for re-entry
@@ -138,6 +143,8 @@ class PreLockFoodCardUiTests(unittest.TestCase):
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "result")
+        lock_body = _html_blobs(at)
+        self.assertIn("oc-food-img", lock_body)
         labels2 = [b.label or "" for b in at.button]
         self.assertTrue(any("Handla" in lab for lab in labels2), labels2)
 

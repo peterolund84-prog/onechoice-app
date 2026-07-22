@@ -325,7 +325,7 @@ class ShareLandingUiTests(unittest.TestCase):
         mat.click().run()
         self.assertEqual(at.session_state["page"], "result")
         _assert_share_icon(self, at, where="food decision")
-        go = next(b for b in at.button if (b.label or "") == "Gör det")
+        go = next(b for b in at.button if (b.label or "") == "Välj")
         go.click().run()
         self.assertEqual(at.session_state["page"], "execute")
         _assert_share_icon(self, at, where="food execute")
