@@ -150,6 +150,9 @@ class FavoritesAppTest(unittest.TestCase):
                     at.session_state["_auth_cookie_checked"] = True
                     db._SHOPPING_FORCE_SQLITE = True
                     db._ensure_sqlite_user(uid)
+                    # Wipe prior favorites for this uid (shared sqlite across AppTests)
+                    for old in db.list_decisions(uid, favorite=True, limit=200):
+                        db.set_decision_favorite(int(old["id"]), False)
                     row = db.create_decision(
                         user_id=uid,
                         domain="food",
@@ -167,12 +170,14 @@ class FavoritesAppTest(unittest.TestCase):
         self.assertIn(f"hist_open_btn_{rid}", keys)
         self.assertIn(f"hist_fav_btn_history_{rid}", keys)
         # Toggle favorite from history
-        fav_btn = next(b for b in at.button if getattr(b, "key", None) == f"hist_fav_btn_history_{rid}")
+        fav_btn = next(
+            b for b in at.button if getattr(b, "key", None) == f"hist_fav_btn_history_{rid}"
+        )
         fav_btn.click().run()
         self.assertFalse(at.exception)
-        listed = db.list_decisions(uid, favorite=True)
-        self.assertEqual(len(listed), 1)
-        self.assertEqual(listed[0]["suggestion"], "Krämig tomatsås-pasta")
+        hit = db.list_decisions(uid, favorite=True)
+        self.assertTrue(any(int(r["id"]) == rid for r in hit))
+        db.set_decision_favorite(rid, False)
         db._SHOPPING_FORCE_SQLITE = False
 
 
