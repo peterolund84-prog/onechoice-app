@@ -57,9 +57,11 @@ class AuthCookieUnitTests(unittest.TestCase):
 
         ac.begin_script_run()
         set_calls: list[str] = []
+        mounts: list[str] = []
 
         class FakeCM:
             def __init__(self, key: str = "init") -> None:
+                mounts.append(key)
                 self.cookies: dict[str, str] = {}
 
             def set(self, *args, **kwargs) -> None:
@@ -69,10 +71,35 @@ class AuthCookieUnitTests(unittest.TestCase):
             with mock.patch.object(ac, "_paint_cookie_js") as paint:
                 ac.set_auth_cookie("at", "rt", quiet=True)
         self.assertEqual(set_calls, [])
+        # Critical: quiet must not mount oc_auth_cm — home never remounts it
+        # after login, and an orphaned CookieManager becomes the error boundary.
+        self.assertEqual(mounts, [])
+        self.assertIsNone(ac._COOKIE_MANAGER)
         paint.assert_called_once()
         snippet = paint.call_args[0][0]
         self.assertIn("document.cookie", snippet)
         self.assertIn(ac.COOKIE_NAME, snippet)
+
+    def test_quiet_set_updates_existing_manager_without_remount(self) -> None:
+        import auth_cookie as ac
+
+        ac.begin_script_run()
+        mounts: list[str] = []
+
+        class FakeCM:
+            def __init__(self, key: str = "init") -> None:
+                mounts.append(key)
+                self.cookies: dict[str, str] = {}
+
+            def set(self, *args, **kwargs) -> None:
+                pass
+
+        with mock.patch("extra_streamlit_components.CookieManager", FakeCM):
+            manager = ac.get_cookie_manager()
+            with mock.patch.object(ac, "_paint_cookie_js"):
+                ac.set_auth_cookie("at", "rt", quiet=True)
+        self.assertEqual(mounts, [ac.COOKIE_COMPONENT_KEY])
+        self.assertIn(ac.COOKIE_NAME, manager.cookies)
 
     def test_read_auth_cookie_uses_init_cookies_not_get_all(self) -> None:
         import auth_cookie as ac
