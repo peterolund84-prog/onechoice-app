@@ -188,5 +188,51 @@ class AuthUiTests(unittest.TestCase):
         # Global secondary must not force underline on all buttons
         self.assertIn("text-decoration: none !important", css)
 
+
+class ResultCrashCacheFixTests(unittest.TestCase):
+    """Perf-pass crash: no nested/stale authed-client caches; owner sees last UI error."""
+
+    def test_no_authed_client_cache(self) -> None:
+        import inspect
+
+        import supabase_client as sb
+
+        src = inspect.getsource(sb)
+        self.assertNotIn("_cached_authed", src)
+        self.assertNotIn("_AUTHED", src)
+        self.assertIn("set_session", inspect.getsource(sb.restore_session))
+        # Base client cache is module-level (not nested inside get_client)
+        self.assertIn("_cached_base_client", src)
+        nested = [
+            line
+            for line in inspect.getsource(sb.get_client).splitlines()
+            if "@st.cache" in line or "def _cached" in line
+        ]
+        self.assertEqual(nested, [])
+
+    def test_dish_and_llm_caches_are_module_level(self) -> None:
+        import inspect
+
+        import dish_images as dimg
+        import llm_config as lc
+
+        b64_src = inspect.getsource(dimg.resolve_dish_image_b64)
+        self.assertNotIn("@st.cache", b64_src)
+        self.assertNotIn("def _cached(", b64_src)
+        self.assertTrue(hasattr(dimg, "_encode_dish_image_b64"))
+
+        resolve_src = inspect.getsource(lc.resolve_text_model)
+        self.assertNotIn("@st.cache", resolve_src)
+        self.assertNotIn("def _cached(", resolve_src)
+        self.assertTrue(hasattr(lc, "_probe_resolve_text_model"))
+
+    def test_profile_surfaces_last_ui_error(self) -> None:
+        import app as app_mod
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn('st.caption(f"Senaste fel: {last_err}")', src)
+        self.assertIn('st.session_state.get("_last_ui_error")', src)
+
+
 if __name__ == "__main__":
     unittest.main()

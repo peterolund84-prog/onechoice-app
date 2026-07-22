@@ -59,6 +59,36 @@ def _probe(model: str, key: str, *, timeout: int = 3) -> tuple[bool, str]:
         return False, f"error:{exc}"
 
 
+def _probe_resolve_text_model(api_key: str, max_probes: str = "1") -> str:
+    """Module-level probe (str args only). Used by cache_resource + fallback."""
+    failures: list[str] = []
+    n = max(1, int(max_probes or "1"))
+    for cand in CANDIDATE_TEXT_MODELS[:n]:
+        ok, detail = _probe(cand, api_key, timeout=3)
+        if ok:
+            _RESOLVED["model"] = cand
+            DIAGNOSTICS.update(status="ok", model=cand, detail="probed")
+            return cand
+        failures.append(f"{cand}:{detail}")
+    _RESOLVED["model"] = _DEFAULT_TEXT_MODEL
+    DIAGNOSTICS.update(
+        status="probe_partial",
+        model=_DEFAULT_TEXT_MODEL,
+        detail="; ".join(failures)[:400],
+    )
+    return _DEFAULT_TEXT_MODEL
+
+
+try:
+    import streamlit as st
+
+    _cached_resolve_text_model = st.cache_resource(show_spinner=False)(
+        _probe_resolve_text_model
+    )
+except Exception:
+    _cached_resolve_text_model = None  # type: ignore[assignment]
+
+
 def resolve_text_model(api_key: str, *, max_probes: int = 1) -> str:
     """
     Return a WORKING model name: explicit override first, then ONE probe
@@ -77,37 +107,17 @@ def resolve_text_model(api_key: str, *, max_probes: int = 1) -> str:
         DIAGNOSTICS.update(status="no_key", model="", detail="GROK_API_KEY missing/placeholder")
         return _DEFAULT_TEXT_MODEL
 
-    def _resolve(k: str) -> str:
-        failures: list[str] = []
-        for cand in CANDIDATE_TEXT_MODELS[: max(1, int(max_probes))]:
-            ok, detail = _probe(cand, k, timeout=3)
-            if ok:
-                _RESOLVED["model"] = cand
-                DIAGNOSTICS.update(status="ok", model=cand, detail="probed")
-                return cand
-            failures.append(f"{cand}:{detail}")
-        _RESOLVED["model"] = _DEFAULT_TEXT_MODEL
-        DIAGNOSTICS.update(
-            status="probe_partial",
-            model=_DEFAULT_TEXT_MODEL,
-            detail="; ".join(failures)[:400],
-        )
-        return _DEFAULT_TEXT_MODEL
-
-    try:
-        import streamlit as st
-
-        @st.cache_resource(show_spinner=False)
-        def _cached(k: str) -> str:
-            # Mirror into module DIAGNOSTICS/RESOLVED for UI + text_model()
-            return _resolve(k)
-
-        model = _cached(key)
-        if "model" not in _RESOLVED:
-            _RESOLVED["model"] = model
-        return model
-    except Exception:
-        return _resolve(key)
+    n_s = str(max(1, int(max_probes)))
+    cached = _cached_resolve_text_model
+    if cached is not None:
+        try:
+            model = cached(key, n_s)
+            if "model" not in _RESOLVED:
+                _RESOLVED["model"] = model
+            return model
+        except Exception:
+            pass
+    return _probe_resolve_text_model(key, n_s)
 
 
 def _explicit_override() -> str:
