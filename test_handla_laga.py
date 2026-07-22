@@ -216,36 +216,58 @@ class HandlaLagaUiTests(unittest.TestCase):
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "result")
-        # Simulate Cloud leaving context as a string, then return to lock card
+
+        # Fresh AppTest — execute shopping checkboxes ghost the element tree and
+        # KeyError on the next run once page-level Hem was removed from lock card.
         cur = dict(at.session_state["current"] or {})
         ctx = cur.get("context")
         if not isinstance(ctx, dict):
             ctx = _as_dict_safe(ctx)
         cur["context"] = json.dumps(ctx, ensure_ascii=False)
-        at.session_state["current"] = cur
-        at.session_state["accepted"] = True
-        at.session_state["page"] = "result"
-        at.run(timeout=60)
+
+        def _ss(key, default=None):
+            try:
+                return at.session_state[key]
+            except Exception:
+                return default
+
+        seed = {
+            "food_meal_type": "middag",
+            "accepted": True,
+            "page": "result",
+            "current": cur,
+            "user_id": _ss("user_id"),
+            "guest_mode": _ss("guest_mode"),
+            "decision_id": _ss("decision_id"),
+            "_auth_cookie_checked": True,
+            "_oc_cookie_component_ready": True,
+        }
+        at2 = AppTest.from_file("app.py", default_timeout=60)
+        at2.run()
+        for k, v in seed.items():
+            if v is not None:
+                at2.session_state[k] = v
+        at2.run(timeout=60)
         last = None
         try:
-            last = at.session_state["_last_ui_error"]
+            last = at2.session_state["_last_ui_error"]
         except Exception:
             last = None
-        self.assertFalse(bool(at.session_state["ui_error"]), last)
-        self.assertEqual(at.session_state["page"], "result")
-        labels = [b.label or "" for b in at.button]
+        self.assertFalse(bool(at2.session_state["ui_error"]), last)
+        self.assertEqual(at2.session_state["page"], "result")
+        labels = [b.label or "" for b in at2.button]
         self.assertTrue(any("Handla" in lab for lab in labels), labels)
         # Handla again from lock card
-        for b in at.button:
+        for b in at2.button:
             if b.label and "Handla" in b.label:
                 b.click().run()
                 break
         try:
-            last = at.session_state["_last_ui_error"]
+            last = at2.session_state["_last_ui_error"]
         except Exception:
             last = None
-        self.assertFalse(bool(at.session_state["ui_error"]), last)
-        self.assertEqual(at.session_state["page"], "execute")
+        self.assertFalse(bool(at2.session_state["ui_error"]), last)
+        self.assertEqual(at2.session_state["page"], "execute")
 
 
 def _as_dict_safe(value):  # noqa: ANN001
