@@ -311,34 +311,17 @@ def meal_candidates(
         out: list[dict[str, Any]] = []
         if recent_dinner:
             out.append(leftover_meal_candidate(recent_dinner, "lunch", language))
-        out.extend(
-            [
-            {
-                "suggestion": "Äggmacka och kaffe" if sv else "Egg sandwich and coffee",
-                "justification": (
-                    "Snabbt vardagslunch — klart på några minuter."
-                    if sv
-                    else "Fast weekday lunch — done in minutes."
-                ),
-                "meta": {
-                    "meal_type": "lunch",
-                    "active_minutes": 8,
-                    "ingredients": ["ägg", "bröd", "smör"],
-                },
-            },
-            {
-                "suggestion": "Sallad med tonfisk" if sv else "Tuna salad",
-                "justification": (
-                    "Lätt lunch — burk och grönt du har hemma."
-                    if sv
-                    else "Light lunch — pantry tuna and greens."
-                ),
-                "meta": {
-                    "meal_type": "lunch",
-                    "active_minutes": 10,
-                    "ingredients": ["tonfisk", "sallad", "gurka", "olja", "salt", "peppar"],
-                },
-            },
+        import food_local_packs as flp
+
+        # Skip "Lunch nära dig" duplicate if we already have eating_out elsewhere
+        for row in flp.lunch_pack(language):
+            meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+            if meta.get("eating_out") or (meta.get("dish_category") == "other" and not meta.get("ingredients")):
+                # Keep map option once at end
+                continue
+            out.append(row)
+        # Always offer eating-out as last pin
+        out.append(
             {
                 "suggestion": "Lunch nära dig" if sv else "Lunch nearby",
                 "justification": (
@@ -350,9 +333,9 @@ def meal_candidates(
                     "meal_type": "lunch",
                     "eating_out": True,
                     "active_minutes": 0,
+                    "dish_category": "other",
                 },
-            },
-        ]
+            }
         )
         return out
     if meal_type == "kvallsmal":

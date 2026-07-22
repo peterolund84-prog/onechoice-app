@@ -37,7 +37,8 @@ create table if not exists public.decisions (
   status text not null check (status in ('shown', 'rejected', 'accepted', 'locked')),
   reroll_index int not null default 0,
   context jsonb not null default '{}'::jsonb,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  favorite boolean not null default false
 );
 
 create index if not exists idx_decisions_user_domain
@@ -45,6 +46,10 @@ create index if not exists idx_decisions_user_domain
 
 create index if not exists idx_decisions_user_status
   on public.decisions (user_id, status, created_at desc);
+
+create index if not exists idx_decisions_user_favorite
+  on public.decisions (user_id, created_at desc)
+  where favorite = true;
 
 -- ---------------------------------------------------------------------------
 -- Preferences (learned from accepts / rejects)

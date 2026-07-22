@@ -63,10 +63,40 @@ class FastFoodDecideTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp.cleanup()
 
-    def test_mat_chip_skips_grok_on_first_decide(self) -> None:
+    def test_mat_chip_skips_grok_on_first_frukost(self) -> None:
         with mock.patch.object(pipeline, "_grok_candidates") as grok:
-            grok.side_effect = AssertionError("Grok must not run on first Mat chip")
+            grok.side_effect = AssertionError("Grok must not run on first frukost")
             t0 = time.perf_counter()
+            r = pipeline.decide(
+                self.user["id"],
+                "Vad ska jag äta?",
+                domain_hint="food",
+                language="sv",
+                db_path=self.db_path,
+                grok_api_key="xai-fake-key-for-test-12345",
+                context_extra={"meal_type": "frukost"},
+            )
+            elapsed = time.perf_counter() - t0
+        self.assertTrue(r.ok)
+        self.assertTrue(r.suggestion)
+        grok.assert_not_called()
+        self.assertLess(elapsed, 2.0, f"local food decide took {elapsed:.2f}s")
+
+    def test_middag_first_decide_calls_grok(self) -> None:
+        called = {"n": 0}
+
+        def fake_grok(*_a, **_k):  # noqa: ANN001
+            called["n"] += 1
+            return [
+                {
+                    "suggestion": "Kycklingwok med ris",
+                    "justification": "Snabb wok.",
+                    "wildcard": False,
+                    "meta": {"meal_type": "middag", "ingredients": ["kycklingfilé", "ris"]},
+                }
+            ] * 3
+
+        with mock.patch.object(pipeline, "_grok_candidates", side_effect=fake_grok):
             r = pipeline.decide(
                 self.user["id"],
                 "Vad ska jag äta?",
@@ -76,11 +106,8 @@ class FastFoodDecideTests(unittest.TestCase):
                 grok_api_key="xai-fake-key-for-test-12345",
                 context_extra={"meal_type": "middag"},
             )
-            elapsed = time.perf_counter() - t0
         self.assertTrue(r.ok)
-        self.assertTrue(r.suggestion)
-        grok.assert_not_called()
-        self.assertLess(elapsed, 2.0, f"local food decide took {elapsed:.2f}s")
+        self.assertEqual(called["n"], 1)
 
     def test_reroll_may_call_grok(self) -> None:
         called = {"n": 0}
