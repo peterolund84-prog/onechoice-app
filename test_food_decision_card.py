@@ -49,10 +49,14 @@ class DishCategoryTests(unittest.TestCase):
         self.assertEqual(fcat.dish_image_path("linser").name, "linser.jpg")
 
     def test_image_path_never_broken(self) -> None:
-        for cat in ("pasta", "generic", "not-a-real-category"):
-            path = fcat.dish_image_path(cat)
-            self.assertTrue(path.is_file(), path)
-            self.assertLessEqual(path.stat().st_size, 120_000, path.name)
+        path = fcat.dish_image_path("pasta")
+        self.assertTrue(path.is_file(), path)
+        self.assertLessEqual(path.stat().st_size, 120_000, path.name)
+        # generic / unknown → no invented photo (file may be absent)
+        gen = fcat.dish_image_path("generic")
+        self.assertFalse(gen.is_file())
+        self.assertIsNone(fcat.dish_image_bytes("generic"))
+        self.assertIsNone(fcat.dish_image_bytes("not-a-real-category"))
 
     def test_pipeline_stamps_dish_category(self) -> None:
         tmp = tempfile.TemporaryDirectory()

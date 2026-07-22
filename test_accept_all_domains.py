@@ -199,7 +199,7 @@ class AppAcceptUiTests(unittest.TestCase):
         )
         self.assertIsNotNone(meal_pills, [list(p.options) for p in at.pills])
         opts = list(meal_pills.options)
-        for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
+        for needle in ("Frukost", "Lunch", "Middag", "Kväll"):
             self.assertIn(needle, opts)
         meal_pills.select("Lunch").run()
         self.assertFalse(at.exception)
