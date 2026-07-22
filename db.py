@@ -168,6 +168,7 @@ def init_db(path: Path | str | None = None) -> None:
                 context_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 execution_opened_at TEXT,
+                favorite INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
@@ -249,6 +250,17 @@ def init_db(path: Path | str | None = None) -> None:
         }
         if "execution_opened_at" not in dec_cols:
             conn.execute("ALTER TABLE decisions ADD COLUMN execution_opened_at TEXT")
+        if "favorite" not in dec_cols:
+            conn.execute(
+                "ALTER TABLE decisions ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0"
+            )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_decisions_user_favorite
+                ON decisions(user_id, created_at DESC)
+                WHERE favorite = 1
+            """
+        )
         # Ensure routed_queries exists on older DBs (executescript IF NOT EXISTS covers new)
         conn.execute(
             """
@@ -702,6 +714,7 @@ def list_decisions(
     *,
     domain: str | None = None,
     status: str | None = None,
+    favorite: bool | None = None,
     limit: int = 50,
     path: Path | str | None = None,
 ) -> list[dict[str, Any]]:
@@ -710,7 +723,13 @@ def list_decisions(
 
         at, rt = _tokens()
         return store.list_decisions(
-            user_id, at, rt, domain=domain, status=status, limit=limit
+            user_id,
+            at,
+            rt,
+            domain=domain,
+            status=status,
+            favorite=favorite,
+            limit=limit,
         )
     sql = "SELECT * FROM decisions WHERE user_id = ?"
     params: list[Any] = [user_id]
@@ -720,11 +739,62 @@ def list_decisions(
     if status:
         sql += " AND status = ?"
         params.append(status)
+    if favorite is True:
+        sql += " AND favorite = 1"
+    elif favorite is False:
+        sql += " AND favorite = 0"
     sql += " ORDER BY created_at DESC, id DESC LIMIT ?"
     params.append(limit)
     with get_conn(path) as conn:
         rows = conn.execute(sql, params).fetchall()
         return [_decision_row(r) for r in rows]
+
+
+def set_decision_favorite(
+    decision_id: int,
+    favorite: bool,
+    *,
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Toggle Mina favoriter flag on a decision row."""
+    flag = 1 if favorite else 0
+    if _use_supabase(path):
+        import supabase_store as store
+
+        at, rt = _tokens()
+        return store.set_decision_favorite(decision_id, bool(favorite), at, rt)
+    with get_conn(path) as conn:
+        conn.execute(
+            "UPDATE decisions SET favorite = ? WHERE id = ?",
+            (flag, decision_id),
+        )
+        row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+        if not row:
+            raise KeyError(f"decision {decision_id} not found")
+        return _decision_row(row)
+
+
+def list_favorite_suggestions(
+    user_id: str,
+    *,
+    domain: str | None = None,
+    path: Path | str | None = None,
+) -> list[str]:
+    """Suggestion titles marked favorite — used as a small ranking bonus."""
+    rows = list_decisions(
+        user_id, domain=domain, favorite=True, limit=100, path=path
+    )
+    out: list[str] = []
+    seen: set[str] = set()
+    for r in rows:
+        title = str(r.get("suggestion") or "").strip()
+        key = title.lower()
+        if title and key not in seen:
+            seen.add(key)
+            out.append(title)
+    return out
 
 
 def recent_cooked_dinner(
@@ -837,6 +907,8 @@ def upsert_preference(
     *,
     path: Path | str | None = None,
 ) -> dict[str, Any]:
+    # Ranking clamp — accepts must never accumulate past ±bounds
+    pref_min, pref_max = -2.0, 3.0
     if _use_supabase(path):
         import supabase_store as store
 
@@ -846,16 +918,34 @@ def upsert_preference(
         )
     now = utc_now()
     with get_conn(path) as conn:
-        conn.execute(
+        existing = conn.execute(
             """
-            INSERT INTO preferences (user_id, domain, key, value, score, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, domain, key, value) DO UPDATE SET
-                score = score + excluded.score,
-                updated_at = excluded.updated_at
+            SELECT score FROM preferences
+            WHERE user_id = ? AND domain = ? AND key = ? AND value = ?
             """,
-            (user_id, domain, key, value, delta, now),
-        )
+            (user_id, domain, key, value),
+        ).fetchone()
+        if existing:
+            new_score = max(
+                pref_min, min(pref_max, float(existing["score"] or 0) + float(delta))
+            )
+            conn.execute(
+                """
+                UPDATE preferences
+                SET score = ?, updated_at = ?
+                WHERE user_id = ? AND domain = ? AND key = ? AND value = ?
+                """,
+                (new_score, now, user_id, domain, key, value),
+            )
+        else:
+            new_score = max(pref_min, min(pref_max, float(delta)))
+            conn.execute(
+                """
+                INSERT INTO preferences (user_id, domain, key, value, score, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, domain, key, value, new_score, now),
+            )
         row = conn.execute(
             """
             SELECT * FROM preferences
@@ -980,6 +1070,7 @@ def _decision_row(row: sqlite3.Row) -> dict[str, Any]:
         d["context"] = json.loads(d.get("context_json") or "{}")
     except json.JSONDecodeError:
         d["context"] = {}
+    d["favorite"] = bool(d.get("favorite"))
     return d
 
 

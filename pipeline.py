@@ -36,6 +36,10 @@ log = logging.getLogger("onechoice.pipeline")
 MAX_REROLLS = 3
 REPEAT_DAYS = 7
 SAFE_RATIO = 0.80  # bandit: 80% safe / 20% explore (wildcard)
+PREF_SCORE_MIN = -2.0
+PREF_SCORE_MAX = 3.0
+PREF_DECAY_HALF_LIFE_DAYS = 30.0
+FAVORITE_RANK_BONUS = 1.0
 
 ALLOWED_DOMAINS = db.DOMAINS  # food, clothes, movie, workout, weekend
 
@@ -326,14 +330,21 @@ def decide(
     )
 
     explore = (not locked) and (random.random() > SAFE_RATIO)
-    # Fast path: Mat chip / first food decide uses local packs (instant).
-    # Grok only on reroll, fridge mode, or non-food domains — cuts ~5–18s.
+    # Fast path ONLY for habit meals (frukost/kvällsmål) — lunch & middag
+    # always consult the LLM so variety is not starved by the tiny local pack.
     food_local_first = (
         domain == "food"
         and not fridge_mode
         and not reroll
         and effective_reroll == 0
+        and meal_type in ("frukost", "kvallsmal")
     )
+    fav_titles: list[str] = []
+    if domain == "food":
+        try:
+            fav_titles = db.list_favorite_suggestions(user_id, domain="food", path=db_path)
+        except Exception as exc:
+            log.warning("list_favorite_suggestions failed: %s", exc)
     candidates = _generate_candidates(
         question=q,
         domain=domain,
@@ -548,6 +559,7 @@ def decide(
         preferences=prefs,
         recent=recent,
         explore=explore,
+        favorite_suggestions=fav_titles,
     )
     top = ranked[0] if ranked else survivors[0]
     prev_suggestion = str((context_extra or {}).get("previous_suggestion") or "").strip()
@@ -1612,7 +1624,11 @@ def _local_candidates(
     packs = packs_sv if language == "sv" else packs_en
     # Near-domain: bias pack by category_guess when present
     cat = str((context or {}).get("category_guess") or "").lower()
-    if domain == "workout":
+    if domain == "food":
+        import food_local_packs as flp
+
+        items = flp.dinner_pack(language)
+    elif domain == "workout":
         import workout_domain as wd
 
         items = wd.local_candidates(language)
@@ -1653,6 +1669,7 @@ def _local_candidates(
         import food_categories as fcat
 
         pool = fcat.stamp_dish_categories(pool)
+        return pool[:20]
     return pool[:5]
 
 
@@ -1774,34 +1791,71 @@ def _near_domain_pack(category: str, language: str) -> list[dict[str, Any]]:
     ]
 
 
+def _effective_pref_score(score: float, updated_at: Any = None) -> float:
+    """Clamp to [−2, +3] and half life every 30 days since last update."""
+    clamped = max(PREF_SCORE_MIN, min(PREF_SCORE_MAX, float(score or 0.0)))
+    if not updated_at:
+        return clamped
+    try:
+        from datetime import timezone
+
+        ts = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        now = datetime.now(timezone.utc)
+        age_days = max(0.0, (now - ts.astimezone(timezone.utc)).total_seconds() / 86400.0)
+    except (TypeError, ValueError):
+        return clamped
+    return clamped * (0.5 ** (age_days / PREF_DECAY_HALF_LIFE_DAYS))
+
+
 def _rank_candidates(
     candidates: list[dict[str, Any]],
     *,
     preferences: list[dict[str, Any]],
     recent: list[str],
     explore: bool,
+    favorite_suggestions: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
     recent_l = {str(r).strip().lower() for r in recent if r}
-    pref_map = {
-        (p.get("value") or "").strip().lower(): float(p.get("score") or 0)
-        for p in preferences
-        if p.get("key") == "suggestion"
-    }
+    fav_l = {str(r).strip().lower() for r in (favorite_suggestions or []) if r}
+    # A1: hard-exclude recent; soft −5 only if exclusion would empty the pool
+    non_recent = [
+        c
+        for c in candidates
+        if str(c.get("suggestion") or "").strip().lower() not in recent_l
+    ]
+    pool = non_recent if non_recent else list(candidates)
+    soft_recent = not bool(non_recent)
+
+    pref_map: dict[str, float] = {}
+    for p in preferences:
+        if p.get("key") != "suggestion":
+            continue
+        val = (p.get("value") or "").strip().lower()
+        if not val:
+            continue
+        pref_map[val] = _effective_pref_score(
+            float(p.get("score") or 0), p.get("updated_at")
+        )
 
     scored: list[tuple[float, dict[str, Any]]] = []
-    for c in candidates:
+    for c in pool:
         key = str(c.get("suggestion") or "").strip().lower()
         if not key:
             continue
-        score = float(pref_map.get(key, 0.0))
-        if key in recent_l:
-            score -= 5.0
+        base = float(pref_map.get(key, 0.0))
         for pref_val, pref_score in pref_map.items():
-            if pref_val and pref_val in key:
-                score += float(pref_score) * 0.25
-        # Safe bias: non-wildcards rank slightly higher unless exploring
+            if pref_val and pref_val != key and pref_val in key:
+                base += float(pref_score) * 0.25
+        if key in fav_l:
+            base += FAVORITE_RANK_BONUS
+        # Cap so favorites/prefs win ties — never override variety guard
+        score = max(PREF_SCORE_MIN, min(PREF_SCORE_MAX, base))
+        if soft_recent and key in recent_l:
+            score -= 5.0
         if c.get("wildcard"):
             score -= 0.15
         scored.append((score, c))

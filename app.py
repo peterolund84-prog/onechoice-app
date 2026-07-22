@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "nav-home-chooser-v47-20260722"
+BUILD_ID = "food-variation-favorites-v48-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -188,6 +188,13 @@ I18N = {
         "list_open_history": "Se dina beslut",
         "history_open": "Öppna",
         "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
+        "history_seg_favorites": "Favoriter",
+        "history_seg_history": "Historik",
+        "history_favorites_empty": "Inga favoriter ännu — tryck hjärtat på en rätt.",
+        "favorite_add": "Spara som favorit",
+        "favorite_remove": "Ta bort favorit",
+        "cook_tonight": "Laga ikväll",
+        "deciding": "Bestämmer…",
         "history_status_shown": "Visat",
         "history_status_accepted": "Genomfört",
         "history_status_rejected": "Avböjt",
@@ -356,6 +363,13 @@ I18N = {
         "list_open_history": "See your decisions",
         "history_open": "Open",
         "history_hint": "Decisions you took — open for recipe and list.",
+        "history_seg_favorites": "Favorites",
+        "history_seg_history": "History",
+        "history_favorites_empty": "No favorites yet — tap the heart on a dish.",
+        "favorite_add": "Save favorite",
+        "favorite_remove": "Remove favorite",
+        "cook_tonight": "Cook tonight",
+        "deciding": "Deciding…",
         "history_status_shown": "Shown",
         "history_status_accepted": "Done",
         "history_status_rejected": "Rejected",
@@ -1593,6 +1607,72 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     top: 8px;
     right: 8px;
     z-index: 4;
+}}
+.st-key-exec_food_host {{
+    position: relative !important;
+}}
+.st-key-exec_fav_corner {{
+    position: absolute !important;
+    top: 8px !important;
+    left: 8px !important;
+    z-index: 5 !important;
+    width: 40px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+.st-key-exec_fav_corner div.stButton > button,
+.st-key-exec_fav_corner button {{
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 12px !important;
+    background-color: rgba(255, 255, 255, 0.92) !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5c57' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 20px 20px !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}}
+.st-key-exec_fav_corner[data-fav="1"] div.stButton > button,
+.st-key-exec_fav_corner[data-fav="1"] button,
+.st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231a1a1a' stroke='%231a1a1a' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+}}
+.st-key-hist_seg {{
+    margin: 0 0 12px !important;
+}}
+.oc-fav-card {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--oc-border);
+}}
+.oc-fav-card img {{
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 10px;
+    flex: 0 0 56px;
+}}
+.oc-fav-card .oc-fav-meta {{
+    flex: 1;
+    min-width: 0;
+}}
+.oc-fav-card .oc-fav-meta strong {{
+    display: block;
+    font-size: 1rem;
+    color: var(--oc-ink);
+}}
+.oc-fav-card .oc-fav-meta span {{
+    font-size: 0.85rem;
+    color: var(--oc-muted);
 }}
 .oc-share-icon-btn {{
     width: 40px;
@@ -4211,7 +4291,9 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         )
 
     try:
-        with st.spinner(t("loading")):
+        meal = str(st.session_state.get("food_meal_type") or "")
+        spin = t("deciding") if meal in ("lunch", "middag") else t("loading")
+        with st.spinner(spin):
             if via_router and not reroll:
                 result = pipeline.handle_free_text(
                     str(st.session_state.user_id),
@@ -4853,6 +4935,7 @@ def _restore_decision_from_row(row: dict[str, Any]) -> None:
         "ui_message": None,
         "needs_domain_pick": False,
         "accepted": accepted,
+        "favorite": bool(row.get("favorite")),
     }
     st.session_state.current = cur
     st.session_state.decision_id = row.get("id")
@@ -4917,6 +5000,108 @@ def on_accept_primary(cur: dict[str, Any]) -> None:
 def accept_and_open_execute(cur: dict[str, Any]) -> None:
     """Handla & laga / Starta passet → execute view (navigate first)."""
     open_execute_now(cur)
+
+
+def _toggle_decision_favorite(decision_id: int) -> None:
+    cur = st.session_state.get("current")
+    if not isinstance(cur, dict):
+        cur = {}
+    want = not bool(cur.get("favorite"))
+    try:
+        row = db.set_decision_favorite(int(decision_id), want)
+        cur["favorite"] = bool(row.get("favorite"))
+        st.session_state.current = cur
+    except Exception as exc:
+        log.warning("favorite toggle failed: %s", exc)
+
+
+def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> None:
+    if not decision_id:
+        return
+    # Marker class for filled heart CSS (Streamlit keys can't be dynamic for CSS)
+    marker = "oc-fav-on" if is_favorite else "oc-fav-off"
+    st.markdown(
+        f'<div class="{marker}" aria-hidden="true"></div>',
+        unsafe_allow_html=True,
+    )
+    with st.container(key="exec_fav_corner"):
+        label = t("favorite_remove") if is_favorite else t("favorite_add")
+        if st.button(
+            label,
+            key=f"fav_toggle_{int(decision_id)}",
+            use_container_width=True,
+            type="secondary",
+        ):
+            _toggle_decision_favorite(int(decision_id))
+            st.rerun()
+
+
+def _cook_favorite_tonight(row: dict[str, Any]) -> None:
+    """Seed a new accepted decision from a favorited recipe and open execute."""
+    uid = str(st.session_state.get("user_id") or "")
+    if not uid:
+        return
+    ctx = row.get("context")
+    if not isinstance(ctx, dict):
+        ctx = _as_dict(ctx) or {}
+    ctx = dict(ctx)
+    ctx["from_favorite"] = True
+    ctx["favorite_source_id"] = row.get("id")
+    try:
+        new_row = db.create_decision(
+            user_id=uid,
+            domain=str(row.get("domain") or "food"),
+            question=str(row.get("question") or t("cook_tonight")),
+            suggestion=str(row.get("suggestion") or ""),
+            justification=str(row.get("justification") or ""),
+            status="accepted",
+            reroll_index=0,
+            context=ctx,
+            execution_type=row.get("execution_type"),
+            execution_label=row.get("execution_label"),
+            execution_url=row.get("execution_url"),
+        )
+    except Exception as exc:
+        log.warning("cook tonight create failed: %s", exc)
+        return
+    _restore_decision_from_row(new_row)
+    st.rerun()
+
+
+def _favorite_card_html(row: dict[str, Any], language: str) -> str:
+    import base64
+
+    import food_categories as fcat
+
+    suggestion = str(row.get("suggestion") or "")
+    ctx = row.get("context") if isinstance(row.get("context"), dict) else {}
+    cat = fcat.infer_dish_category(
+        suggestion,
+        meta={**(ctx or {}), "dish_category": (ctx or {}).get("dish_category")},
+    )
+    img = ""
+    raw = fcat.dish_image_bytes(cat)
+    if raw:
+        b64 = base64.b64encode(raw).decode("ascii")
+        img = f'<img src="data:image/jpeg;base64,{b64}" alt=""/>'
+    mins = None
+    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
+    if recipe and recipe.get("active_minutes") is not None:
+        try:
+            mins = int(recipe["active_minutes"])
+        except (TypeError, ValueError):
+            mins = None
+    if mins is None and ctx.get("max_active_minutes") is not None:
+        try:
+            mins = int(ctx["max_active_minutes"])
+        except (TypeError, ValueError):
+            mins = None
+    meta = t("recipe_mins").format(mins=mins) if mins else ""
+    return (
+        f'<div class="oc-fav-card">{img}'
+        f'<div class="oc-fav-meta"><strong>{html.escape(suggestion)}</strong>'
+        f'<span>{html.escape(meta)}</span></div></div>'
+    )
 
 
 def raise_ui_error(where: str, exc: BaseException | None = None) -> None:
@@ -7043,19 +7228,34 @@ def page_execute() -> None:
     suggestion = str(cur.get("suggestion") or "")
     justification = str(cur.get("justification") or "")
     share_corner = _safe_decision_share_button_html(cur, key="share_execute")
-    # Same dish image as pre-lock card — not a title-only stub
-    _paint_html(
-        _render_food_card_html(
-            language=language,
-            suggestion=suggestion,
-            justification=justification,
-            ctx=ctx,
-            lock_label_html=(
-                f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
-            ),
-            share_corner_html=share_corner,
+    did = cur.get("decision_id") or st.session_state.get("decision_id")
+    is_fav = bool(cur.get("favorite"))
+    if did and not is_fav:
+        # Heal favorite flag from DB if session was restored without it
+        try:
+            rows = db.list_decisions(
+                str(st.session_state.user_id), favorite=True, limit=80
+            )
+            is_fav = any(int(r.get("id") or 0) == int(did) for r in rows)
+            cur["favorite"] = is_fav
+            st.session_state.current = cur
+        except Exception:
+            pass
+    with st.container(key="exec_food_host"):
+        _render_favorite_toggle(int(did) if did else None, is_favorite=is_fav)
+        # Same dish image as pre-lock card — not a title-only stub
+        _paint_html(
+            _render_food_card_html(
+                language=language,
+                suggestion=suggestion,
+                justification=justification,
+                ctx=ctx,
+                lock_label_html=(
+                    f'<div class="oc-lock">{html.escape(t("locked_label"))}</div>'
+                ),
+                share_corner_html=share_corner,
+            )
         )
-    )
 
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
     # Cloud/Supabase may leave recipe as a JSON string — heal before use
@@ -7394,6 +7594,53 @@ def page_history() -> None:
         f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("history_title"))}</p>',
         unsafe_allow_html=True,
     )
+    fav_label = t("history_seg_favorites")
+    hist_label = t("history_seg_history")
+    with st.container(key="hist_seg"):
+        seg = st.pills(
+            "hist_seg",
+            options=[fav_label, hist_label],
+            selection_mode="single",
+            default=hist_label,
+            label_visibility="collapsed",
+            key="history_segment",
+        )
+    show_favs = seg == fav_label
+
+    if show_favs:
+        rows = db.list_decisions(
+            st.session_state.user_id, favorite=True, limit=40
+        )
+        if not rows:
+            st.info(t("history_favorites_empty"))
+        else:
+            for r in rows:
+                rid = r.get("id")
+                st.markdown(
+                    _favorite_card_html(r, st.session_state.get("language", "sv")),
+                    unsafe_allow_html=True,
+                )
+                cols = st.columns(2, gap="small")
+                with cols[0]:
+                    if rid is not None and st.button(
+                        t("history_open"),
+                        key=f"fav_open_{rid}",
+                        use_container_width=True,
+                        type="secondary",
+                    ):
+                        _restore_decision_from_row(r)
+                        st.rerun()
+                with cols[1]:
+                    if rid is not None and st.button(
+                        t("cook_tonight"),
+                        key=f"fav_cook_{rid}",
+                        use_container_width=True,
+                        type="primary",
+                    ):
+                        _cook_favorite_tonight(r)
+        nav()
+        return
+
     st.markdown(
         f'<p class="oc-meta">{html.escape(t("history_hint"))}</p>',
         unsafe_allow_html=True,

@@ -197,6 +197,7 @@ def list_decisions(
     *,
     domain: str | None = None,
     status: str | None = None,
+    favorite: bool | None = None,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     client = _client(access_token, refresh_token)
@@ -205,6 +206,10 @@ def list_decisions(
         q = q.eq("domain", domain)
     if status:
         q = q.eq("status", status)
+    if favorite is True:
+        q = q.eq("favorite", True)
+    elif favorite is False:
+        q = q.eq("favorite", False)
     res = q.order("created_at", desc=True).limit(limit).execute()
     return [_decision_row(r) for r in (res.data or [])]
 
@@ -253,9 +258,12 @@ def upsert_preference(
     )
     rows = existing.data or []
     now = _utc_now()
+    pref_min, pref_max = -2.0, 3.0
     if rows:
         row = rows[0]
-        new_score = float(row.get("score") or 0) + float(delta)
+        new_score = max(
+            pref_min, min(pref_max, float(row.get("score") or 0) + float(delta))
+        )
         client.table("preferences").update(
             {"score": new_score, "updated_at": now}
         ).eq("id", row["id"]).execute()
@@ -273,7 +281,7 @@ def upsert_preference(
         "domain": domain,
         "key": key,
         "value": value,
-        "score": float(delta),
+        "score": max(pref_min, min(pref_max, float(delta))),
         "updated_at": now,
     }
     res = client.table("preferences").insert(payload).execute()
@@ -338,7 +346,31 @@ def _decision_row(row: dict[str, Any]) -> dict[str, Any]:
     elif ctx is None:
         d["context"] = {}
     d["context_json"] = json.dumps(d.get("context") or {}, ensure_ascii=False)
+    d["favorite"] = bool(d.get("favorite"))
     return d
+
+
+def set_decision_favorite(
+    decision_id: int,
+    favorite: bool,
+    access_token: str,
+    refresh_token: str,
+) -> dict[str, Any]:
+    client = _client(access_token, refresh_token)
+    client.table("decisions").update({"favorite": bool(favorite)}).eq(
+        "id", decision_id
+    ).execute()
+    res = (
+        client.table("decisions")
+        .select("*")
+        .eq("id", decision_id)
+        .limit(1)
+        .execute()
+    )
+    rows = res.data or []
+    if not rows:
+        raise KeyError(f"decision {decision_id} not found")
+    return _decision_row(rows[0])
 
 
 def log_routed_query(
