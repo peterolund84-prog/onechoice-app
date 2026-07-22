@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "perf-pass-v71-20260722"
+BUILD_ID = "hotfix-css-every-run-v72-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -813,42 +813,17 @@ def _dynamic_css_block() -> str:
 
 
 def inject_css() -> None:
-    """Inject cached styles.css once per session; tiny dynamic block every run."""
-    import json as _json
+    """Emit full stylesheet every rerun (Streamlit drops un-emitted nodes).
 
+    read_css() is @st.cache_data — file read is cached; injection is not.
+    """
     dyn = _dynamic_css_block()
-    # Small dynamic block every rerun (Streamlit-managed; tokens may change).
-    st.markdown(f'<style id="oc-dyn-css">{dyn}</style>', unsafe_allow_html=True)
-
-    if st.session_state.get("_oc_css_injected"):
-        return
     css = read_css()
-    # Emit once via markdown (AppTest scrapes this on first run).
-    st.markdown(f'<style id="oc-app-css">{css}</style>', unsafe_allow_html=True)
-    # Also plant into parent <head> so browser keeps CSS after Streamlit
-    # drops the markdown node on later reruns (no ~110 KB re-ship).
-    payload = _json.dumps(css)
-    boot = (
-        "<script>(function(){"
-        "var d=document;"
-        "try{if(window.parent&&window.parent.document)d=window.parent.document;}catch(e){}"
-        "if(d.getElementById('oc-app-css-head'))return;"
-        "var s=d.createElement('style');"
-        "s.id='oc-app-css-head';"
-        "s.textContent=" + payload + ";"
-        "d.head.appendChild(s);"
-        "})();</script>"
+    st.markdown(
+        f'<style id="oc-dyn-css">{dyn}</style>\n'
+        f'<style id="oc-app-css">{css}</style>',
+        unsafe_allow_html=True,
     )
-    try:
-        st.html(boot, unsafe_allow_javascript=True)
-    except TypeError:
-        try:
-            st.html(boot)
-        except Exception:
-            pass
-    except Exception:
-        pass
-    st.session_state._oc_css_injected = True
 
 
 
