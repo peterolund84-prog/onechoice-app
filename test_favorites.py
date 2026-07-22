@@ -177,10 +177,13 @@ class FavoritesAppTest(unittest.TestCase):
         ]
         self.assertTrue(open_labels)
         self.assertNotIn("Öppna", open_labels[0])
-        # Toggle favorite from history
+        # Toggle favorite from history — label is glyph-only (ZWSP); help holds copy
         fav_btn = next(
             b for b in at.button if getattr(b, "key", None) == f"hist_fav_btn_history_{rid}"
         )
+        fav_label = str(getattr(fav_btn, "label", "") or "")
+        self.assertNotIn("favorit", fav_label.lower())
+        self.assertNotIn("Ta bort", fav_label)
         fav_btn.click().run()
         self.assertFalse(at.exception)
         hit = db.list_decisions(uid, favorite=True)

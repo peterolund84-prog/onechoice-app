@@ -97,6 +97,76 @@ class IconButtonCssTests(unittest.TestCase):
         # Heart chrome stripped via Streamlit key wrappers
         self.assertIn("st-key-hist_fav_", src)
         self.assertIn("st-key-exec_fav_corner", src)
+        # Labels visually hidden — glyph only
+        self.assertIn("text-indent: -9999px", src)
+
+
+class HistoryRowPolishTests(unittest.TestCase):
+    def test_row_thumb_and_inset_separator_css(self) -> None:
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn(".oc-row-thumb", src)
+        self.assertIn("box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06)", src)
+        self.assertIn("padding: 4px 16px", src)
+        self.assertIn("left: calc(44px + 12px)", src)
+        self.assertIn("font-size: 16px", src)
+        self.assertIn(".oc-row-thumb-ph", src)
+        # No plate background on photo thumb
+        self.assertNotIn(".oc-hist-thumb", src)
+
+    def test_generic_uses_tonal_placeholder_not_photo(self) -> None:
+        html = app_mod._hist_thumb_html(
+            {"domain": "food", "suggestion": "Något okänt", "context": {}}
+        )
+        self.assertIn("oc-row-thumb-ph", html)
+        self.assertNotIn("data:image/jpeg", html)
+
+        html_movie = app_mod._hist_thumb_html(
+            {"domain": "movie", "suggestion": "Inception", "context": {}}
+        )
+        self.assertIn("oc-row-thumb-ph", html_movie)
+
+    def test_known_category_uses_photo_thumb(self) -> None:
+        html = app_mod._hist_thumb_html(
+            {
+                "domain": "food",
+                "suggestion": "Pasta pesto",
+                "context": {"dish_category": "pasta"},
+            }
+        )
+        self.assertIn('class="oc-row-thumb"', html)
+        self.assertIn("data:image/jpeg", html)
+        self.assertNotIn("oc-row-thumb-ph", html)
+
+    def test_dish_assets_meet_brightness_floor(self) -> None:
+        from pathlib import Path
+
+        from PIL import Image, ImageStat
+
+        import food_categories as fcat
+
+        base = Path(fcat.dish_image_path("pasta")).parent
+        dark = []
+        for cat in fcat.DISH_CATEGORIES:
+            if cat == "generic":
+                continue
+            p = base / f"{cat}.jpg"
+            if not p.is_file():
+                continue
+            im = Image.open(p).convert("L").resize((64, 64))
+            br = float(ImageStat.Stat(im).mean[0])
+            if br < 110:
+                dark.append((cat, br))
+        self.assertEqual(dark, [], f"dark outliers remain: {dark}")
+
+    def test_manifest_records_style_bar(self) -> None:
+        from pathlib import Path
+
+        import food_categories as fcat
+
+        manifest = Path(fcat.dish_image_path("pasta")).parent / "MANIFEST.md"
+        text = manifest.read_text(encoding="utf-8")
+        self.assertIn("tight crop, food ≥70% of frame, light neutral surface", text)
+        self.assertIn("no dark moody shots", text)
 
 
 class HistoryAppFilterTests(unittest.TestCase):
