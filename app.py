@@ -5194,20 +5194,6 @@ def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
         )
 
 
-def _render_decide_evictor() -> None:
-    """Immediate opaque slot — evicts the previous decision card before any wait."""
-    with st.container(key="decide_slot"):
-        st.html(
-            '<div class="oc-deciding-root" data-oc-deciding="1" aria-hidden="true"></div>'
-            '<div class="oc-decision oc-food-decision oc-skel-card oc-skel-evict" aria-hidden="true">'
-            '<div class="oc-food-img" style="background:#f3f3f0"></div>'
-            '<div class="oc-food-body">'
-            '<div class="oc-skel-bar is-title" style="width:70%;opacity:0.35"></div>'
-            '<div class="oc-skel-bar" style="width:50%;opacity:0.25"></div>'
-            "</div></div>"
-        )
-
-
 def _await_decide_with_skeleton(
     fut,
     *,
