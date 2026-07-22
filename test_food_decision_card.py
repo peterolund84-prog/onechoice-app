@@ -27,6 +27,14 @@ class DishCategoryTests(unittest.TestCase):
             fcat.infer_dish_category("Mystery bowl", meta={"dish_category": "nope"}),
             "generic",
         )
+        # Salad form beats protein cue (tonfisk → fisk.jpg was salmon)
+        self.assertEqual(fcat.infer_dish_category("Sallad med tonfisk"), "sallad")
+        self.assertEqual(fcat.infer_dish_category("Tuna salad"), "sallad")
+        self.assertEqual(fcat.infer_dish_category("Grillad lax"), "fisk")
+        self.assertEqual(
+            fcat.dish_image_path("sallad").name,
+            "sallad.jpg",
+        )
 
     def test_image_path_never_broken(self) -> None:
         for cat in ("pasta", "generic", "not-a-real-category"):

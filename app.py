@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "design-drift-lista-nav-v30-20260722"
+BUILD_ID = "auth-underline-dish-img-v31-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -251,11 +251,11 @@ I18N = {
         "gdpr_guest_note": "Gästläge: data finns bara lokalt i den här enheten tills du rensar den.",
 
         "guest": "Fortsätt som gäst (lokal demo)",
-        "auth_hint": "Supabase Auth — spara beslut i molnet",
-        "no_supabase": "Supabase saknas i secrets — kör i lokalt demläge.",
+        "auth_hint": "",
+        "no_supabase": "Molninloggning saknas — kör i lokalt demläge.",
         "auth_cloud_ok": "Molnet: inloggning tillgänglig",
-        "auth_cloud_off": "Molnet: Supabase saknas — bara lokal demo",
-        "auth_login_prompt": "Logga in för att spara beslut i molnet.",
+        "auth_cloud_off": "Molnet: saknas — bara lokal demo",
+        "auth_login_prompt": "Logga in för att spara dina beslut.",
         "logged_in_as": "Inloggad som",
         "too_long": "Max 200 tecken.",
         "ambiguous": "Välj vad det handlar om — så tar jag beslutet.",
@@ -414,11 +414,11 @@ I18N = {
         "gdpr_guest_note": "Guest mode: data stays only on this device until you clear it.",
 
         "guest": "Continue as guest (local demo)",
-        "auth_hint": "Supabase Auth — save decisions in the cloud",
-        "no_supabase": "Supabase missing in secrets — running local demo.",
+        "auth_hint": "",
+        "no_supabase": "Cloud sign-in missing — running local demo.",
         "auth_cloud_ok": "Cloud: sign-in available",
-        "auth_cloud_off": "Cloud: Supabase missing — local demo only",
-        "auth_login_prompt": "Sign in to save decisions in the cloud.",
+        "auth_cloud_off": "Cloud: missing — local demo only",
+        "auth_login_prompt": "Sign in to save your decisions.",
         "logged_in_as": "Signed in as",
         "too_long": "Max 200 characters.",
         "ambiguous": "Pick what this is about — then I’ll decide.",
@@ -908,7 +908,7 @@ button[data-testid="baseButton-primary"] {{
     box-shadow: none !important;
     font-family: "Inter", sans-serif !important;
 }}
-/* Link-style secondary outside chip grids / nav / cards */
+/* Secondary buttons — quiet by default (NO underline). Link-style only via .oc-link-wrap. */
 div.stButton > button[data-testid="baseButton-secondary"],
 div.stButton > button[kind="secondary"],
 div.stButton > button[data-testid="stBaseButton-secondary"] {{
@@ -916,9 +916,14 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {{
     border: none !important; box-shadow: none !important;
     border-radius: 0 !important; font-weight: 500 !important;
     min-height: 36px !important; width: auto !important;
-    font-size: 0.95rem !important; text-decoration: underline !important;
-    text-underline-offset: 3px !important;
+    font-size: 0.95rem !important; text-decoration: none !important;
     font-family: "Inter", sans-serif !important;
+}}
+/* Intentional text-link secondaries (Nytt förslag / mode switch) */
+.oc-link-wrap + div[data-testid="element-container"] div.stButton > button,
+div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="element-container"] div.stButton > button {{
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
 }}
 /* Occasion / meal chip rows ONLY — never nav, never lista, never domain cards */
 .st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button,
@@ -1181,6 +1186,8 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {{
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
+    text-decoration: none !important;
+    text-underline-offset: unset !important;
     transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
     -webkit-tap-highlight-color: transparent !important;
 }}
@@ -1194,6 +1201,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {{
     background: #fff !important;
     background-color: #fff !important;
     color: var(--oc-ink) !important;
+    text-decoration: none !important;
 }}
 {_domain_card_button_css()}
 .oc-domain-card-icon {{
@@ -3215,10 +3223,7 @@ def _go_to_auth_page(*, mode: str = "login") -> None:
 def page_auth() -> None:
     _clear_action_query_params()
     render_top_chrome()
-    st.markdown(
-        f'<p class="oc-tagline">{html.escape(t("auth_hint"))}</p>',
-        unsafe_allow_html=True,
-    )
+    # No vendor / infra eyebrow on the login surface
 
     import supabase_client as sb
 
@@ -3289,7 +3294,7 @@ def page_auth() -> None:
                         st.rerun()
                     else:
                         st.info(
-                            "Konto skapat. Bekräfta e-post i Supabase (om aktiverat), sedan logga in."
+                            "Konto skapat. Bekräfta e-post om det krävs, sedan logga in."
                         )
                         st.session_state.auth_mode = "login"
                 except Exception as exc:
