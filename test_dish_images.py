@@ -82,43 +82,30 @@ class DecideSkeletonTests(unittest.TestCase):
         self.assertIn("oc-status-cycle", src)
         self.assertIn("oc-card-arrive", src)
         self.assertIn("_render_decide_skeleton", src)
-        self.assertIn("timeout=20", src)
+        self.assertIn("_await_decide_with_skeleton", src)
+        self.assertIn("DECIDE_TIMEOUT_S = 20.0", src)
+        self.assertIn("DECIDE_SKELETON_DELAY_S = 0.4", src)
         self.assertIn("Kollar vad du åt senast", src)
         self.assertIn("Läser av kylen", src)
 
-    def test_habit_meals_skip_skeleton(self) -> None:
+    def test_habit_meals_also_use_time_based_skeleton(self) -> None:
         import app as app_mod
 
-        self.assertFalse(
-            app_mod._decide_uses_skeleton(hint="food", meal="frukost", fridge_mode=False)
-        )
-        self.assertFalse(
-            app_mod._decide_uses_skeleton(hint="food", meal="kvallsmal", fridge_mode=False)
-        )
-        self.assertTrue(
-            app_mod._decide_uses_skeleton(hint="food", meal="middag", fridge_mode=False)
-        )
-        self.assertTrue(
-            app_mod._decide_uses_skeleton(hint="food", meal="lunch", fridge_mode=False)
-        )
-        self.assertTrue(
-            app_mod._decide_uses_skeleton(hint="movie", meal="middag", fridge_mode=False)
-        )
-        self.assertTrue(
-            app_mod._decide_uses_skeleton(hint="food", meal="frukost", fridge_mode=True)
-        )
+        # Path-based skip removed — every domain uses the 400ms await helper.
+        self.assertTrue(hasattr(app_mod, "_await_decide_with_skeleton"))
+        self.assertFalse(hasattr(app_mod, "_decide_uses_skeleton"))
+        self.assertEqual(app_mod.DECIDE_SKELETON_DELAY_S, 0.4)
 
-    def test_meal_seg_font_12px_no_ellipsis(self) -> None:
+    def test_meal_seg_font_full_labels(self) -> None:
         import app as app_mod
         import food_domain as fd
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn("font-size: 12px", src)
         self.assertIn("letter-spacing: 0", src)
-        self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kväll")
-        # Labels short enough for 390px / 4
+        self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
         labels = [fd.meal_label(k, "sv") for k in fd.MEAL_ORDER]
-        self.assertTrue(all(len(x) <= 8 for x in labels), labels)
+        self.assertEqual(labels, ["Frukost", "Lunch", "Middag", "Kvällsmål"])
 
     def test_food_card_uses_resolver_not_generic(self) -> None:
         import app as app_mod

@@ -20,6 +20,10 @@ class DecisionChipsActionsTests(unittest.TestCase):
         # No Måltid section label in renderer
         self.assertNotIn('html.escape("Måltid"', src)
         self.assertIn('key="meal_seg"', src)
+        # Full labels — never abbreviated chip text
+        import food_domain as fd
+
+        self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
 
     def test_result_secondary_outlined_button_css(self) -> None:
         import app as app_mod

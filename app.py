@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-quiet-cookie-no-cm-v59-20260722"
+BUILD_ID = "seg-loading-nav-v60-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1435,20 +1435,20 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: var(--oc-ink) !important;
     font-weight: 600 !important;
 }}
-/* Bottom nav — frosted glass bar */
+/* Bottom nav — frosted glass bar (must fully obscure page content below) */
 .st-key-oc_nav_bar,
 .st-key-oc_nav_pills {{
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
     bottom: 0 !important;
-    z-index: 999 !important;
+    z-index: 10000 !important;
     width: 100% !important;
     margin: 0 !important;
     padding: 0.35rem 0.4rem max(0.55rem, env(safe-area-inset-bottom)) !important;
-    background: rgba(250, 250, 247, 0.72) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
+    background: rgba(250, 250, 247, 0.92) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
     border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-sizing: border-box !important;
 }}
@@ -1733,16 +1733,25 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: #4F46E5 !important;
 }}
 .st-key-hist_seg {{ margin: 0 0 12px !important; }}
-/* Meal segmented control — one row, equal segments (Favoriter|Historik family) */
+/* Meal segmented control — full width, equal segments, full labels (never ellipsis) */
 .st-key-meal_seg {{
     margin: 0 0 16px !important;
     width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}}
+.st-key-meal_seg [data-testid="stVerticalBlock"],
+.st-key-meal_seg [data-testid="stVerticalBlockBorderWrapper"],
+.st-key-meal_seg [data-testid="stElementContainer"] {{
+    width: 100% !important;
+    max-width: 100% !important;
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"],
 .st-key-meal_seg [data-testid="stPills"] {{
     display: flex !important;
     flex-wrap: nowrap !important;
     width: 100% !important;
+    max-width: 100% !important;
     gap: 0 !important;
     margin: 0 !important;
     padding: 3px !important;
@@ -1753,8 +1762,10 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 .st-key-meal_seg [data-testid="stButtonGroup"] button,
 .st-key-meal_seg [data-testid="stPills"] button {{
     flex: 1 1 0 !important;
+    flex-basis: 0 !important;
     width: auto !important;
     min-width: 0 !important;
+    max-width: none !important;
     height: 36px !important;
     min-height: 36px !important;
     max-height: 36px !important;
@@ -1773,6 +1784,27 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: clip !important;
+}}
+.st-key-meal_seg [data-testid="stButtonGroup"] button p,
+.st-key-meal_seg [data-testid="stPills"] button p,
+.st-key-meal_seg [data-testid="stButtonGroup"] button span,
+.st-key-meal_seg [data-testid="stPills"] button span,
+.st-key-meal_seg [data-testid="stButtonGroup"] button div,
+.st-key-meal_seg [data-testid="stPills"] button div {{
+    white-space: nowrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    text-overflow: unset !important;
+    font-size: inherit !important;
+    letter-spacing: 0 !important;
+    max-width: none !important;
+}}
+@media (max-width: 420px) {{
+    .st-key-meal_seg [data-testid="stButtonGroup"] button,
+    .st-key-meal_seg [data-testid="stPills"] button {{
+        font-size: 11px !important;
+        padding: 0 2px !important;
+    }}
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"] button[aria-checked="true"],
 .st-key-meal_seg [data-testid="stPills"] button[aria-checked="true"],
@@ -3277,8 +3309,14 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     color: var(--oc-ink) !important;
     font-weight: 600 !important;
 }}
-/* Glass nav MUST win over global secondary/underline + any column pill chrome */
-.st-key-oc_nav_bar,
+/* Glass nav MUST win over global secondary/underline + any column pill chrome.
+   Keep the frosted bar opaque — only nested layout nodes stay transparent. */
+.st-key-oc_nav_bar {{
+    background: rgba(250, 250, 247, 0.92) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    z-index: 10000 !important;
+}}
 .st-key-oc_nav_bar [data-testid="stHorizontalBlock"],
 .st-key-oc_nav_bar [data-testid="stVerticalBlock"],
 .st-key-oc_nav_bar [data-testid="stVerticalBlockBorderWrapper"] {{
@@ -4654,19 +4692,8 @@ def _safe_decide(user_id: str, question: str, **kwargs: Any):
     return pipeline.decide(user_id, question, **filtered)
 
 
-def _decide_uses_skeleton(*, hint: str | None, meal: str, fridge_mode: bool) -> bool:
-    """LLM-backed paths show a skeleton; local habit meals stay instant."""
-    if fridge_mode:
-        return True
-    domain = str(hint or "")
-    if domain in ("movie", "clothes", "workout", "weekend"):
-        return True
-    if domain == "food" or domain == "":
-        # frukost / kvällsmål are local packs — no theatre
-        if meal in ("frukost", "kvallsmal"):
-            return False
-        return True
-    return True
+DECIDE_SKELETON_DELAY_S = 0.4
+DECIDE_TIMEOUT_S = 20.0
 
 
 def _decide_status_messages(*, fridge_mode: bool) -> tuple[str, str, str, str]:
@@ -4699,6 +4726,26 @@ def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
         f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
         "</div></div>"
     )
+
+
+def _await_decide_with_skeleton(fut, *, fridge_mode: bool, delay_s: float = DECIDE_SKELETON_DELAY_S, timeout_s: float = DECIDE_TIMEOUT_S):
+    """Wait for decide; show skeleton only if it takes longer than delay_s.
+
+    Time-based — never assume which code path is fast. Under delay_s the
+    skeleton never appears (no flash). After delay_s it paints and we keep
+    waiting until timeout_s total.
+    """
+    from concurrent.futures import TimeoutError as FuturesTimeout
+
+    try:
+        return fut.result(timeout=max(0.0, delay_s)), False
+    except FuturesTimeout:
+        _render_decide_skeleton(fridge_mode=fridge_mode)
+        remaining = max(0.05, timeout_s - delay_s)
+        try:
+            return fut.result(timeout=remaining), True
+        except FuturesTimeout:
+            raise
 
 
 def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_router: bool = False) -> None:
@@ -4789,13 +4836,6 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
             st.session_state.get("fridge_inventory") or []
         )
 
-    meal = str(st.session_state.get("food_meal_type") or "")
-    use_skel = _decide_uses_skeleton(
-        hint=str(hint) if hint else None,
-        meal=meal,
-        fridge_mode=fridge_mode,
-    )
-
     # Capture Streamlit session values on the main thread — worker threads
     # cannot touch st.session_state (no ScriptRunContext).
     uid = str(st.session_state.user_id)
@@ -4844,21 +4884,20 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         )
 
     try:
-        if use_skel:
-            _render_decide_skeleton(fridge_mode=fridge_mode)
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(_call_decide)
-                try:
-                    result = fut.result(timeout=20)
-                except FuturesTimeout:
-                    log.warning("decide timed out after 20s")
-                    st.session_state.ui_error = True
-                    st.session_state._last_ui_error = "decide_timeout"
-                    st.session_state.force_route_domain = None
-                    st.rerun()
-                    return
-        else:
-            result = _call_decide()
+        # Time-based skeleton for EVERY path: paint only if decide takes >400ms.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_call_decide)
+            try:
+                result, _shown = _await_decide_with_skeleton(
+                    fut, fridge_mode=fridge_mode
+                )
+            except FuturesTimeout:
+                log.warning("decide timed out after %.0fs", DECIDE_TIMEOUT_S)
+                st.session_state.ui_error = True
+                st.session_state._last_ui_error = "decide_timeout"
+                st.session_state.force_route_domain = None
+                st.rerun()
+                return
         if via_router:
             st.session_state.force_route_domain = None
         # Free-text may land on clothes without occasion — gate before showing
