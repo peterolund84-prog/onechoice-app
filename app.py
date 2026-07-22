@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-decide-dup-slot-v67-20260722"
+BUILD_ID = "fix-skel-home-leak-v68-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2025,6 +2025,26 @@ body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card) {{
     pointer-events: none !important;
     visibility: hidden !important;
 }}
+/* Streamlit delta-merge / bfcache can leave decide skeleton on Hem
+   ("Sätter ihop receptet…" above Bestäm åt mig). Kill it whenever home is up. */
+body:has(.st-key-home_hero) .st-key-decide_slot,
+body:has(.st-key-home_hero) .oc-skel-card,
+body:has(.st-key-home_hero) [data-oc-deciding],
+body:has(.st-key-home_domains) .st-key-decide_slot,
+body:has(.st-key-home_domains) .oc-skel-card,
+body:has(.st-key-home_domains) [data-oc-deciding],
+body:has(.st-key-home_free_form) .st-key-decide_slot,
+body:has(.st-key-home_free_form) .oc-skel-card {{
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+}}
 /* No page-wide dim while deciding — keep chrome crisp */
 body:has(.oc-skel-card) [data-testid="stStatusWidget"],
 body:has(.oc-skel-card) [data-testid="stDecoration"],
@@ -2051,9 +2071,9 @@ html.oc-pending body::before {{
     z-index: 9500 !important;
     pointer-events: none !important;
 }}
-/* Lift wash once the next view (decide skeleton) is in the DOM */
-html.oc-pending:has(.oc-skel-card) body::before,
-html.oc-pending:has([data-oc-deciding]) body::before {{
+/* Lift wash only when skeleton is alone — not while home is still merged in */
+html.oc-pending:has(.oc-skel-card):not(:has(.st-key-home_hero)):not(:has(.st-key-home_domains)) body::before,
+html.oc-pending:has([data-oc-deciding]):not(:has(.st-key-home_hero)):not(:has(.st-key-home_domains)) body::before {{
     content: none !important;
     display: none !important;
 }}
@@ -4194,6 +4214,12 @@ def _oc_pending_nav_runtime_html() -> str:
   function hasSkeleton() {{
     return !!(doc.querySelector(".oc-skel-card") || doc.querySelector("[data-oc-deciding]"));
   }}
+  function hasHome() {{
+    return !!(doc.querySelector(".st-key-home_hero") ||
+              doc.querySelector(".st-key-home_domains") ||
+              doc.querySelector('[class*="st-key-home_hero"]') ||
+              doc.querySelector('[class*="st-key-home_domains"]'));
+  }}
   function wipeEl() {{
     return doc.getElementById("oc-nav-wipe");
   }}
@@ -4219,7 +4245,8 @@ def _oc_pending_nav_runtime_html() -> str:
   function syncLift() {{
     var w = wipeEl();
     if (w) {{
-      if (hasSkeleton()) w.classList.add("is-lifted");
+      // Never lift while Hem is still merged in with the skeleton
+      if (hasSkeleton() && !hasHome()) w.classList.add("is-lifted");
       else w.classList.remove("is-lifted");
     }}
   }}
@@ -4275,10 +4302,13 @@ def _oc_pending_nav_runtime_html() -> str:
     }}
     try {{ clearTimeout(window.__ocDisarmTimer); }} catch (e) {{}}
     window.__ocDisarmTimer = setTimeout(function() {{
-      if (!isRunning()) {{
-        if (hasSkeleton()) {{ syncLift(); disarm(); }}
-        else disarm();
-      }}
+      if (isRunning()) return;
+      if (hasSkeleton() && !hasHome()) {{ syncLift(); disarm(); return; }}
+      if (!hasSkeleton()) {{ disarm(); return; }}
+      // Skeleton still merged with Hem — hold wipe, then force-clear
+      window.__ocDisarmTimer = setTimeout(function() {{
+        if (!isRunning()) disarm();
+      }}, 900);
     }}, 480);
   }}
 

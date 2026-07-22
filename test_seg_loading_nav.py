@@ -156,12 +156,18 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertIn("inject_app_runtime", src)
         self.assertIn("data-test-script-state", src)
         self.assertIn("unsafe_allow_javascript", src)
+        # Skeleton must not leak onto Hem
+        self.assertIn("body:has(.st-key-home_hero) .oc-skel-card", src)
+        self.assertIn("body:has(.st-key-home_hero) .st-key-decide_slot", src)
+        # Wipe lifts only when home is gone
+        self.assertIn(":not(:has(.st-key-home_hero))", src)
         html = app_mod._oc_pending_nav_runtime_html()
         self.assertIn("oc-pending", html)
         self.assertIn("oc-nav-wipe", html)
         self.assertIn("__ocDisarmTimer", html)
         self.assertIn("__ocPendingClick", html)
         self.assertIn("__ocPendingScrollCancel", html)
+        self.assertIn("hasHome", html)
         self.assertIn("isRunning", html)
         self.assertIn("rerunRequested", html)
         # Click only — pointerdown blanks the page when scrolling over buttons
