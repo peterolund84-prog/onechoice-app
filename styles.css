@@ -1246,9 +1246,13 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     max-width: 100% !important;
 }
 /* While deciding / skeleton is up: hide ANY prior real decision card
-   (Streamlit can leave the previous run's card dimmed underneath). */
-body:has([data-oc-deciding]) .oc-decision:not(.oc-skel-card),
-body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card) {
+   (Streamlit can leave the previous run's card dimmed underneath).
+   Never apply on result/execute hosts — a leftover .oc-skel-card from
+   st.html would otherwise hide the real card (no dish image). */
+body:has([data-oc-deciding]):not(:has(.oc-result)):not(:has(.oc-exec-lock)):not(:has(.oc-exec-meta-slot)):not(:has([class*="st-key-exec_food_host"]))
+  .oc-decision:not(.oc-skel-card),
+body:has(.oc-skel-card):not(:has(.oc-result)):not(:has(.oc-exec-lock)):not(:has(.oc-exec-meta-slot)):not(:has([class*="st-key-exec_food_host"]))
+  .oc-decision:not(.oc-skel-card) {
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;

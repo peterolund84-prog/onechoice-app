@@ -133,7 +133,16 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         css = _styles()
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card)", css)
+        # Hide prior cards under skeleton — but NEVER on result (leftover
+        # .oc-skel-card from st.html would blank the dish image otherwise).
+        self.assertIn(
+            "body:has(.oc-skel-card):not(:has(.oc-result)):not(:has(.oc-exec-lock))",
+            css,
+        )
+        self.assertIn(
+            "body:has([data-oc-deciding]):not(:has(.oc-result)):not(:has(.oc-exec-lock))",
+            css,
+        )
         self.assertIn("data-oc-deciding", src)
         self.assertIn("_decide_skel_painted", src)
 
