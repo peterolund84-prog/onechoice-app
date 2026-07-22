@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-nav-ghost-v63-20260722"
+BUILD_ID = "fix-domain-ghost-v64-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2036,21 +2036,39 @@ body:has([data-oc-deciding]) [data-testid="stDecoration"] {{
 .oc-deciding-root {{
     display: none !important;
 }}
-/* General nav ghost wipe: on click we arm html.oc-pending so the prior page
-   cannot sit dimmed under the next run. Skeleton is exempt (decide loading). */
-html.oc-pending .block-container::after {{
-    content: "";
-    position: fixed;
-    top: calc(52px + env(safe-area-inset-top));
-    left: 0;
-    right: 0;
-    bottom: calc(72px + env(safe-area-inset-bottom));
+/* General nav ghost wipe — real #oc-nav-wipe node is appended to body by JS
+   (must sit outside Streamlit's dimmed .main, or the wash fades with the old page). */
+#oc-nav-wipe {{
+    position: fixed !important;
+    top: calc(52px + env(safe-area-inset-top)) !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: calc(72px + env(safe-area-inset-bottom)) !important;
     background: var(--oc-bg) !important;
-    z-index: 9000;
-    pointer-events: none;
+    background-color: var(--oc-bg) !important;
+    z-index: 9500 !important;
+    pointer-events: none !important;
 }}
-html.oc-pending:has(.oc-skel-card) .block-container::after,
-html.oc-pending:has([data-oc-deciding]) .block-container::after {{
+#oc-nav-wipe.is-lifted {{
+    display: none !important;
+}}
+/* Hide zero-size runtime iframes (nav wipe / wake lock) */
+iframe[height="0"],
+iframe[height="0"][width="0"] {{
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    border: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}}
+
+/* Legacy class hook (kept for tests / belt) */
+html.oc-pending .block-container::after {{
+    content: none !important;
     display: none !important;
 }}
 .oc-hist-date {{
@@ -4109,83 +4127,128 @@ def _share_icon_button_html(
 
 
 def _oc_pending_nav_runtime_html() -> str:
-    """Blank prior page content on click until the next Streamlit run finishes.
+    """Blank prior page on tap until the next Streamlit run finishes.
 
-    Streamlit keeps the old UI (often dimmed) visible while a rerun is in flight.
-    That reads as 'ghosting' when tapping nav / Nytt förslag / domain cards.
+    Must run in the parent frame and append a body-level overlay — a CSS wash
+    inside .block-container sits under Streamlit's dim layer and still shows
+    the old home (e.g. after tapping Mat).
     """
-    return """<script>
-(function() {
-  if (window.__ocPendingNavBound) return;
-  window.__ocPendingNavBound = true;
+    bg = "#FAFAF7"
+    return f"""
+<script>
+(function() {{
+  var doc;
+  try {{ doc = window.parent.document; }} catch (e) {{ doc = document; }}
+  if (!doc || doc.documentElement.getAttribute("data-oc-pending-bound") === "1") return;
+  doc.documentElement.setAttribute("data-oc-pending-bound", "1");
 
-  function appEl() {
-    return document.querySelector('[data-testid="stApp"]');
-  }
-  function scriptState() {
+  function appEl() {{
+    return doc.querySelector('[data-testid="stApp"]');
+  }}
+  function scriptState() {{
     var a = appEl();
     return a ? (a.getAttribute("data-test-script-state") || "") : "";
-  }
-  function isRunning() {
+  }}
+  function isRunning() {{
     var s = scriptState();
     return s === "running" || s === "rerunRequested";
-  }
-  function arm() {
-    document.documentElement.classList.add("oc-pending");
-  }
-  function disarm() {
-    document.documentElement.classList.remove("oc-pending");
-  }
-
-  document.addEventListener("click", function(e) {
+  }}
+  function hasSkeleton() {{
+    return !!(doc.querySelector(".oc-skel-card") || doc.querySelector("[data-oc-deciding]"));
+  }}
+  function wipeEl() {{
+    return doc.getElementById("oc-nav-wipe");
+  }}
+  function arm() {{
+    doc.documentElement.classList.add("oc-pending");
+    var w = wipeEl();
+    if (!w) {{
+      w = doc.createElement("div");
+      w.id = "oc-nav-wipe";
+      w.setAttribute("aria-hidden", "true");
+      doc.body.appendChild(w);
+    }}
+    w.classList.remove("is-lifted");
+    w.style.background = "{bg}";
+    syncLift();
+  }}
+  function disarm() {{
+    doc.documentElement.classList.remove("oc-pending");
+    var w = wipeEl();
+    if (w) w.remove();
+  }}
+  function syncLift() {{
+    var w = wipeEl();
+    if (!w) return;
+    if (hasSkeleton()) w.classList.add("is-lifted");
+    else w.classList.remove("is-lifted");
+  }}
+  function shouldIgnore(t) {{
+    if (!t || !t.closest) return true;
+    if (t.closest(".st-key-oc_lang_bar") || t.closest('[class*="st-key-oc_lang"]')) return true;
+    if (t.closest('[data-testid="stCheckbox"]')) return true;
+    if (t.closest('[data-testid="stTextInput"]')) return true;
+    if (t.closest('[data-testid="stNumberInput"]')) return true;
+    return false;
+  }}
+  function onPointer(e) {{
     var t = e.target && e.target.closest && e.target.closest(
       'button, [role="button"], a[href^="?"]'
     );
-    if (!t) return;
-    if (t.closest(".st-key-oc_lang_bar") || t.closest('[class*="st-key-oc_lang"]')) return;
-    if (t.closest('[data-testid="stCheckbox"]')) return;
-    if (t.closest('[data-testid="stTextInput"]')) return;
-    if (t.closest('[data-testid="stNumberInput"]')) return;
+    if (!t || shouldIgnore(t)) return;
     arm();
-  }, true);
+  }}
+  doc.addEventListener("pointerdown", onPointer, true);
+  doc.addEventListener("click", onPointer, true);
 
-  function onStateChange() {
-    if (!document.documentElement.classList.contains("oc-pending")) return;
-    if (!isRunning()) disarm();
-  }
+  function onStateChange() {{
+    syncLift();
+    if (!doc.documentElement.classList.contains("oc-pending")) return;
+    // Keep the wipe through Streamlit's back-to-back reruns
+    // (home Mat → page=deciding hop briefly hits notRunning).
+    if (isRunning()) {{
+      try {{ clearTimeout(window.__ocDisarmTimer); }} catch (e) {{}}
+      return;
+    }}
+    try {{ clearTimeout(window.__ocDisarmTimer); }} catch (e) {{}}
+    window.__ocDisarmTimer = setTimeout(function() {{
+      if (!isRunning()) disarm();
+    }}, 320);
+  }}
 
   var appObs = null;
-  function watchApp() {
+  function watchApp() {{
     var a = appEl();
     if (!a) return;
     if (appObs) appObs.disconnect();
     appObs = new MutationObserver(onStateChange);
-    appObs.observe(a, { attributes: true, attributeFilter: ["data-test-script-state"] });
+    appObs.observe(a, {{ attributes: true, attributeFilter: ["data-test-script-state"] }});
     onStateChange();
-  }
+  }}
   watchApp();
-  new MutationObserver(watchApp).observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-})();
-</script>"""
+  new MutationObserver(function() {{
+    watchApp();
+    syncLift();
+  }}).observe(doc.documentElement, {{ childList: true, subtree: true }});
+}})();
+</script>
+"""
 
 
 def inject_app_runtime() -> None:
-    """One-shot parent-frame helpers (nav wipe). Safe to call every run."""
+    """Parent-frame nav wipe — components.html reaches window.parent reliably."""
+    import streamlit.components.v1 as components
+
     try:
-        st.html(
-            _oc_pending_nav_runtime_html(),
-            unsafe_allow_javascript=True,
-        )
-    except TypeError:
+        components.html(_oc_pending_nav_runtime_html(), height=0, width=0)
+    except Exception:
         try:
-            st.html(_oc_pending_nav_runtime_html())
+            st.html(
+                _oc_pending_nav_runtime_html(),
+                unsafe_allow_javascript=True,
+            )
         except Exception:
             pass
-    except Exception:
-        pass
 
 
 def _oc_share_runtime_html() -> str:

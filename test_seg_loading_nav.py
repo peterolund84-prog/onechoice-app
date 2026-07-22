@@ -140,11 +140,16 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn("html.oc-pending", src)
-        self.assertIn("__ocPendingNavBound", src)
+        self.assertIn("#oc-nav-wipe", src)
         self.assertIn("inject_app_runtime", src)
         self.assertIn("data-test-script-state", src)
+        self.assertIn("components.html", src)
         html = app_mod._oc_pending_nav_runtime_html()
         self.assertIn("oc-pending", html)
+        self.assertIn("oc-nav-wipe", html)
+        self.assertIn("window.parent.document", html)
+        self.assertIn("pointerdown", html)
+        self.assertIn("__ocDisarmTimer", html)
         self.assertIn("isRunning", html)
         self.assertIn("rerunRequested", html)
 
