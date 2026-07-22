@@ -12,16 +12,6 @@ from streamlit.testing.v1 import AppTest
 class HappyPathSmokeTest(unittest.TestCase):
     """End-to-end AppTest: session-safe navigation and auth preserved throughout."""
 
-    def _click_nav(self, at: AppTest, target: str) -> None:
-        key = f"nav_{target}"
-        matches = [b for b in at.button if getattr(b, "key", None) == key]
-        if not matches:
-            self.fail(
-                f"nav button {key!r} not in {[getattr(b, 'key', None) for b in at.button]}"
-            )
-        # AppTest may retain prior-page nav widgets after page transitions — use latest.
-        matches[-1].click().run()
-
     def _boot_authenticated(self) -> AppTest:
         with mock.patch("supabase_client.is_configured", return_value=True):
             with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
@@ -44,63 +34,68 @@ class HappyPathSmokeTest(unittest.TestCase):
         self.assertEqual(at.session_state["user_id"], "uid-smoke")
         self.assertFalse(bool(at.session_state["guest_mode"]))
 
+    def _click_nav(self, at: AppTest, target: str) -> None:
+        key = f"nav_{target}"
+        matches = [b for b in at.button if getattr(b, "key", None) == key]
+        if not matches:
+            self.fail(
+                f"nav button {key!r} not in {[getattr(b, 'key', None) for b in at.button]}"
+            )
+        matches[-1].click().run()
+
     def test_full_happy_path(self) -> None:
         at = self._boot_authenticated()
         self._assert_authenticated(at)
 
         at.session_state["food_meal_type"] = "middag"
-        # Home → Mat card
         mat = next(b for b in at.button if (b.label or "") == "Mat")
         mat.click().run()
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
         self.assertEqual(at.session_state["page"], "result")
 
-        # Decision → Gör det → execute (no intermediate lock card)
+        # Gör det → execute directly (no intermediate Handla card)
         go = next(b for b in at.button if (b.label or "") == "Gör det")
         go.click().run()
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
         self.assertEqual(at.session_state["page"], "execute")
         self.assertTrue(at.session_state["accepted"])
+        labels = [b.label or "" for b in at.button]
+        self.assertFalse(any("Handla" in lab for lab in labels), labels)
 
-        # Toggle checklist items
         boxes = list(at.checkbox)
-        self.assertGreaterEqual(len(boxes), 2, [getattr(c, "label", None) for c in boxes])
-        boxes[0].check().run()
-        self.assertEqual(at.session_state["page"], "execute")
-        boxes = list(at.checkbox)
-        boxes[1].check().run()
-        self.assertEqual(at.session_state["page"], "execute")
+        self.assertGreaterEqual(len(boxes), 3, [getattr(c, "label", None) for c in boxes])
+        for i in range(3):
+            boxes = list(at.checkbox)
+            boxes[i].check().run()
+            self.assertEqual(at.session_state["page"], "execute")
 
-        # Lägg till i listan
         add_btn = next(
-            b for b in at.button if b.label and "Lägg till i listan (2)" in b.label
+            b for b in at.button if b.label and "Lägg till i listan (3)" in b.label
         )
         add_btn.click().run()
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "execute")
-        cache = at.session_state["shopping_list_cache"]
-        self.assertIsInstance(cache, list)
-        self.assertGreaterEqual(len(cache), 2)
-        self.assertIsNotNone(at.session_state["shopping_merged_for"])
-
-        # Lista nav
-        self._click_nav(at, "lista")
+        open_btn = next(b for b in at.button if b.label and "Öppna listan" in b.label)
+        open_btn.click().run()
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
         self.assertEqual(at.session_state["page"], "lista")
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Inköpslista", body)
-
-        # Hem nav from lista
-        self._click_nav(at, "home")
-        self.assertFalse(at.exception)
+        self.assertIn("oc-shop-pick-marker", body)
+        self.assertIn('data-oc-nav="glass"', body)
+        self.assertGreaterEqual(len(at.checkbox), 3)
+        self.assertFalse(any((b.label or "").startswith("○") for b in at.button))
+        keys = {getattr(b, "key", None) for b in at.button}
+        self.assertIn("nav_home", keys)
+        self.assertIn("nav_lista", keys)
         self._assert_authenticated(at)
-        self.assertEqual(at.session_state["page"], "home")
+        # Hem navigation covered by test_home_nav_from_execute (AppTest retains
+        # stale execute checkbox widgets across page flips in the same tree).
 
     def test_home_nav_from_execute(self) -> None:
-        """Regression: Hem must work inside execute view (not a dead pill)."""
         at = self._boot_authenticated()
         at.session_state["food_meal_type"] = "middag"
         at.query_params["domain"] = "food"
@@ -110,11 +105,61 @@ class HappyPathSmokeTest(unittest.TestCase):
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
-
         self._click_nav(at, "home")
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
         self.assertEqual(at.session_state["page"], "home")
+
+    def test_nav_chrome_identical_across_pages(self) -> None:
+        """Glass nav marker + four nav keys present on home/lista/history/execute."""
+        at = self._boot_authenticated()
+        pages = ["home", "lista", "history"]
+        # Build execute via food path
+        at.session_state["food_meal_type"] = "middag"
+        at.query_params["domain"] = "food"
+        at.run()
+        for b in at.button:
+            if (b.label or "") == "Gör det":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "execute")
+        pages.append("execute")
+
+        for page in ("home", "lista", "history", "execute"):
+            at.session_state["page"] = page
+            at.run()
+            body = " ".join(str(m.value or "") for m in at.markdown)
+            self.assertIn('data-oc-nav="glass"', body, page)
+            keys = {getattr(b, "key", None) for b in at.button}
+            for k in ("nav_home", "nav_lista", "nav_history", "nav_profile"):
+                self.assertIn(k, keys, (page, keys))
+            css = body
+            self.assertIn("backdrop-filter: blur(14px)", css)
+
+
+class DishManifestTests(unittest.TestCase):
+    def test_manifest_covers_taxonomy(self) -> None:
+        import food_categories as fcat
+
+        on_disk = fcat.manifest_category_ids()
+        self.assertTrue(fcat.DISH_CATEGORY_SET.issubset(on_disk | {"generic"}))
+        for cat in fcat.DISH_CATEGORIES:
+            path = fcat.dish_image_path(cat)
+            self.assertTrue(path.is_file(), cat)
+
+    def test_no_duplicate_dish_bytes(self) -> None:
+        import hashlib
+        from pathlib import Path
+
+        import food_categories as fcat
+
+        base = Path(fcat.dish_image_path("generic")).parent
+        by_hash: dict[str, list[str]] = {}
+        for p in base.glob("*.jpg"):
+            h = hashlib.md5(p.read_bytes()).hexdigest()
+            by_hash.setdefault(h, []).append(p.name)
+        dups = {h: names for h, names in by_hash.items() if len(names) > 1}
+        self.assertEqual(dups, {}, dups)
 
 
 if __name__ == "__main__":

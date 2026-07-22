@@ -264,21 +264,26 @@ class ReliableShoppingUiTests(unittest.TestCase):
             if b.label and "Lägg till i listan" in b.label and "(0)" not in b.label:
                 b.click().run()
                 break
-        # Stay on execute; CTA morphs to confirmation with open-list link
+        # Stay on execute; CTA morphs to confirmation open-list button
         self.assertEqual(at.session_state["page"], "execute")
         self.assertIsNotNone(at.session_state["shopping_merged_for"])
         self.assertFalse(bool(at.session_state["shopping_list_error"]))
-        body2 = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("Öppna listan", body2)
+        labels2 = [b.label or "" for b in at.button]
+        self.assertTrue(
+            any("Öppna listan" in lab for lab in labels2),
+            labels2,
+        )
         cache = at.session_state["shopping_list_cache"]
         self.assertIsInstance(cache, list)
         self.assertGreaterEqual(len(cache), 1)
         self.assertEqual(at.session_state["user_id"], uid)
 
-        # Bottom nav present
+        # Bottom nav present + glass chrome marker
         labels = [b.label or "" for b in at.button]
-        self.assertIn("Lista", labels)
+        self.assertTrue(any(lab.startswith("Lista") for lab in labels), labels)
         self.assertIn("Hem", labels)
+        body = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn('data-oc-nav="glass"', body)
 
     def test_premium_shop_css_tokens(self) -> None:
         import inspect

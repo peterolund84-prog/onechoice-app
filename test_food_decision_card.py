@@ -112,6 +112,14 @@ class PreLockFoodCardUiTests(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "execute")
         labels = [b.label or "" for b in at.button]
         self.assertFalse(any("Handla" in lab for lab in labels), labels)
+        # Back from execute still shows locked card for re-entry
+        for b in at.button:
+            if b.label and ("Tillbaka" in b.label or "Back" in b.label):
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
+        labels2 = [b.label or "" for b in at.button]
+        self.assertTrue(any("Handla" in lab for lab in labels2), labels2)
 
 
 if __name__ == "__main__":
