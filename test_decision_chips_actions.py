@@ -13,13 +13,21 @@ class DecisionChipsActionsTests(unittest.TestCase):
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn(".st-key-meal_seg", src)
-        self.assertIn("flex-wrap: nowrap", src)
         self.assertIn("height: 36px", src)
         self.assertIn("font-size: 12px", src)
         self.assertIn("#4F46E5", src)
         # No Måltid section label in renderer
         self.assertNotIn('html.escape("Måltid"', src)
         self.assertIn('key="meal_seg"', src)
+        # Grid ONLY on ButtonGroup — never stPills > * (re-shows collapsed label)
+        self.assertIn(
+            '.st-key-meal_seg [data-testid="stButtonGroup"] {{\n'
+            "    display: grid !important;",
+            src,
+        )
+        self.assertNotIn('[data-testid="stPills"] > *', src)
+        self.assertNotIn('key="meal_pills"', src)
+        self.assertIn('key="meal_seg_choice"', src)
         # Full labels — never abbreviated chip text
         import food_domain as fd
 

@@ -13,6 +13,7 @@ from streamlit.testing.v1 import AppTest
 # Keys / key-shaped identifiers that have leaked into visible UI before.
 KNOWN_LEAK_KEYS = (
     "meal_pills",
+    "meal_seg_choice",
     "movie_format_pills",
     "movie_mood_pills",
     "ambiguous_pick",
@@ -103,6 +104,9 @@ class NoWidgetLabelLeaksTests(unittest.TestCase):
                 rf'st\.pills\(\s*["\']' + re.escape(key) + r'["\']',
                 msg=f"st.pills still labelled {key!r}",
             )
+        self.assertNotIn('key="meal_pills"', src)
+        # CSS must not force-show collapsed label via stPills > *
+        self.assertNotIn('[data-testid="stPills"] > *', src)
 
     def test_no_widget_label_leaks_on_pages(self) -> None:
         at = _boot()
