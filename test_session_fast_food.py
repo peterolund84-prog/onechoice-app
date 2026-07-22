@@ -21,7 +21,8 @@ class SessionSafeNavTests(unittest.TestCase):
         import app as app_mod
 
         src = inspect.getsource(app_mod.nav)
-        self.assertIn("st.pills", src)
+        self.assertIn("st.button", src)
+        self.assertIn('key=f"nav_', src)
         self.assertNotIn("href=", src)
 
     def test_lang_bar_uses_buttons_not_href(self) -> None:
@@ -41,9 +42,9 @@ class SessionSafeNavTests(unittest.TestCase):
         uid = at.session_state["user_id"]
         self.assertTrue(uid)
         hit = False
-        for p in at.pills:
-            if getattr(p, "key", None) == "oc_nav_pills":
-                p.set_value("lista").run()
+        for b in at.button:
+            if (b.label or "") == "Lista":
+                b.click().run()
                 hit = True
                 break
         self.assertTrue(hit)

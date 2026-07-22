@@ -137,6 +137,44 @@ def create_decision(
     return _decision_row(frows[0])
 
 
+def mark_execution_opened(
+    decision_id: int,
+    access_token: str,
+    refresh_token: str,
+    *,
+    opened_at: str,
+) -> dict[str, Any]:
+    client = _client(access_token, refresh_token)
+    existing = (
+        client.table("decisions")
+        .select("execution_opened_at")
+        .eq("id", decision_id)
+        .limit(1)
+        .execute()
+    )
+    rows = existing.data or []
+    if rows and rows[0].get("execution_opened_at"):
+        res = (
+            client.table("decisions")
+            .select("*")
+            .eq("id", decision_id)
+            .limit(1)
+            .execute()
+        )
+        got = res.data or []
+        if not got:
+            raise KeyError(f"decision {decision_id} not found")
+        return _decision_row(got[0])
+    client.table("decisions").update({"execution_opened_at": opened_at}).eq(
+        "id", decision_id
+    ).execute()
+    res = client.table("decisions").select("*").eq("id", decision_id).limit(1).execute()
+    rows = res.data or []
+    if not rows:
+        raise KeyError(f"decision {decision_id} not found")
+    return _decision_row(rows[0])
+
+
 def set_decision_status(
     decision_id: int,
     status: str,

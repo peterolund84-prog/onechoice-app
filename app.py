@@ -38,9 +38,9 @@ Button → transition:
   [result] food primary "Gör det"  (accepted is False)
         → accept_decision(decision_id)  # DB status=accepted
         → current.locked=True, accepted=True, disable rerolls
-        → stay on result (lock card)
+        → page=execute directly (one tap — no intermediate lock card)
 
-  [result] food primary "Handla & laga"  (accepted is True / locked card)
+  [result] food locked card "Handla & laga"  (returning from execute)
         → page=execute only (no second DB write; lock already permanent)
 
   [result] non-food primary (link / "Gör det nu")
@@ -73,6 +73,7 @@ import logging
 import re
 import traceback
 import uuid
+import urllib.parse
 from datetime import datetime
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -707,6 +708,26 @@ def _render_food_card_html(
     )
 
 
+def _domain_card_button_css() -> str:
+    """Per-domain SVG icons as ::before on session-safe card buttons."""
+    rules: list[str] = []
+    for domain, svg in _DOMAIN_CARD_ICONS.items():
+        uri = urllib.parse.quote(svg.replace("\n", " ").strip())
+        rules.append(
+            f"""
+[class*="st-key-home_domain_{domain}"] div.stButton > button::before {{
+    content: "";
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    margin-right: 8px;
+    background: center / contain no-repeat url("data:image/svg+xml,{uri}");
+}}"""
+        )
+    return "\n".join(rules)
+
+
 def inject_css() -> None:
     st.markdown(
         f"""
@@ -1106,33 +1127,10 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     gap: 10px !important;
     margin-bottom: 10px !important;
 }}
-/* oc-domain-card — session-safe button cards (no <a href>) */
+/* Domain cards — button IS the card (no nested pill) */
 [class*="st-key-home_domain_"] {{
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    background: #fff !important;
-    border-radius: 14px !important;
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-    min-height: 52px !important;
-    max-height: 52px !important;
-    overflow: hidden !important;
-    box-sizing: border-box !important;
-    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
-    -webkit-tap-highlight-color: transparent !important;
-}}
-[class*="st-key-home_domain_"]:hover {{
-    transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
-    border-color: rgba(0, 0, 0, 0.1) !important;
-}}
-[class*="st-key-home_domain_"] [data-testid="stHorizontalBlock"] {{
-    align-items: center !important;
-    gap: 6px !important;
     margin: 0 !important;
-    padding: 0 8px 0 12px !important;
-    min-height: 52px !important;
+    padding: 0 !important;
 }}
 [class*="st-key-home_domain_"] div.stButton {{
     margin: 0 !important;
@@ -1140,29 +1138,39 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     width: 100% !important;
 }}
 [class*="st-key-home_domain_"] div.stButton > button {{
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+    background: #fff !important;
+    border-radius: 14px !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    box-sizing: border-box !important;
     color: var(--oc-ink) !important;
     font-family: "Inter", sans-serif !important;
     font-size: 16px !important;
     font-weight: 500 !important;
     line-height: 1.2 !important;
     text-align: left !important;
-    justify-content: flex-start !important;
-    padding: 0 !important;
-    min-height: 44px !important;
+    padding: 0 12px !important;
     white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
+    -webkit-tap-highlight-color: transparent !important;
 }}
 [class*="st-key-home_domain_"] div.stButton > button:hover,
 [class*="st-key-home_domain_"] div.stButton > button:focus {{
-    background: transparent !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    background: #fff !important;
     color: var(--oc-ink) !important;
-    border: none !important;
-    box-shadow: none !important;
 }}
+{_domain_card_button_css()}
 .oc-domain-card-icon {{
     display: flex !important;
     align-items: center !important;
@@ -1349,6 +1357,79 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
     -webkit-backdrop-filter: blur(14px) !important;
     border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-sizing: border-box !important;
+}}
+.st-key-oc_nav_bar [data-testid="stHorizontalBlock"] {{
+    gap: 0.15rem !important;
+    align-items: stretch !important;
+}}
+[class*="st-key-nav_"] div.stButton {{
+    margin: 0 !important;
+    width: 100% !important;
+}}
+[class*="st-key-nav_"] div.stButton > button {{
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 999px !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    min-height: 3rem !important;
+    padding: 0.3rem 0.35rem !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.15rem !important;
+    line-height: 1.1 !important;
+}}
+[class*="st-key-nav_"] div.stButton > button::before {{
+    content: "" !important;
+    display: block !important;
+    width: 22px !important;
+    height: 22px !important;
+    background: center / contain no-repeat !important;
+    opacity: 0.72 !important;
+}}
+.st-key-nav_home div.stButton > button::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z'/%3E%3C/svg%3E") !important;
+}}
+.st-key-nav_lista div.stButton > button::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'/%3E%3C/svg%3E") !important;
+}}
+.st-key-nav_history div.stButton > button::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5l3 2'/%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3C/svg%3E") !important;
+}}
+.st-key-nav_profile div.stButton > button::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
+}}
+[class*="st-key-nav_"] div.stButton > button[kind="primary"],
+[class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"] {{
+    color: var(--oc-accent) !important;
+    font-weight: 600 !important;
+    background: rgba(59, 59, 196, 0.12) !important;
+}}
+[class*="st-key-nav_"] div.stButton > button[kind="primary"]::before,
+[class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"]::before {{
+    opacity: 1 !important;
+}}
+.st-key-nav_home div.stButton > button[kind="primary"]::before,
+.st-key-nav_home div.stButton > button[data-testid="baseButton-primary"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z'/%3E%3C/svg%3E") !important;
+}}
+.st-key-nav_lista div.stButton > button[kind="primary"]::before,
+.st-key-nav_lista div.stButton > button[data-testid="baseButton-primary"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'/%3E%3C/svg%3E") !important;
+}}
+.st-key-nav_history div.stButton > button[kind="primary"]::before,
+.st-key-nav_history div.stButton > button[data-testid="baseButton-primary"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5l3 2'/%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3C/svg%3E") !important;
+}}
+.st-key-nav_profile div.stButton > button[kind="primary"]::before,
+.st-key-nav_profile div.stButton > button[data-testid="baseButton-primary"]::before {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
 }}
 .st-key-oc_nav_bar [data-testid="stPills"],
 .st-key-oc_nav_pills [data-testid="stPills"],
@@ -3159,43 +3240,38 @@ def lang_bar() -> None:
 
 
 def nav() -> None:
-    """Fixed bottom nav — session-safe pills in keyed container (no oval chrome)."""
+    """Fixed bottom nav — session-safe buttons (explicit page routing)."""
     page = st.session_state.page
-    current = "home" if page in ("home", "result", "execute", "fridge", "ambiguous") else page
+    highlight = "home" if page in ("home", "result", "execute", "fridge", "ambiguous") else page
     options = ("home", "lista", "history", "profile")
-    if current not in options:
-        current = "home"
+    if highlight not in options:
+        highlight = "home"
     labels = {
         "home": t("home"),
         "lista": t("list_nav"),
         "history": t("history"),
         "profile": t("profile"),
     }
-
-    mirrored = st.session_state.get("_oc_nav_mirror")
-    pending = st.session_state.get("oc_nav_pills")
-    if mirrored is None:
-        st.session_state.oc_nav_pills = current
-        st.session_state._oc_nav_mirror = current
-    elif mirrored != current:
-        st.session_state.oc_nav_pills = current
-        st.session_state._oc_nav_mirror = current
-    elif pending in options and pending != current:
-        st.session_state.page = pending
-        st.session_state._oc_nav_mirror = pending
-        st.rerun()
-        return
+    page_targets = {
+        "home": "home",
+        "lista": "lista",
+        "history": "history",
+        "profile": "profile",
+    }
 
     with st.container(key="oc_nav_bar"):
-        st.pills(
-            "nav",
-            options=list(options),
-            format_func=lambda k: labels.get(k, k),
-            selection_mode="single",
-            key="oc_nav_pills",
-            label_visibility="collapsed",
-            width="stretch",
-        )
+        cols = st.columns(len(options), gap="small")
+        for col, key in zip(cols, options):
+            with col:
+                is_active = highlight == key
+                if st.button(
+                    labels[key],
+                    key=f"nav_{key}",
+                    use_container_width=True,
+                    type="primary" if is_active else "secondary",
+                ):
+                    st.session_state.page = page_targets[key]
+                    st.rerun()
 
 
 def _start_domain_decision(domain: str) -> None:
@@ -3414,27 +3490,17 @@ def render_home_domain_grid() -> None:
                 idx = i + j
                 if idx >= len(entries):
                     break
-                domain, label, icon = entries[idx]
+                domain, label, _icon = entries[idx]
                 with cols[j]:
-                    with st.container(key=f"home_domain_{domain}"):
-                        icon_col, btn_col = st.columns(
-                            [0.2, 0.8], gap="small", vertical_alignment="center"
-                        )
-                        with icon_col:
-                            st.markdown(
-                                f'<div class="oc-domain-card-icon">{icon}</div>',
-                                unsafe_allow_html=True,
-                            )
-                        with btn_col:
-                            if st.button(
-                                label,
-                                key=f"home_domain_btn_{domain}",
-                                use_container_width=True,
-                            ):
-                                if domain == "fridge":
-                                    _start_fridge_flow()
-                                else:
-                                    _start_domain_decision(domain)
+                    if st.button(
+                        label,
+                        key=f"home_domain_{domain}",
+                        use_container_width=True,
+                    ):
+                        if domain == "fridge":
+                            _start_fridge_flow()
+                        else:
+                            _start_domain_decision(domain)
 
 
 def render_logo() -> None:
@@ -4259,6 +4325,25 @@ def _flush_db_accept_bg() -> None:
     _flush_db_accept()
 
 
+def on_accept_food_and_execute(cur: dict[str, Any]) -> None:
+    """Food 'Gör det' — accept, lock, and open execute in one tap."""
+    try:
+        st.session_state.accepted = False
+        accept_current_decision(cur)
+    except BaseException as exc:
+        if _is_streamlit_control_flow(exc):
+            raise
+        log.exception("on_accept_food_and_execute failed: %s", exc)
+        _lock_current_locally(cur)
+        st.session_state.accepted = True
+    try:
+        safe_toast(t("accepted"))
+    except Exception:
+        pass
+    st.session_state.ui_error = None
+    open_execute_now(cur)
+
+
 def on_accept_primary(cur: dict[str, Any]) -> None:
     """Primary accept for non-execute domains — lock locally first."""
     _lock_current_locally(cur)
@@ -4641,6 +4726,17 @@ def _set_profile_show_nutrition(enabled: bool) -> None:
     db.update_user(uid, profile_json=raw)
 
 
+def _mark_execution_opened_for_current(cur: dict[str, Any]) -> None:
+    """Persist execute-view open — grounds leftover evidence."""
+    did = _active_decision_id(cur)
+    if did is None:
+        return
+    try:
+        db.mark_execution_opened(int(did))
+    except Exception as exc:
+        log.warning("mark_execution_opened failed: %s", exc)
+
+
 def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
     """Return (label, has_values) for the nutrition control — never None/null text."""
     import shopping as shopping_mod
@@ -4649,6 +4745,14 @@ def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
     missing = t("nutrition_missing")
     if not isinstance(recipe, dict):
         return missing, False
+    try:
+        import shopping as shopping_mod
+
+        visible = getattr(shopping_mod, "nutrition_segment_visible", None)
+        if callable(visible) and not visible(recipe):
+            return missing, False
+    except Exception:
+        pass
     try:
         ensure = getattr(shopping_mod, "ensure_recipe_nutrition", None)
         if callable(ensure):
@@ -4767,8 +4871,8 @@ def render_recipe_block(
         show_nutrition = True
     if show_nutrition and include_ingredients:
         line, has_vals = _nutrition_display_line(recipe)
-        cls = "oc-nutrition" if has_vals else "oc-nutrition missing"
-        nutrition_html = f'<p class="{cls}">{html.escape(line)}</p>'
+        if has_vals:
+            nutrition_html = f'<p class="oc-nutrition">{html.escape(line)}</p>'
     ings_html = ""
     if include_ingredients:
         ings_html = (
@@ -5751,7 +5855,7 @@ def page_result() -> None:
             use_container_width=True,
             key="food_go_for_it",
         ):
-            on_accept_primary(cur)
+            on_accept_food_and_execute(cur)
     else:
         # Shared accept for clothes / movie / weekend; workout opens execute player
         exec_label = cur.get("execution_label") or t("do_it")
@@ -6079,6 +6183,8 @@ def page_execute() -> None:
             _lock_current_locally(cur)
         except Exception:
             st.session_state.accepted = True
+
+    _mark_execution_opened_for_current(cur if isinstance(cur, dict) else {})
 
     language = st.session_state.get("language", "sv")
     domain = (cur.get("domain") or "").strip()

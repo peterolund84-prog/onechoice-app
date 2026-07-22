@@ -691,6 +691,38 @@ def nutrition_fields_valid(
     return k is not None and p is not None and n is not None and k > 0 and p >= 0 and n >= 1
 
 
+def nutrition_segment_visible(
+    recipe: dict[str, Any] | None,
+    nutrition: dict[str, Any] | None = None,
+) -> bool:
+    """True when we have honest per-portion nutrition to show (never all-zero stubs)."""
+    if not isinstance(recipe, dict):
+        return False
+    if recipe.get("no_recipe") or recipe.get("leftover"):
+        nut = recipe.get("nutrition") if isinstance(recipe.get("nutrition"), dict) else {}
+        kcal = _as_nutrition_int(nut.get("kcal"))
+        protein = _as_nutrition_int(nut.get("protein_g"))
+        fat = _as_nutrition_int(nut.get("fat_g"))
+        carbs = _as_nutrition_int(nut.get("carbs_g"))
+        if not any(x and x > 0 for x in (kcal, protein, fat, carbs)):
+            return False
+    kcal, protein, portions = read_recipe_nutrition(recipe)
+    if not nutrition_fields_valid(kcal, protein, portions):
+        return False
+    nut = nutrition if isinstance(nutrition, dict) else {}
+    if not nut and isinstance(recipe.get("nutrition"), dict):
+        nut = recipe["nutrition"]
+    fat = _as_nutrition_int(
+        recipe.get("fat_g_per_portion", nut.get("fat_g"))
+    )
+    carbs = _as_nutrition_int(
+        recipe.get("carbs_g_per_portion", nut.get("carbs_g"))
+    )
+    if fat == 0 and carbs == 0 and _as_nutrition_int(kcal) == 0:
+        return False
+    return True
+
+
 def read_recipe_nutrition(
     recipe: dict[str, Any] | None,
 ) -> tuple[int | None, int | None, int | None]:
@@ -812,6 +844,8 @@ def format_nutrition_line(
         )
     if not nutrition_fields_valid(kcal, protein, portions):
         return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
+    if not nutrition_segment_visible(recipe, nutrition):
+        return "Nutrition unavailable" if language == "en" else "Näringsvärden saknas"
     fat = _as_nutrition_int(
         recipe.get("fat_g_per_portion") if isinstance(recipe, dict) else None
     ) if isinstance(recipe, dict) else None
@@ -823,19 +857,19 @@ def format_nutrition_line(
             fat = _as_nutrition_int(nutrition.get("fat_g"))
         if carbs is None:
             carbs = _as_nutrition_int(nutrition.get("carbs_g"))
-    if fat is None:
-        fat = 0
-    if carbs is None:
-        carbs = 0
     if language == "en":
-        return (
-            f"Approx. {kcal} kcal per serving · {protein} g protein · "
-            f"{fat} g fat · {carbs} g carbs"
-        )
-    return (
-        f"Ca {kcal} kcal per portion · {protein} g protein · "
-        f"{fat} g fett · {carbs} g kolh."
-    )
+        parts = [f"Approx. {kcal} kcal per serving", f"{protein} g protein"]
+        if fat and fat > 0:
+            parts.append(f"{fat} g fat")
+        if carbs and carbs > 0:
+            parts.append(f"{carbs} g carbs")
+        return " · ".join(parts)
+    parts = [f"Ca {kcal} kcal per portion", f"{protein} g protein"]
+    if fat and fat > 0:
+        parts.append(f"{fat} g fett")
+    if carbs and carbs > 0:
+        parts.append(f"{carbs} g kolh.")
+    return " · ".join(parts)
 
 
 def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:

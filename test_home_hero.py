@@ -98,15 +98,16 @@ class HomeHeroTests(unittest.TestCase):
         self.assertIn('<divclass="oc-hero-title"', body.replace(" ", "").lower())
         self.assertNotIn("<h1", body.lower())
         self.assertIn("oc-section-label", body)
-        self.assertIn("oc-domain-card-icon", body)
         labels = [b.label or "" for b in at.button]
         for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
             self.assertIn(needle, labels, f"missing domain button {needle}")
         self.assertIn("Fota kylen", labels)
         self.assertIn("Bestäm åt mig", labels)
         self.assertNotIn("Vad finns i kylen?", body)
-        # Valid inline SVG icons — no broken glyph placeholders
-        self.assertGreaterEqual(body.count('xmlns="http://www.w3.org/2000/svg"'), 6)
+        # Domain card icons live in CSS data-URIs (not inline markdown)
+        css = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("st-key-home_domain_", css)
+        self.assertGreaterEqual(css.count("data:image/svg+xml"), 6)
         self.assertNotIn("▯", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)

@@ -167,6 +167,7 @@ def init_db(path: Path | str | None = None) -> None:
                 reroll_index INTEGER NOT NULL DEFAULT 0,
                 context_json TEXT NOT NULL,
                 created_at TEXT NOT NULL,
+                execution_opened_at TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             );
 
@@ -243,6 +244,11 @@ def init_db(path: Path | str | None = None) -> None:
             conn.execute(
                 "ALTER TABLE users ADD COLUMN profile_json TEXT NOT NULL DEFAULT '{}'"
             )
+        dec_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(decisions)").fetchall()
+        }
+        if "execution_opened_at" not in dec_cols:
+            conn.execute("ALTER TABLE decisions ADD COLUMN execution_opened_at TEXT")
         # Ensure routed_queries exists on older DBs (executescript IF NOT EXISTS covers new)
         conn.execute(
             """
@@ -633,6 +639,38 @@ def _ensure_sqlite_user(user_id: str, *, path: Path | str | None = None) -> None
         )
 
 
+def mark_execution_opened(
+    decision_id: int,
+    *,
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Record that the user opened the execute view for this decision."""
+    ts = utc_now()
+    if _use_supabase(path):
+        try:
+            import supabase_store as store
+
+            at, rt = _tokens()
+            return store.mark_execution_opened(decision_id, at, rt, opened_at=ts)
+        except Exception:
+            pass
+    with get_conn(path) as conn:
+        conn.execute(
+            """
+            UPDATE decisions
+            SET execution_opened_at = ?
+            WHERE id = ? AND execution_opened_at IS NULL
+            """,
+            (ts, decision_id),
+        )
+        row = conn.execute(
+            "SELECT * FROM decisions WHERE id = ?", (decision_id,)
+        ).fetchone()
+        if not row:
+            raise KeyError(f"decision {decision_id} not found")
+        return _decision_row(row)
+
+
 def set_decision_status(
     decision_id: int,
     status: str,
@@ -706,6 +744,8 @@ def recent_cooked_dinner(
     rows = list_decisions(user_id, domain="food", limit=40, path=path)
     for r in rows:
         if str(r.get("status") or "") not in ("accepted", "locked"):
+            continue
+        if not r.get("execution_opened_at"):
             continue
         ctx = r.get("context") if isinstance(r.get("context"), dict) else {}
         meal = str(ctx.get("meal_type") or "")
