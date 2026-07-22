@@ -7128,9 +7128,6 @@ def page_shared() -> None:
 
 
 def main() -> None:
-    import auth_cookie as ac
-
-    ac.get_cookie_manager()
     init_state()
     if not st.session_state.get("_auth_cookie_checked"):
         st.stop()
