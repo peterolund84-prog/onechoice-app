@@ -245,13 +245,18 @@ class PageButtonInventoryTests(unittest.TestCase):
         self.assertNotIn("1 portioner", html)
 
     def test_css_hides_result_ctas_outside_result(self) -> None:
+        """Orphan CTA defense is session clear + result marker — not the old Hard kill CSS."""
         import app as app_mod
+        from pathlib import Path
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("body:not(:has(.oc-result))", src)
-        self.assertIn("st-key-food_go_for_it", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("oc-result", css)
+        self.assertIn("food_go_for_it", src)
         self.assertIn("oc-fav-corner", src)
-        self.assertIn("top: 12px", src)
+        self.assertIn("top: 12px", css)
+        # Perf pass removed the Hard kill belt
+        self.assertNotIn("Hard kill: result/meal CTAs", css)
 
 
 if __name__ == "__main__":

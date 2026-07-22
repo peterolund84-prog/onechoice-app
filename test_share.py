@@ -376,9 +376,11 @@ class ShareLandingUiTests(unittest.TestCase):
         self.assertIn("__ocSharePayloads", html_btn)
         self.assertIn("oc-share-icon-btn", html_btn)
         # Icon is CSS background (not inline SVG that DOMPurify strips → white box)
-        src = Path(app_mod.__file__).read_text(encoding="utf-8")
-        self.assertIn("data:image/svg+xml", src)
-        self.assertIn(".oc-share-icon-btn", src)
+        from pathlib import Path
+
+        css = Path("styles.css").read_text(encoding="utf-8")
+        self.assertIn("data:image/svg+xml", css)
+        self.assertIn(".oc-share-icon-btn", css)
         runtime = app_mod._oc_share_runtime_html()
         self.assertIn("navigator.share", runtime)
         self.assertIn("oc-share-toast", runtime)

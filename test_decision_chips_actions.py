@@ -9,16 +9,19 @@ from unittest import mock
 
 class DecisionChipsActionsTests(unittest.TestCase):
     def test_meal_seg_css_is_one_row_segmented(self) -> None:
+        from pathlib import Path
+
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".st-key-meal_seg", src)
-        self.assertIn(".oc-seg", src)
-        self.assertIn("height: 40px", src)
-        self.assertIn("height: 32px", src)
-        self.assertIn("font-size: 13px", src)
-        self.assertIn("padding: 4px", src)
-        self.assertIn("#4F46E5", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".st-key-meal_seg", css)
+        self.assertIn(".oc-seg", css)
+        self.assertIn("height: 40px", css)
+        self.assertIn("height: 32px", css)
+        self.assertIn("font-size: 13px", css)
+        self.assertIn("padding: 4px", css)
+        self.assertIn("#4F46E5", css)
         self.assertNotIn('html.escape("Måltid"', src)
         self.assertIn('key="meal_seg"', src)
         self.assertIn('class="oc-seg"', src)
@@ -30,29 +33,35 @@ class DecisionChipsActionsTests(unittest.TestCase):
         self.assertNotIn("st.pills(", meal_fn)
         self.assertIn("st.button(", meal_fn)
         # Nav-style key scoping
-        self.assertIn('[class*="st-key-meal_seg_"]', src)
+        self.assertIn('[class*="st-key-meal_seg_"]', css)
         import food_domain as fd
 
         self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
 
     def test_result_vertical_rhythm_css(self) -> None:
+        from pathlib import Path
+
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".oc-result", src)
-        self.assertIn("52px + env(safe-area-inset-top) + 24px", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".oc-result", css)
+        self.assertIn("52px + env(safe-area-inset-top) + 24px", css)
         self.assertIn('key="result_primary_btn"', src)
-        self.assertIn(".st-key-result_secondary_btn", src)
-        self.assertIn("margin: 12px 0 0 !important", src)
+        self.assertIn(".st-key-result_secondary_btn", css)
+        self.assertIn("margin: 12px 0 0 !important", css)
         self.assertIn("st.columns([1, 1, 1, 1]", src)
-        self.assertIn('[class*="st-key-meal_seg_"]', src)
+        self.assertIn('[class*="st-key-meal_seg_"]', css)
 
     def test_result_secondary_outlined_button_css(self) -> None:
+        from pathlib import Path
+
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".st-key-result_secondary_btn", src)
-        self.assertIn("height: 48px", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".st-key-result_secondary_btn", css)
+        self.assertIn("height: 48px", css)
         self.assertIn('key="reroll_btn"', src)
         self.assertNotIn('key="reroll_link"', src)
         self.assertNotIn('key="back_home"', src)

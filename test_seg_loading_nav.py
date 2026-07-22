@@ -6,7 +6,14 @@ from __future__ import annotations
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from unittest import mock
+
+_STYLES = Path(__file__).resolve().parent / "styles.css"
+
+
+def _styles() -> str:
+    return _STYLES.read_text(encoding="utf-8")
 
 
 class MealSegFullLabelTests(unittest.TestCase):
@@ -23,15 +30,16 @@ class MealSegFullLabelTests(unittest.TestCase):
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".st-key-meal_seg", src)
-        self.assertIn(".oc-seg", src)
-        self.assertIn("flex: 1 1 0 !important", src)
-        self.assertIn("height: 32px", src)  # segment button
-        self.assertIn("height: 40px", src)  # track
-        self.assertIn("padding: 4px", src)
-        self.assertIn("font-size: 13px", src)
-        self.assertIn("letter-spacing: 0", src)
-        self.assertIn("white-space: nowrap", src)
+        css = _styles()
+        self.assertIn(".st-key-meal_seg", css)
+        self.assertIn(".oc-seg", css)
+        self.assertIn("flex: 1 1 0 !important", css)
+        self.assertIn("height: 32px", css)  # segment button
+        self.assertIn("height: 40px", css)  # track
+        self.assertIn("padding: 4px", css)
+        self.assertIn("font-size: 13px", css)
+        self.assertIn("letter-spacing: 0", css)
+        self.assertIn("white-space: nowrap", css)
         self.assertIn('key=f"meal_seg_{meal_key}"', src)
         self.assertIn("st.columns([1, 1, 1, 1]", src)
         self.assertNotIn('key="meal_pills"', src)
@@ -51,14 +59,9 @@ class DecideSlotTests(unittest.TestCase):
         self.assertIn('"deciding": page_deciding', src)
 
     def test_decide_slot_css_is_full_width(self) -> None:
-        import app as app_mod
-
-        src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".st-key-decide_slot", src)
-        self.assertIn(
-            ".oc-skel-card {\n    width: 100% !important;",
-            src.replace("{{", "{").replace("}}", "}"),
-        )
+        css = _styles()
+        self.assertIn(".st-key-decide_slot", css)
+        self.assertIn(".oc-skel-card {\n    width: 100% !important;", css)
 
 
 class TimeBasedSkeletonTests(unittest.TestCase):
@@ -128,8 +131,9 @@ class TimeBasedSkeletonTests(unittest.TestCase):
     def test_css_hides_prior_card_under_skeleton(self) -> None:
         import app as app_mod
 
+        css = _styles()
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card)", src)
+        self.assertIn("body:has(.oc-skel-card) .oc-decision:not(.oc-skel-card)", css)
         self.assertIn("data-oc-deciding", src)
         self.assertIn("_decide_skel_painted", src)
 
@@ -145,39 +149,25 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertNotIn('["_decide_skel_painted"] = False', src)
         self.assertNotIn("_render_decide_evictor", src)
 
-    def test_pending_nav_wipe_runtime(self) -> None:
-        """General click→wipe so old pages never sit dimmed under the next run."""
+    def test_css_extracted_and_cached(self) -> None:
+        """Perf pass: static CSS lives in styles.css; inject once per session."""
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("html.oc-pending", src)
-        self.assertIn("html.oc-pending body::before", src)
-        self.assertIn("#oc-nav-wipe", src)
-        self.assertIn("inject_app_runtime", src)
-        self.assertIn("data-test-script-state", src)
-        self.assertIn("unsafe_allow_javascript", src)
-        # Orphan skeleton on settled Hem only — keep cycling status during decide
-        self.assertIn("html:not(.oc-pending) body:has(.st-key-home_hero) .oc-skel-card", src)
-        self.assertIn("html:not(.oc-pending) body:has(.st-key-home_hero) .st-key-decide_slot", src)
-        self.assertIn("Kollar vad du åt senast", src)
-        self.assertIn("oc-status-cycle", src)
-        # Wipe lifts only when home is gone
-        self.assertIn(":not(:has(.st-key-home_hero))", src)
-        html = app_mod._oc_pending_nav_runtime_html()
-        self.assertIn("oc-pending", html)
-        self.assertIn("oc-nav-wipe", html)
-        self.assertIn("__ocDisarmTimer", html)
-        self.assertIn("__ocPendingClick", html)
-        self.assertIn("__ocPendingScrollCancel", html)
-        self.assertIn("hasHome", html)
-        self.assertIn("isRunning", html)
-        self.assertIn("rerunRequested", html)
-        # Click only — pointerdown blanks the page when scrolling over buttons
-        self.assertIn('addEventListener("click"', html)
-        self.assertNotIn('addEventListener("pointerdown"', html)
-        self.assertIn("touchmove", html)
-        # Must target the app document (st.html), not assume iframe→parent
-        self.assertIn('[data-testid="stApp"]', html)
+        self.assertTrue(_STYLES.is_file())
+        self.assertIn("def read_css", src)
+        self.assertIn("@st.cache_data", src)
+        self.assertIn("_oc_css_injected", src)
+        self.assertIn("def _dynamic_css_block", src)
+        # Ghost wipe hacks removed after perf pass
+        self.assertNotIn("inject_app_runtime", src)
+        self.assertNotIn("_oc_pending_nav_runtime_html", src)
+        css = _styles()
+        self.assertNotIn("html.oc-pending", css)
+        self.assertNotIn("#oc-nav-wipe", css)
+        self.assertNotIn("Hard kill: result/meal CTAs", css)
+        self.assertIn("Kollar vad du åt senast", open(app_mod.__file__, encoding="utf-8").read())
+        self.assertIn("oc-status-cycle", css)
 
     def test_run_decision_always_uses_time_based_await(self) -> None:
         import app as app_mod
@@ -192,15 +182,13 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
 class NavBleedTests(unittest.TestCase):
     def test_nav_glass_is_opaque_enough(self) -> None:
-        import app as app_mod
-
-        src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn("rgba(250, 250, 247, 0.92)", src)
-        self.assertIn("blur(20px)", src)
-        self.assertIn("z-index: 10000", src)
+        css = _styles()
+        self.assertIn("rgba(250, 250, 247, 0.92)", css)
+        self.assertIn("blur(20px)", css)
+        self.assertIn("z-index: 10000", css)
         # Must not wipe nav bar background back to transparent
         # (children may be transparent; the bar itself must keep glass)
-        nav_block = src.split("/* Glass nav MUST win")[1].split(".st-key-oc_nav_bar [class*")[0]
+        nav_block = css.split("/* Glass nav MUST win")[1].split(".st-key-oc_nav_bar [class*")[0]
         self.assertIn("rgba(250, 250, 247, 0.92)", nav_block)
         # The bar rule itself is NOT background: transparent
         bar_only = nav_block.split(".st-key-oc_nav_bar [data-testid")[0]

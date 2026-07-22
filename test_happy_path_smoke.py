@@ -159,7 +159,9 @@ class HappyPathSmokeTest(unittest.TestCase):
             keys = {getattr(b, "key", None) for b in at.button}
             for k in ("nav_home", "nav_lista", "nav_history", "nav_profile"):
                 self.assertIn(k, keys, (page, keys))
-            css = body
+            from pathlib import Path
+
+            css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
             self.assertIn("backdrop-filter: blur(14px)", css)
 
     def test_home_redirects_to_execute_when_food_accepted(self) -> None:

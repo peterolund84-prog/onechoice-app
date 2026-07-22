@@ -286,16 +286,14 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertIn('data-oc-nav="glass"', body)
 
     def test_premium_shop_css_tokens(self) -> None:
-        import inspect
+        from pathlib import Path
 
-        import app as app_mod
-
-        src = inspect.getsource(app_mod.inject_css)
-        self.assertIn("oc-shop-pick-marker", src)
-        self.assertIn("oc-shop-row", src)
-        self.assertIn("oc-shop-pick", src)
-        self.assertIn("exec_sticky_cta", src)
-        self.assertIn("oc-exec-lock", src)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn("oc-shop-pick-marker", css)
+        self.assertIn("oc-shop-row", css)
+        self.assertIn("oc-shop-pick", css)
+        self.assertIn("exec_sticky_cta", css)
+        self.assertIn("oc-exec-lock", css)
 
 
 if __name__ == "__main__":

@@ -20,9 +20,12 @@ class HomeDesignTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        css = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("--oc-bg", css)
-        self.assertIn("--oc-accent", css)
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        dyn = " ".join(str(m.value or "") for m in at.markdown)
+        self.assertIn("--oc-bg", dyn)
+        self.assertIn("--oc-accent", dyn)
         self.assertIn("family=Sora", css)
         self.assertIn("family=Inter", css)
         self.assertIn("oc-hero", css)

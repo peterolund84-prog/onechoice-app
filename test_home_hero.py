@@ -104,8 +104,10 @@ class HomeHeroTests(unittest.TestCase):
         self.assertIn("Fota kylen", labels)
         self.assertIn("Bestäm åt mig", labels)
         self.assertNotIn("Vad finns i kylen?", body)
-        # Domain card icons live in CSS data-URIs (not inline markdown)
-        css = " ".join(str(m.value or "") for m in at.markdown)
+        # Domain card icons live in styles.css data-URIs
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         self.assertIn("st-key-home_domain_", css)
         self.assertGreaterEqual(css.count("data:image/svg+xml"), 6)
         self.assertNotIn("▯", body)
@@ -216,13 +218,15 @@ class HomeHeroTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        css = " ".join(str(m.value or "") for m in at.markdown)
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        body = " ".join(str(m.value or "") for m in at.markdown)
         for needle in (
             "left: 50%",
             "translateX(-50%)",
             "text-align: center",
             "oc-hero-title",
-            "role=\"heading\"",
             "oc-cta",
             "st-key-home_hero div.stButton",
             "margin: 0 0 28px",
@@ -235,6 +239,7 @@ class HomeHeroTests(unittest.TestCase):
             "oc-header-wordmark",
         ):
             self.assertIn(needle, css, needle)
+        self.assertIn('role="heading"', body)
 
     def test_domain_cards_use_session_safe_buttons(self) -> None:
         from streamlit.testing.v1 import AppTest

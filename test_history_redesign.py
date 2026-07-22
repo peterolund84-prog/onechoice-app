@@ -89,32 +89,38 @@ class HistoryDateLabelTests(unittest.TestCase):
 
 class IconButtonCssTests(unittest.TestCase):
     def test_oc_icon_btn_rule_present(self) -> None:
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".oc-icon-btn", src)
-        self.assertIn(".oc-icon-btn.active", src)
-        self.assertIn("width: 40px", src)
+        self.assertIn(".oc-icon-btn", css)
+        self.assertIn(".oc-icon-btn.active", css)
+        self.assertIn("width: 40px", css)
         self.assertIn("oc-icon-btn oc-share-icon-btn", src)
         # Heart chrome stripped via Streamlit key wrappers
-        self.assertIn("st-key-hist_fav_", src)
-        self.assertIn("st-key-exec_fav_corner", src)
+        self.assertIn("st-key-hist_fav_", css)
+        self.assertIn("st-key-exec_fav_corner", css)
         # Labels visually hidden — glyph only
-        self.assertIn("text-indent: -9999px", src)
+        self.assertIn("text-indent: -9999px", css)
 
 
 class HistoryRowPolishTests(unittest.TestCase):
     def test_row_thumb_and_inset_separator_css(self) -> None:
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         src = open(app_mod.__file__, encoding="utf-8").read()
-        self.assertIn(".oc-row-thumb", src)
-        self.assertIn("box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06)", src)
-        self.assertIn("padding: 4px 16px", src)
-        self.assertIn(".oc-hist-row-main", src)
-        self.assertIn("border-bottom: 1px solid var(--oc-border)", src)
-        self.assertIn("font-size: 16px", src)
-        self.assertIn(".oc-row-thumb-ph", src)
+        self.assertIn(".oc-row-thumb", css)
+        self.assertIn("box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06)", css)
+        self.assertIn("padding: 4px 16px", css)
+        self.assertIn(".oc-hist-row-main", css)
+        self.assertIn("border-bottom: 1px solid var(--oc-border)", css)
+        self.assertIn("font-size: 16px", css)
+        self.assertIn(".oc-row-thumb-ph", css)
         self.assertIn("data-oc-hist-row", src)
-        self.assertIn(".oc-hist-heart-glyph.is-on", src)
+        self.assertIn(".oc-hist-heart-glyph.is-on", css)
         # No plate background on photo thumb
-        self.assertNotIn(".oc-hist-thumb", src)
+        self.assertNotIn(".oc-hist-thumb {", css)
 
     def test_row_visual_html_is_self_contained(self) -> None:
         html = app_mod._hist_row_visual_html(
