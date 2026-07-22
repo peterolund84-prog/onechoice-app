@@ -37,11 +37,8 @@ MEAL_TYPES: dict[str, dict[str, Any]] = {
         "repeat_days": 7,
     },
     "kvallsmal": {
-        # Short chip label so the 4-segment meal control fits at 390px
-        "sv": "Kväll",
-        "en": "Evening",
-        "sv_full": "Kvällsmål",
-        "en_full": "Evening snack",
+        "sv": "Kvällsmål",
+        "en": "Evening snack",
         "show_shopping": False,
         "max_minutes": 5,
         "assume_at_home_only": True,
@@ -54,18 +51,13 @@ MEAL_ORDER = ("frukost", "lunch", "middag", "kvallsmal")
 
 
 def meal_label(key: str, language: str = "sv") -> str:
-    """Compact label for segmented controls / chips."""
+    """Full meal name for segmented controls — never abbreviated."""
     row = MEAL_TYPES.get(key) or {}
     return str(row.get(language) or row.get("sv") or key)
 
 
 def meal_headline(key: str, language: str = "sv") -> str:
-    """Full spoken meal name for hero headlines (may be longer than chip label)."""
-    row = MEAL_TYPES.get(key) or {}
-    lang = "en" if language == "en" else "sv"
-    full = row.get(f"{lang}_full")
-    if full:
-        return str(full)
+    """Hero headline meal name (same as chip label — full words)."""
     return meal_label(key, language)
 
 
