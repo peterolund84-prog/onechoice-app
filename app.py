@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "historik-row-polish-v52-20260722"
+BUILD_ID = "historik-row-fix-v53-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1665,11 +1665,9 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     margin: 0 !important;
     padding: 0 !important;
 }}
-/* Streamlit heart buttons — same chrome-free rule as .oc-icon-btn; glyph only */
+/* Streamlit heart buttons — execute card corner (Historik heart is HTML glyph) */
 .st-key-exec_fav_corner div.stButton > button,
-.st-key-exec_fav_corner button,
-div[class*="st-key-hist_fav_"] div.stButton > button,
-div[class*="st-key-hist_fav_"] button {{
+.st-key-exec_fav_corner button {{
     background: transparent !important;
     background-color: transparent !important;
     border: none !important;
@@ -1696,10 +1694,7 @@ div[class*="st-key-hist_fav_"] button {{
 }}
 .st-key-exec_fav_corner div.stButton > button p,
 .st-key-exec_fav_corner div.stButton > button span,
-.st-key-exec_fav_corner div.stButton > button div,
-div[class*="st-key-hist_fav_"] div.stButton > button p,
-div[class*="st-key-hist_fav_"] div.stButton > button span,
-div[class*="st-key-hist_fav_"] div.stButton > button div {{
+.st-key-exec_fav_corner div.stButton > button div {{
     font-size: 0 !important;
     line-height: 0 !important;
     color: transparent !important;
@@ -1710,8 +1705,7 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {{
     margin: 0 !important;
     padding: 0 !important;
 }}
-.st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button,
-div[class*="st-key-hist_row_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] div.stButton > button {{
+.st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button {{
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5' stroke='%234F46E5' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
     color: #4F46E5 !important;
 }}
@@ -1722,76 +1716,63 @@ div[class*="st-key-hist_row_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] di
     font-family: "Inter", sans-serif !important;
 }}
 .oc-hist-date:first-child {{ margin-top: 0.35rem; }}
-/* Group card: 16px side inset so thumbs never kiss the frame */
-div[class*="st-key-hist_group_"] {{ margin: 0 0 0.85rem !important; padding: 0 !important; }}
-div[class*="st-key-hist_group_"] [data-testid="stVerticalBlockBorderWrapper"] {{
+/* Group card — our border + 16px inset (no Streamlit border-wrapper fight) */
+div[class*="st-key-hist_group_"] {{
+    margin: 0 0 0.85rem !important;
     padding: 4px 16px !important;
+    background: #fff !important;
+    border: 1px solid var(--oc-border) !important;
+    border-radius: 14px !important;
+    box-sizing: border-box !important;
 }}
+div[class*="st-key-hist_group_"] [data-testid="stVerticalBlockBorderWrapper"],
 div[class*="st-key-hist_group_"] [data-testid="stVerticalBlockBorderWrapper"] > div {{
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
     gap: 0 !important;
 }}
-/* 64px content-box row; inset hairline starts at text column (iOS list) */
+/* Row shell: 64px, hosts HTML visual + absolute hit targets */
 div[class*="st-key-hist_row_"] {{
+    position: relative !important;
     margin: 0 !important;
-    padding: 10px 0 !important;
+    padding: 0 !important;
     height: 64px !important;
     min-height: 64px !important;
     max-height: 64px !important;
-    box-sizing: border-box !important;
-    border-bottom: none !important;
-    position: relative !important;
     overflow: visible !important;
 }}
-div[class*="st-key-hist_row_"]:not(:last-of-type)::after {{
-    content: "";
-    position: absolute;
-    left: calc(44px + 12px);
-    right: 0;
-    bottom: 0;
-    height: 1px;
-    background: var(--oc-border);
+div[class*="st-key-hist_row_"] [data-testid="stVerticalBlock"] {{
+    gap: 0 !important;
+}}
+div[class*="st-key-hist_row_"] [data-testid="stHtml"],
+div[class*="st-key-hist_row_"] [data-testid="element-container"]:has([data-testid="stHtml"]),
+div[class*="st-key-hist_row_"] [data-testid="element-container"]:has(.oc-hist-row),
+div[class*="st-key-hist_row_"] [data-testid="element-container"]:has([data-oc-hist-row]) {{
+    margin: 0 !important;
+    padding: 0 !important;
+    height: 64px !important;
+}}
+.oc-hist-row {{
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    height: 64px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
     pointer-events: none;
 }}
-div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] {{
-    align-items: center !important;
-    height: 44px !important;
-    min-height: 44px !important;
-    gap: 12px !important;
-    flex-wrap: nowrap !important;
-    position: relative !important;
-    padding-right: 40px !important;
-    box-sizing: border-box !important;
+.oc-hist-row-thumb-wrap {{
+    flex: 0 0 44px;
+    width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0;
+    box-sizing: border-box;
 }}
-div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div {{
-    padding: 0 !important;
-}}
-/* Col 1: fixed 44px thumb */
-div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child(1) {{
-    flex: 0 0 44px !important;
-    width: 44px !important;
-    min-width: 44px !important;
-    max-width: 44px !important;
-}}
-/* Col 2: flexible text — heart overlaid so long titles fit at 390px */
-div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child(2) {{
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    width: auto !important;
-    max-width: none !important;
-}}
-/* Col 3: fixed 40px heart overlay */
-div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child(3) {{
-    position: absolute !important;
-    right: 0 !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
-    flex: 0 0 40px !important;
-    width: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    z-index: 3 !important;
-}}
-/* Image IS the element — no plate/wrapper chrome */
 .oc-row-thumb {{
     width: 44px;
     height: 44px;
@@ -1799,7 +1780,6 @@ div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child
     border-radius: 10px;
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
     display: block;
-    flex: none;
     background: transparent !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -1809,36 +1789,32 @@ div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] > div:nth-child
     width: 44px;
     height: 44px;
     border-radius: 50%;
-    background: rgba(79, 70, 229, 0.08);
+    background-color: rgba(79, 70, 229, 0.08);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(79,70,229,0.55)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3'/%3E%3Cpath d='M7 12v9'/%3E%3Cpath d='M15 3v9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2z'/%3E%3Cpath d='M17 12v9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 18px 18px;
     box-shadow: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
     flex: none;
 }}
-.oc-row-thumb-ph svg {{
-    width: 18px;
-    height: 18px;
-    stroke: rgba(79, 70, 229, 0.55);
-    fill: none;
-    stroke-width: 1.6;
-    stroke-linecap: round;
-    stroke-linejoin: round;
+/* Inset separator: only under text+heart, thumb column stays clean */
+.oc-hist-row-main {{
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--oc-border);
 }}
-div[class*="st-key-hist_row_"] [data-testid="stImage"],
-div[class*="st-key-hist_row_"] [data-testid="stImage"] > div,
-div[class*="st-key-hist_row_"] figure,
-div[class*="st-key-hist_row_"] .stMarkdown {{
-    background: transparent !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
+.oc-hist-row-last .oc-hist-row-main {{
+    border-bottom: none;
 }}
 .oc-hist-text {{
+    flex: 1 1 auto;
     min-width: 0;
-    padding: 0;
-    pointer-events: none;
     overflow: hidden;
 }}
 .oc-hist-title {{
@@ -1850,7 +1826,6 @@ div[class*="st-key-hist_row_"] .stMarkdown {{
     overflow: hidden;
     text-overflow: ellipsis;
     letter-spacing: -0.015em;
-    padding-right: 4px;
     font-family: "Inter", sans-serif !important;
 }}
 .oc-hist-meta {{
@@ -1863,22 +1838,81 @@ div[class*="st-key-hist_row_"] .stMarkdown {{
     text-overflow: ellipsis;
     font-family: "Inter", sans-serif !important;
 }}
-/* Full-row tap target — invisible over title/meta */
-div[class*="st-key-hist_body_"] {{
-    position: relative !important; margin: 0 !important; padding: 0 !important; min-width: 0 !important;
-    height: 44px !important;
+.oc-hist-heart-glyph {{
+    flex: 0 0 40px;
+    width: 40px;
+    height: 40px;
+    display: block;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 20px 20px;
+    transition: background-image 150ms ease;
 }}
+.oc-hist-heart-glyph.is-on {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5' stroke='%234F46E5' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E");
+}}
+/* Invisible hit targets over the HTML row */
 div[class*="st-key-hist_open_"] {{
-    position: absolute !important; inset: 0 !important; z-index: 2 !important;
-    margin: 0 !important; padding: 0 !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 40px !important;
+    bottom: 0 !important;
+    z-index: 2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }}
 div[class*="st-key-hist_open_"] div.stButton,
 div[class*="st-key-hist_open_"] div.stButton > button,
 div[class*="st-key-hist_open_"] button {{
     background: transparent !important; border: none !important; box-shadow: none !important;
-    width: 100% !important; height: 100% !important; min-height: 44px !important;
+    width: 100% !important; height: 100% !important; min-height: 64px !important;
     margin: 0 !important; padding: 0 !important; border-radius: 0 !important;
     opacity: 0 !important; color: transparent !important; font-size: 0 !important;
+}}
+div[class*="st-key-hist_fav_"] {{
+    position: absolute !important;
+    right: 0 !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 40px !important;
+    height: 40px !important;
+    z-index: 3 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+div[class*="st-key-hist_fav_"] div.stButton > button,
+div[class*="st-key-hist_fav_"] button {{
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    max-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    /* Glyph is in the HTML row — button is tap-only */
+    background-image: none !important;
+    color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    overflow: hidden !important;
+    text-indent: -9999px !important;
+    opacity: 1 !important;
+}}
+div[class*="st-key-hist_fav_"] div.stButton > button p,
+div[class*="st-key-hist_fav_"] div.stButton > button span,
+div[class*="st-key-hist_fav_"] div.stButton > button div {{
+    font-size: 0 !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
 }}
 .oc-share-lista-wrap {{
     display: flex; justify-content: flex-end; align-items: center; min-height: 40px;
@@ -5278,15 +5312,19 @@ def _hist_time_meta(row: dict[str, Any], language: str) -> str:
 
 
 def _hist_generic_placeholder_html() -> str:
-    """44px tonal circle + fork — used when dish_category is generic/missing."""
+    """44px tonal circle + fork (CSS bg) — used when dish_category is generic/missing."""
     return (
-        '<div class="oc-row-thumb-ph" aria-hidden="true">'
-        '<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">'
-        '<path d="M5 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3"/>'
-        '<path d="M7 12v9"/>'
-        '<path d="M15 3v9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2z"/>'
-        '<path d="M17 12v9"/>'
-        "</svg></div>"
+        '<div class="oc-row-thumb-ph" aria-hidden="true" '
+        'style="width:44px;height:44px;border-radius:50%;'
+        "background-color:rgba(79,70,229,0.08);display:block\"></div>"
+    )
+
+
+def _hist_heart_glyph_html(*, filled: bool) -> str:
+    cls = "oc-hist-heart-glyph is-on" if filled else "oc-hist-heart-glyph"
+    return (
+        f'<span class="{cls}" aria-hidden="true" '
+        'style="flex:0 0 40px;width:40px;height:40px;display:block"></span>'
     )
 
 
@@ -5309,8 +5347,13 @@ def _hist_thumb_html(row: dict[str, Any]) -> str:
     if not raw:
         return _hist_generic_placeholder_html()
     b64 = base64.b64encode(raw).decode("ascii")
+    # Inline critical styles — survives Streamlit wrapper chrome
     return (
-        f'<img class="oc-row-thumb" src="data:image/jpeg;base64,{b64}" alt=""/>'
+        f'<img class="oc-row-thumb" alt="" '
+        f'style="width:44px;height:44px;object-fit:cover;border-radius:10px;'
+        f'display:block;margin:0;padding:0;border:none;background:transparent;'
+        f'box-shadow:inset 0 0 0 1px rgba(0,0,0,0.06)" '
+        f'src="data:image/jpeg;base64,{b64}"/>'
     )
 
 
@@ -5355,65 +5398,97 @@ def _group_history_by_day(
     return list(groups.items())
 
 
-def _render_history_row(row: dict[str, Any], *, mode: str = "history") -> None:
-    """64px tappable list row: thumb | title+meta | heart."""
+def _hist_row_visual_html(
+    row: dict[str, Any],
+    *,
+    is_fav: bool,
+    last: bool,
+) -> str:
+    """Self-contained row markup — inline layout so Streamlit columns can't undo it."""
+    suggestion = str(row.get("suggestion") or "")
+    language = st.session_state.get("language", "sv")
+    meta = _hist_time_meta(row, language)
+    thumb = _hist_thumb_html(row)
+    meta_html = (
+        f'<div class="oc-hist-meta" style="font-size:13px;color:rgba(0,0,0,0.45);'
+        f'line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;'
+        f'text-overflow:ellipsis">{html.escape(meta)}</div>'
+        if meta
+        else ""
+    )
+    last_cls = " oc-hist-row-last" if last else ""
+    sep = "none" if last else "1px solid #E5E5E0"
+    return (
+        f'<div class="oc-hist-row{last_cls}" data-oc-hist-row="1" '
+        f'style="display:flex;align-items:stretch;gap:12px;height:64px;'
+        f'margin:0;padding:0;box-sizing:border-box">'
+        f'<div class="oc-hist-row-thumb-wrap" style="flex:0 0 44px;width:44px;'
+        f'display:flex;align-items:center;justify-content:center;padding:10px 0;'
+        f'box-sizing:border-box">{thumb}</div>'
+        f'<div class="oc-hist-row-main" style="flex:1 1 auto;min-width:0;display:flex;'
+        f'align-items:center;gap:12px;padding:10px 0;box-sizing:border-box;'
+        f'border-bottom:{sep}">'
+        f'<div class="oc-hist-text" style="flex:1 1 auto;min-width:0;overflow:hidden">'
+        f'<div class="oc-hist-title" style="font-size:16px;font-weight:500;'
+        f'line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'
+        f'letter-spacing:-0.015em">{html.escape(suggestion)}</div>'
+        f"{meta_html}</div>"
+        f"{_hist_heart_glyph_html(filled=is_fav)}"
+        f"</div></div>"
+    )
+
+
+def _paint_hist_html(body: str) -> None:
+    """Paint Historik HTML without re-injecting the share runtime on every row."""
+    try:
+        st.html(body or "")
+    except Exception:
+        st.markdown(body or "", unsafe_allow_html=True)
+
+
+def _render_history_row(
+    row: dict[str, Any],
+    *,
+    mode: str = "history",
+    last: bool = False,
+) -> None:
+    """64px tappable list row: HTML visual + invisible open/heart hit targets."""
     rid = row.get("id")
     if rid is None:
         return
     rid_i = int(rid)
     is_fav = bool(row.get("favorite"))
     suggestion = str(row.get("suggestion") or "")
-    language = st.session_state.get("language", "sv")
-    meta = _hist_time_meta(row, language)
 
     with st.container(key=f"hist_row_{mode}_{rid_i}"):
-        marker = "oc-fav-on" if is_fav else "oc-fav-off"
-        st.markdown(
-            f'<div class="{marker}" aria-hidden="true"></div>',
-            unsafe_allow_html=True,
-        )
-        thumb_c, body_c, fav_c = st.columns([44, 260, 40], gap="small")
-        with thumb_c:
-            st.markdown(_hist_thumb_html(row), unsafe_allow_html=True)
-        with body_c:
-            with st.container(key=f"hist_body_{mode}_{rid_i}"):
-                meta_html = (
-                    f'<div class="oc-hist-meta">{html.escape(meta)}</div>' if meta else ""
-                )
-                st.markdown(
-                    f'<div class="oc-hist-text">'
-                    f'<div class="oc-hist-title">{html.escape(suggestion)}</div>'
-                    f"{meta_html}</div>",
-                    unsafe_allow_html=True,
-                )
-                with st.container(key=f"hist_open_{mode}_{rid_i}"):
-                    if st.button(
-                        suggestion or "·",
-                        key=f"hist_open_btn_{mode}_{rid_i}",
-                        use_container_width=True,
-                        type="secondary",
-                        help=suggestion,
-                    ):
-                        if mode == "favorites":
-                            st.session_state["_favorite_browse_id"] = rid_i
-                            st.session_state["_favorite_browse_row"] = dict(row)
-                        else:
-                            st.session_state.pop("_favorite_browse_id", None)
-                            st.session_state.pop("_favorite_browse_row", None)
-                        _restore_decision_from_row(row)
-                        st.rerun()
-        with fav_c:
-            with st.container(key=f"hist_fav_{mode}_{rid_i}"):
-                help_lbl = t("favorite_remove") if is_fav else t("favorite_add")
-                if st.button(
-                    "\u200b",
-                    key=f"hist_fav_btn_{mode}_{rid_i}",
-                    use_container_width=True,
-                    type="secondary",
-                    help=help_lbl,
-                ):
-                    _toggle_favorite_by_id(rid_i, currently=is_fav)
-                    st.rerun()
+        _paint_hist_html(_hist_row_visual_html(row, is_fav=is_fav, last=last))
+        with st.container(key=f"hist_open_{mode}_{rid_i}"):
+            if st.button(
+                suggestion or "·",
+                key=f"hist_open_btn_{mode}_{rid_i}",
+                use_container_width=True,
+                type="secondary",
+                help=suggestion,
+            ):
+                if mode == "favorites":
+                    st.session_state["_favorite_browse_id"] = rid_i
+                    st.session_state["_favorite_browse_row"] = dict(row)
+                else:
+                    st.session_state.pop("_favorite_browse_id", None)
+                    st.session_state.pop("_favorite_browse_row", None)
+                _restore_decision_from_row(row)
+                st.rerun()
+        with st.container(key=f"hist_fav_{mode}_{rid_i}"):
+            help_lbl = t("favorite_remove") if is_fav else t("favorite_add")
+            if st.button(
+                "\u200b",
+                key=f"hist_fav_btn_{mode}_{rid_i}",
+                use_container_width=True,
+                type="secondary",
+                help=help_lbl,
+            ):
+                _toggle_favorite_by_id(rid_i, currently=is_fav)
+                st.rerun()
 
 
 def _render_history_groups(
@@ -5430,9 +5505,10 @@ def _render_history_groups(
                 unsafe_allow_html=True,
             )
         day_key = day.isoformat() if day else "unknown"
-        with st.container(border=True, key=f"hist_group_{mode}_{day_key}"):
-            for r in day_rows:
-                _render_history_row(r, mode=mode)
+        # border=False — we draw the card chrome ourselves (16px inset works)
+        with st.container(key=f"hist_group_{mode}_{day_key}"):
+            for i, r in enumerate(day_rows):
+                _render_history_row(r, mode=mode, last=(i == len(day_rows) - 1))
 
 
 

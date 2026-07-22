@@ -107,11 +107,35 @@ class HistoryRowPolishTests(unittest.TestCase):
         self.assertIn(".oc-row-thumb", src)
         self.assertIn("box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06)", src)
         self.assertIn("padding: 4px 16px", src)
-        self.assertIn("left: calc(44px + 12px)", src)
+        self.assertIn(".oc-hist-row-main", src)
+        self.assertIn("border-bottom: 1px solid var(--oc-border)", src)
         self.assertIn("font-size: 16px", src)
         self.assertIn(".oc-row-thumb-ph", src)
+        self.assertIn("data-oc-hist-row", src)
+        self.assertIn(".oc-hist-heart-glyph.is-on", src)
         # No plate background on photo thumb
         self.assertNotIn(".oc-hist-thumb", src)
+
+    def test_row_visual_html_is_self_contained(self) -> None:
+        html = app_mod._hist_row_visual_html(
+            {
+                "id": 1,
+                "domain": "food",
+                "suggestion": "Etiopisk-inspirerad linsgryta",
+                "favorite": True,
+                "created_at": "2026-07-20T15:47:00+02:00",
+                "context": {"dish_category": "linser"},
+            },
+            is_fav=True,
+            last=False,
+        )
+        self.assertIn('data-oc-hist-row="1"', html)
+        self.assertIn("Etiopisk-inspirerad linsgryta", html)
+        self.assertIn("oc-hist-heart-glyph is-on", html)
+        self.assertIn("display:flex", html)
+        self.assertIn("height:64px", html)
+        self.assertIn("border-bottom:1px solid", html)
+        self.assertIn("oc-row-thumb", html)
 
     def test_generic_uses_tonal_placeholder_not_photo(self) -> None:
         html = app_mod._hist_thumb_html(
