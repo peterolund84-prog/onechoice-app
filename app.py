@@ -251,6 +251,9 @@ I18N = {
         "guest": "Fortsätt som gäst (lokal demo)",
         "auth_hint": "Supabase Auth — spara beslut i molnet",
         "no_supabase": "Supabase saknas i secrets — kör i lokalt demläge.",
+        "auth_cloud_ok": "Molnet: inloggning tillgänglig",
+        "auth_cloud_off": "Molnet: Supabase saknas — bara lokal demo",
+        "auth_login_prompt": "Logga in för att spara beslut i molnet.",
         "logged_in_as": "Inloggad som",
         "too_long": "Max 200 tecken.",
         "ambiguous": "Välj vad det handlar om — så tar jag beslutet.",
@@ -410,6 +413,9 @@ I18N = {
         "guest": "Continue as guest (local demo)",
         "auth_hint": "Supabase Auth — save decisions in the cloud",
         "no_supabase": "Supabase missing in secrets — running local demo.",
+        "auth_cloud_ok": "Cloud: sign-in available",
+        "auth_cloud_off": "Cloud: Supabase missing — local demo only",
+        "auth_login_prompt": "Sign in to save decisions in the cloud.",
         "logged_in_as": "Signed in as",
         "too_long": "Max 200 characters.",
         "ambiguous": "Pick what this is about — then I’ll decide.",
@@ -2505,8 +2511,7 @@ def init_state() -> None:
     if _peek_share_token() and not st.session_state.user_id:
         st.session_state.guest_mode = True
 
-    _bootstrap_guest_session()
-
+    # Auth gate BEFORE guest bootstrap — never mint a guest UUID while login is pending
     if (
         sb.is_configured()
         and not st.session_state.user_id
@@ -2517,7 +2522,9 @@ def init_state() -> None:
         _clear_action_query_params()
         return
 
-    # Local / guest fallback
+    _bootstrap_guest_session()
+
+    # Local / guest fallback when Supabase is off (or explicit guest)
     if not st.session_state.user_id:
         db.init_db()
         st.session_state.user_id = str(uuid.uuid4())
@@ -2872,6 +2879,26 @@ def render_share_for_decision(
 def require_auth_context() -> None:
     if st.session_state.access_token and st.session_state.refresh_token:
         db.set_auth(st.session_state.access_token, st.session_state.refresh_token)
+
+
+def _go_to_auth_page(*, mode: str = "login") -> None:
+    """Clear guest session and open login — used from Profil."""
+    db.clear_auth()
+    for key in (
+        "user_id",
+        "user_email",
+        "access_token",
+        "refresh_token",
+        "current",
+        "decision_id",
+    ):
+        st.session_state[key] = None
+    st.session_state["accepted"] = False
+    st.session_state["guest_mode"] = False
+    st.session_state["auth_mode"] = mode
+    _clear_guest_query_param()
+    _clear_action_query_params()
+    st.session_state["page"] = "auth"
 
 
 def page_auth() -> None:
@@ -6377,10 +6404,26 @@ def page_profile() -> None:
         f'<div class="oc-price">{html.escape(t("pro_price"))}</div></div>',
         unsafe_allow_html=True,
     )
+    import supabase_client as sb
+
     if st.session_state.user_email:
         st.caption(f"{t('logged_in_as')} {st.session_state.user_email}")
     elif st.session_state.guest_mode:
         st.caption("Guest / lokal demo")
+
+    if sb.is_configured():
+        st.caption(t("auth_cloud_ok"))
+    else:
+        st.caption(t("auth_cloud_off"))
+
+    if st.session_state.guest_mode:
+        st.caption(t("auth_login_prompt"))
+        if sb.is_configured():
+            if st.button(t("login_cta"), type="primary", use_container_width=True, key="profile_login"):
+                _go_to_auth_page(mode="login")
+                st.rerun()
+        else:
+            st.info(t("no_supabase"))
 
     # AI status — owner diagnostics. Makes silent LLM failure VISIBLE on device.
     try:
@@ -6576,22 +6619,13 @@ def page_profile() -> None:
         unsafe_allow_html=True,
     )
 
-    if st.button(t("logout"), use_container_width=True):
+    if st.session_state.get("access_token") and not st.session_state.guest_mode:
         import supabase_client as sb
 
-        sb.sign_out(st.session_state.access_token, st.session_state.refresh_token)
-        db.clear_auth()
-        for key in (
-            "user_id",
-            "user_email",
-            "access_token",
-            "refresh_token",
-            "current",
-            "guest_mode",
-        ):
-            st.session_state[key] = None if key != "guest_mode" else False
-        st.session_state.page = "auth"
-        st.rerun()
+        if st.button(t("logout"), use_container_width=True):
+            sb.sign_out(st.session_state.access_token, st.session_state.refresh_token)
+            _go_to_auth_page(mode="login")
+            st.rerun()
     nav()
 
 

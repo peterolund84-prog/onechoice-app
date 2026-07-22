@@ -21,9 +21,34 @@ def _secret(name: str, default: str = "") -> str:
     try:
         import streamlit as st
 
-        return str(st.secrets.get(name, default) or default)
+        raw = st.secrets.get(name, None)
+        if raw is not None and not isinstance(raw, dict):
+            return str(raw)
+        # Nested TOML: [supabase] url = "..." or [api] SUPABASE_URL = "..."
+        for section in st.secrets.keys():  # type: ignore[attr-defined]
+            try:
+                block = st.secrets[section]
+            except Exception:
+                continue
+            if not isinstance(block, dict):
+                continue
+            if name in block and block[name] is not None:
+                val = block[name]
+                if not isinstance(val, dict):
+                    return str(val)
+            # Common nested aliases
+            aliases = {
+                "SUPABASE_URL": ("url", "supabase_url"),
+                "SUPABASE_KEY": ("key", "anon_key", "supabase_key", "SUPABASE_ANON_KEY"),
+            }
+            for alias in aliases.get(name, ()):
+                if alias in block and block[alias] is not None:
+                    val = block[alias]
+                    if not isinstance(val, dict):
+                        return str(val)
     except Exception:
-        return default
+        pass
+    return default
 
 
 def get_creds() -> tuple[str, str]:
