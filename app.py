@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "food-valj-exec-image-v37-20260722"
+BUILD_ID = "hide-chooser-after-valj-v38-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -3648,6 +3648,36 @@ def _unchecked_shopping_count() -> int:
     return sum(1 for r in items if not bool(r.get("checked")))
 
 
+def _resume_decision_page() -> str | None:
+    """If a locked decision is in play, return execute/result — never the home chooser."""
+    cur = st.session_state.get("current")
+    if not isinstance(cur, dict) or not cur.get("suggestion"):
+        return None
+    accepted = bool(
+        st.session_state.get("accepted")
+        or cur.get("accepted")
+        or cur.get("locked")
+    )
+    if not accepted:
+        return None
+    domain = (cur.get("domain") or "").strip()
+    if (
+        _is_food_cook(cur)
+        or domain == "workout"
+        or cur.get("execution_type") == "workout"
+    ):
+        return "execute"
+    return "result"
+
+
+def _go_home_chooser() -> None:
+    """Explicit start-over — show Mat/Kläder chooser, don't resume the last lock."""
+    _clear_fridge_session()
+    st.session_state["_force_home_chooser"] = True
+    st.session_state.page = "home"
+    st.rerun()
+
+
 def nav() -> None:
     """Fixed bottom glass nav — ONE shared component; no view may restyle it."""
     page = st.session_state.page
@@ -3663,12 +3693,6 @@ def nav() -> None:
         ),
         "history": t("history"),
         "profile": t("profile"),
-    }
-    page_targets = {
-        "home": "home",
-        "lista": "lista",
-        "history": "history",
-        "profile": "profile",
     }
 
     with st.container(key="oc_nav_bar"):
@@ -3687,7 +3711,20 @@ def nav() -> None:
                     use_container_width=True,
                     type="primary" if is_active else "secondary",
                 ):
-                    st.session_state.page = page_targets[key]
+                    if key == "home":
+                        # Hem is highlighted on result/execute — tapping it must NOT
+                        # dump the user back on the Mat/Kläder chooser mid-decision.
+                        if page in ("result", "execute", "fridge", "ambiguous"):
+                            st.rerun()
+                            return
+                        resume = _resume_decision_page()
+                        st.session_state.page = resume or "home"
+                    else:
+                        st.session_state.page = {
+                            "lista": "lista",
+                            "history": "history",
+                            "profile": "profile",
+                        }[key]
                     st.rerun()
 
 
@@ -5434,6 +5471,15 @@ def _clear_guest_query_param() -> None:
 def page_home() -> None:
     import router as rt
 
+    # Locked decision in play → resume it. Chooser only for an explicit start-over.
+    force_chooser = bool(_session_pop("_force_home_chooser", False))
+    if not force_chooser:
+        resume = _resume_decision_page()
+        if resume:
+            st.session_state.page = resume
+            st.rerun()
+            return
+
     render_logo()
     inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
 
@@ -6205,9 +6251,7 @@ def page_result() -> None:
             elif st.button(exec_label, type="primary", use_container_width=True, key="do_it_locked"):
                 on_accept_primary(cur)
         if st.button(t("home"), key="back_home_locked", type="secondary", use_container_width=True):
-            _clear_fridge_session()
-            st.session_state.page = "home"
-            st.rerun()
+            _go_home_chooser()
         nav()
         return
 
@@ -6327,9 +6371,7 @@ def page_result() -> None:
         )
 
     if st.button(t("home"), key="back_home", type="secondary", use_container_width=True):
-        _clear_fridge_session()
-        st.session_state.page = "home"
-        st.rerun()
+        _go_home_chooser()
     nav()
 
 
@@ -6699,8 +6741,7 @@ def page_execute() -> None:
                 _reset_workout_player()
                 st.rerun()
             if st.button(t("home"), use_container_width=True, key="wo_exec_home"):
-                st.session_state.page = "home"
-                st.rerun()
+                _go_home_chooser()
             nav()
             return
 

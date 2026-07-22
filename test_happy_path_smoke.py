@@ -108,7 +108,12 @@ class HappyPathSmokeTest(unittest.TestCase):
         self._click_nav(at, "home")
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
-        self.assertEqual(at.session_state["page"], "home")
+        # Hem is highlighted on execute — tapping it must keep the choice, not the chooser
+        self.assertEqual(at.session_state["page"], "execute")
+        labels = [b.label or "" for b in at.button]
+        self.assertNotIn("Mat", labels)
+        self.assertFalse(any("Bestäm åt mig" == lab for lab in labels), labels)
+        self.assertFalse(any("Fota kylen" == lab for lab in labels), labels)
 
     def test_nav_chrome_identical_across_pages(self) -> None:
         """Glass nav marker + four nav keys present on home/lista/history/execute."""
@@ -127,6 +132,9 @@ class HappyPathSmokeTest(unittest.TestCase):
 
         for page in ("home", "lista", "history", "execute"):
             at.session_state["page"] = page
+            if page == "home":
+                # Explicit chooser — otherwise accepted food resumes execute
+                at.session_state["_force_home_chooser"] = True
             at.run()
             body = " ".join(str(m.value or "") for m in at.markdown)
             self.assertIn('data-oc-nav="glass"', body, page)
@@ -135,6 +143,23 @@ class HappyPathSmokeTest(unittest.TestCase):
                 self.assertIn(k, keys, (page, keys))
             css = body
             self.assertIn("backdrop-filter: blur(14px)", css)
+
+    def test_home_redirects_to_execute_when_food_accepted(self) -> None:
+        at = self._boot_authenticated()
+        at.session_state["food_meal_type"] = "middag"
+        at.query_params["domain"] = "food"
+        at.run()
+        for b in at.button:
+            if (b.label or "") == "Välj":
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "execute")
+        at.session_state["page"] = "home"
+        at.run()
+        self.assertEqual(at.session_state["page"], "execute")
+        labels = [b.label or "" for b in at.button]
+        self.assertNotIn("Mat", labels)
+        self.assertFalse(any("Bestäm åt mig" == lab for lab in labels), labels)
 
 
 class DishManifestTests(unittest.TestCase):
