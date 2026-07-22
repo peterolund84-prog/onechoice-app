@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "lista-delete-api-v46-20260722"
+BUILD_ID = "nav-home-chooser-v47-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -3814,19 +3814,14 @@ def nav() -> None:
                     type="primary" if is_active else "secondary",
                 ):
                     if key == "home":
-                        # Hem is highlighted on result/execute — tapping it must NOT
-                        # dump the user back on the Mat/Kläder chooser mid-decision.
-                        if page in ("result", "execute", "fridge", "ambiguous"):
-                            st.rerun()
-                            return
-                        resume = _resume_decision_page()
-                        st.session_state.page = resume or "home"
-                    else:
-                        st.session_state.page = {
-                            "lista": "lista",
-                            "history": "history",
-                            "profile": "profile",
-                        }[key]
+                        # Always the domain chooser — never resume execute/result.
+                        _go_home_chooser()
+                        return
+                    st.session_state.page = {
+                        "lista": "lista",
+                        "history": "history",
+                        "profile": "profile",
+                    }[key]
                     st.rerun()
 
 
@@ -7376,8 +7371,8 @@ def page_lista() -> None:
             unsafe_allow_html=True,
         )
         if st.button(t("home"), type="primary", use_container_width=True, key="lista_go_home"):
-            st.session_state.page = "home"
-            st.rerun()
+            _go_home_chooser()
+            return
         if st.button(
             t("list_open_history"),
             type="secondary",
