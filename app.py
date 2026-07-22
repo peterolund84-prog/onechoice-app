@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "historik-card-favorite-v50-20260722"
+BUILD_ID = "historik-redesign-icons-v51-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -190,7 +190,12 @@ I18N = {
         "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
         "history_seg_favorites": "Favoriter",
         "history_seg_history": "Historik",
-        "history_favorites_empty": "Inga favoriter ännu — tryck hjärtat på en rad i Historik.",
+        "history_favorites_empty": "Hjärta en rätt efter att du lagat den, så hamnar den här.",
+        "history_empty": "Inga beslut än. Låt OneChoice bestämma något.",
+        "history_show_all": "Visa alla händelser",
+        "history_show_less": "Visa bara genomförda",
+        "history_today": "Idag",
+        "history_yesterday": "Igår",
         "favorite_add": "Spara som favorit",
         "favorite_remove": "Ta bort favorit",
         "cook_tonight": "Laga ikväll",
@@ -222,8 +227,7 @@ I18N = {
         "home": "Hem",
         "history": "Historik",
         "profile": "Profil",
-        "history_title": "Din historik",
-        "history_empty": "Inga beslut ännu.",
+        "history_title": "Historik",
         "domains": {
             "food": "Mat",
             "clothes": "Kläder",
@@ -365,7 +369,11 @@ I18N = {
         "history_hint": "Decisions you took — open for recipe and list.",
         "history_seg_favorites": "Favorites",
         "history_seg_history": "History",
-        "history_favorites_empty": "No favorites yet — tap the heart on a History row.",
+        "history_favorites_empty": "Heart a dish after cooking — it lands here.",
+        "history_show_all": "Show all events",
+        "history_show_less": "Show completed only",
+        "history_today": "Today",
+        "history_yesterday": "Yesterday",
         "favorite_add": "Save favorite",
         "favorite_remove": "Remove favorite",
         "cook_tonight": "Cook tonight",
@@ -397,8 +405,8 @@ I18N = {
         "home": "Home",
         "history": "History",
         "profile": "Profile",
-        "history_title": "Your history",
-        "history_empty": "No decisions yet.",
+        "history_title": "History",
+        "history_empty": "No decisions yet. Let OneChoice decide something.",
         "domains": {
             "food": "Food",
             "clothes": "Clothes",
@@ -1602,15 +1610,52 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     max-width: 22rem; margin-left: auto; margin-right: auto;
     font-family: "Inter", sans-serif !important;
 }}
+
 .oc-share-corner {{
     position: absolute;
     top: 8px;
     right: 8px;
     z-index: 4;
 }}
-.st-key-exec_food_host {{
-    position: relative !important;
+/* Global icon-only buttons — glyph only, invisible 40px tap target */
+.oc-icon-btn,
+.oc-icon-btn:hover,
+.oc-icon-btn:focus,
+.oc-icon-btn:active,
+.oc-share-icon-btn,
+.oc-share-icon-btn:hover,
+.oc-share-icon-btn:focus,
+.oc-share-icon-btn:active {{
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: rgba(0, 0, 0, 0.45) !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
 }}
+.oc-share-icon-btn {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E") !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+    background-size: 20px 20px !important;
+}}
+.oc-share-icon-btn:active {{ opacity: 0.7; }}
+.oc-icon-btn svg {{ width: 20px; height: 20px; stroke-width: 1.5; }}
+.oc-icon-btn.active {{ color: #4F46E5 !important; }}
+.st-key-exec_food_host {{ position: relative !important; }}
 .st-key-exec_fav_corner {{
     position: absolute !important;
     top: 8px !important;
@@ -1620,104 +1665,103 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     margin: 0 !important;
     padding: 0 !important;
 }}
+/* Streamlit heart buttons — same chrome-free rule as .oc-icon-btn */
 .st-key-exec_fav_corner div.stButton > button,
-.st-key-exec_fav_corner button {{
+.st-key-exec_fav_corner button,
+div[class*="st-key-hist_fav_"] div.stButton > button,
+div[class*="st-key-hist_fav_"] button {{
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
     width: 40px !important;
     min-width: 40px !important;
     height: 40px !important;
     min-height: 40px !important;
     margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-    border-radius: 12px !important;
-    background-color: rgba(255, 255, 255, 0.92) !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5c57' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+    border-radius: 0 !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(0,0,0,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
     background-position: center !important;
     background-size: 20px 20px !important;
     color: transparent !important;
     font-size: 0 !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06) !important;
+    transition: background-image 150ms ease, color 150ms ease !important;
 }}
-.st-key-exec_fav_corner[data-fav="1"] div.stButton > button,
-.st-key-exec_fav_corner[data-fav="1"] button,
-.st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button {{
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231a1a1a' stroke='%231a1a1a' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+.st-key-exec_food_host:has(.oc-fav-on) .st-key-exec_fav_corner div.stButton > button,
+div[class*="st-key-hist_row_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] div.stButton > button {{
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5' stroke='%234F46E5' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
+    color: #4F46E5 !important;
 }}
-.st-key-hist_seg {{
-    margin: 0 0 12px !important;
+.st-key-hist_seg {{ margin: 0 0 12px !important; }}
+.oc-hist-date {{
+    font-size: 0.68rem; letter-spacing: 0.08em; text-transform: uppercase;
+    color: var(--oc-muted); font-weight: 600; margin: 1rem 0 0.45rem;
+    font-family: "Inter", sans-serif !important;
 }}
-.oc-fav-card {{
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--oc-border);
+.oc-hist-date:first-child {{ margin-top: 0.35rem; }}
+div[class*="st-key-hist_group_"] {{ margin: 0 0 0.85rem !important; padding: 0 !important; }}
+div[class*="st-key-hist_group_"] [data-testid="stVerticalBlockBorderWrapper"] {{
+    padding: 0.15rem 0.5rem 0.15rem 0.65rem !important;
 }}
-.oc-fav-card img {{
-    width: 56px;
-    height: 56px;
-    object-fit: cover;
-    border-radius: 10px;
-    flex: 0 0 56px;
+div[class*="st-key-hist_row_"] {{
+    margin: 0 !important; padding: 0 !important; min-height: 64px !important;
+    border-bottom: 1px solid var(--oc-border) !important;
 }}
-.oc-fav-card .oc-fav-meta {{
-    flex: 1;
-    min-width: 0;
+div[class*="st-key-hist_group_"] div[class*="st-key-hist_row_"]:last-of-type {{
+    border-bottom: none !important;
 }}
-.oc-fav-card .oc-fav-meta strong {{
-    display: block;
-    font-size: 1rem;
-    color: var(--oc-ink);
+div[class*="st-key-hist_row_"] [data-testid="stHorizontalBlock"] {{
+    align-items: center !important; min-height: 64px !important; gap: 10px !important;
 }}
-.oc-fav-card .oc-fav-meta span {{
-    font-size: 0.85rem;
-    color: var(--oc-muted);
+.oc-hist-thumb {{
+    width: 44px; height: 44px; object-fit: cover; border-radius: 10px; display: block;
+    background: #eee;
 }}
-.oc-share-icon-btn {{
-    width: 40px;
-    height: 40px;
-    margin: 0;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    border-radius: 12px;
-    background-color: rgba(255, 255, 255, 0.92);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5c57' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: center;
-    background-size: 20px 20px;
-    color: transparent;
-    font-size: 0;
-    line-height: 0;
-    cursor: pointer;
-    -webkit-tap-highlight-color: transparent;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+.oc-hist-text {{ min-width: 0; padding: 0.2rem 0; pointer-events: none; }}
+.oc-hist-title {{
+    font-size: 0.95rem; font-weight: 600; color: var(--oc-ink); line-height: 1.25;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: "Inter", sans-serif !important;
 }}
-.oc-share-icon-btn:active {{
-    opacity: 0.7;
+.oc-hist-meta {{
+    font-size: 13px; color: var(--oc-muted); line-height: 1.3; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-family: "Inter", sans-serif !important;
 }}
-.oc-share-icon-btn img {{
-    width: 20px;
-    height: 20px;
-    display: block;
-    pointer-events: none;
+/* Full-row tap target — invisible over title/meta */
+div[class*="st-key-hist_body_"] {{
+    position: relative !important; margin: 0 !important; padding: 0 !important; min-width: 0 !important;
+}}
+div[class*="st-key-hist_open_"] {{
+    position: absolute !important; inset: 0 !important; z-index: 2 !important;
+    margin: 0 !important; padding: 0 !important;
+}}
+div[class*="st-key-hist_open_"] div.stButton,
+div[class*="st-key-hist_open_"] div.stButton > button,
+div[class*="st-key-hist_open_"] button {{
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    width: 100% !important; height: 100% !important; min-height: 64px !important;
+    margin: 0 !important; padding: 0 !important; border-radius: 0 !important;
+    opacity: 0 !important; color: transparent !important; font-size: 0 !important;
 }}
 .oc-share-lista-wrap {{
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    min-height: 40px;
+    display: flex; justify-content: flex-end; align-items: center; min-height: 40px;
 }}
-.oc-share-lista-wrap .oc-share-corner {{
-    position: static;
+.oc-share-lista-wrap .oc-share-corner {{ position: static; }}
+.st-key-hist_show_all {{ margin: 0.75rem 0 0 !important; }}
+.st-key-hist_show_all div.stButton > button {{
+    background: transparent !important; border: none !important; box-shadow: none !important;
+    color: var(--oc-muted) !important; text-decoration: underline !important;
+    text-underline-offset: 3px !important; font-size: 13px !important; font-weight: 500 !important;
+    min-height: 40px !important; padding: 0 !important;
 }}
-.oc-share-lista-wrap .oc-share-icon-btn {{
-    background-color: transparent;
-    box-shadow: none;
+.oc-hist-empty {{
+    color: rgba(0,0,0,0.45); font-size: 0.95rem; margin: 1.5rem 0 0.75rem;
+    font-family: "Inter", sans-serif !important;
 }}
+
 .oc-movie-decision {{
     text-align: left !important;
     padding-left: 1.3rem !important;
@@ -1941,45 +1985,6 @@ div[data-testid="stCheckbox"] label {{
 }}
 .oc-hist strong {{ display: block; font-size: 1.05rem; margin-bottom: 0.2rem; color: var(--oc-ink); }}
 .oc-hist span {{ font-size: 0.9rem; color: var(--oc-muted); }}
-/* History row card — title + Öppna + heart in one bordered block */
-div[class*="st-key-hist_card_"] {{
-    margin: 0 0 0.75rem !important;
-}}
-div[class*="st-key-hist_card_"] [data-testid="stVerticalBlockBorderWrapper"] {{
-    padding: 0.85rem 1rem !important;
-}}
-div[class*="st-key-hist_fav_"] {{
-    margin: 0 !important;
-    padding: 0 !important;
-}}
-div[class*="st-key-hist_fav_"] div.stButton > button,
-div[class*="st-key-hist_fav_"] button {{
-    width: 40px !important;
-    min-width: 40px !important;
-    height: 40px !important;
-    min-height: 40px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 1px solid rgba(0, 0, 0, 0.08) !important;
-    border-radius: 12px !important;
-    background-color: #fff !important;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c5c57' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
-    background-repeat: no-repeat !important;
-    background-position: center !important;
-    background-size: 20px 20px !important;
-    color: transparent !important;
-    font-size: 0 !important;
-    box-shadow: none !important;
-}}
-div[class*="st-key-hist_card_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] div.stButton > button,
-div[class*="st-key-hist_card_"]:has(.oc-fav-on) div[class*="st-key-hist_fav_"] button {{
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231a1a1a' stroke='%231a1a1a' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E") !important;
-}}
-div[class*="st-key-hist_card_"] div[class*="st-key-hist_open_"] div.stButton > button,
-div[class*="st-key-hist_card_"] div[class*="st-key-fav_cook_"] div.stButton > button,
-div[class*="st-key-hist_card_"] div[class*="st-key-fav_open_"] div.stButton > button {{
-    min-height: 44px !important;
-}}
 .oc-pro {{
     padding: 2rem 1.5rem; text-align: center; margin-top: 1.5rem;
 }}
@@ -3429,7 +3434,7 @@ def _share_icon_button_html(
         f'window.__ocSharePayloads[{_json.dumps(safe_key)}]={payload_json};'
         f'}})();</script>'
         f'<span class="oc-share-corner">'
-        f'<button type="button" class="oc-share-icon-btn" data-oc-share="icon" '
+        f'<button type="button" class="oc-icon-btn oc-share-icon-btn" data-oc-share="icon" '
         f'data-oc-share-key="{html.escape(safe_key)}" data-payload="{payload_b64}" '
         f'aria-label="{aria}"></button></span>'
     )
@@ -5091,35 +5096,163 @@ def _render_favorite_toggle(decision_id: int | None, *, is_favorite: bool) -> No
             st.rerun()
 
 
+
+def _hist_local_dt(created_at: Any):
+    """Parse decision created_at → aware datetime in APP_LOCAL_TZ."""
+    from datetime import timezone
+
+    if not created_at:
+        return None
+    try:
+        ts = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        return ts.astimezone(APP_LOCAL_TZ)
+    except (TypeError, ValueError):
+        return None
+
+
+def _hist_date_label(day, *, language: str) -> str:
+    """Relative Swedish/English date header: IDAG / IGÅR / MÅNDAG 20 JULI."""
+    from datetime import date, timedelta
+
+    today = datetime.now(APP_LOCAL_TZ).date()
+    if day == today:
+        return t("history_today").upper()
+    if day == today - timedelta(days=1):
+        return t("history_yesterday").upper()
+    if language == "sv":
+        weekdays = (
+            "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"
+        )
+        months = (
+            "januari", "februari", "mars", "april", "maj", "juni",
+            "juli", "augusti", "september", "oktober", "november", "december",
+        )
+        return f"{weekdays[day.weekday()]} {day.day} {months[day.month - 1]}".upper()
+    return day.strftime("%A %-d %B").upper()
+
+
+def _hist_time_meta(row: dict[str, Any], language: str) -> str:
+    ts = _hist_local_dt(row.get("created_at"))
+    clock = ts.strftime("%H:%M") if ts else ""
+    domain = domain_label(row.get("domain") or "")
+    if clock and domain:
+        return f"{clock} · {domain}"
+    return clock or domain
+
+
+def _hist_thumb_html(row: dict[str, Any]) -> str:
+    import base64
+
+    import food_categories as fcat
+
+    suggestion = str(row.get("suggestion") or "")
+    ctx = row.get("context") if isinstance(row.get("context"), dict) else {}
+    cat = "generic"
+    if (row.get("domain") or "") == "food":
+        cat = fcat.infer_dish_category(
+            suggestion,
+            meta={**(ctx or {}), "dish_category": (ctx or {}).get("dish_category")},
+        )
+    raw = fcat.dish_image_bytes(cat)
+    if not raw:
+        return '<div class="oc-hist-thumb" aria-hidden="true"></div>'
+    b64 = base64.b64encode(raw).decode("ascii")
+    return (
+        f'<img class="oc-hist-thumb" src="data:image/jpeg;base64,{b64}" alt=""/>'
+    )
+
+
+def _filter_history_rows(
+    rows: list[dict[str, Any]],
+    *,
+    show_all: bool,
+    favorites_only: bool,
+) -> list[dict[str, Any]]:
+    """Editorial filter + same-dish-once-per-day dedupe for default view."""
+    out: list[dict[str, Any]] = []
+    seen_day_title: set[tuple[Any, str]] = set()
+    for r in rows:
+        if favorites_only and not bool(r.get("favorite")):
+            continue
+        status = str(r.get("status") or "")
+        if not show_all and not favorites_only:
+            if status not in ("accepted", "locked"):
+                continue
+        ts = _hist_local_dt(r.get("created_at"))
+        day = ts.date() if ts else None
+        title_key = str(r.get("suggestion") or "").strip().lower()
+        if not show_all and day is not None and title_key:
+            stamp = (day, title_key)
+            if stamp in seen_day_title:
+                continue
+            seen_day_title.add(stamp)
+        out.append(r)
+    return out
+
+
+def _group_history_by_day(
+    rows: list[dict[str, Any]],
+) -> list[tuple[Any, list[dict[str, Any]]]]:
+    from collections import OrderedDict
+
+    groups: OrderedDict = OrderedDict()
+    for r in rows:
+        ts = _hist_local_dt(r.get("created_at"))
+        day = ts.date() if ts else None
+        groups.setdefault(day, []).append(r)
+    return list(groups.items())
+
+
 def _render_history_row(row: dict[str, Any], *, mode: str = "history") -> None:
-    """One bordered card: title/meta + Öppna (+ Laga ikväll) + heart."""
+    """64px tappable list row: thumb | title+meta | heart."""
     rid = row.get("id")
     if rid is None:
         return
     rid_i = int(rid)
     is_fav = bool(row.get("favorite"))
     suggestion = str(row.get("suggestion") or "")
-    status = str(row.get("status") or "")
-    status_lbl = _history_status_label(status)
-    when = str(row.get("created_at") or "")
-    if "T" in when:
-        when = when.replace("T", " ")[:16]
-    meta = f"{when} · {status_lbl} · {domain_label(row.get('domain') or '')}"
+    language = st.session_state.get("language", "sv")
+    meta = _hist_time_meta(row, language)
 
-    with st.container(border=True, key=f"hist_card_{mode}_{rid_i}"):
+    with st.container(key=f"hist_row_{mode}_{rid_i}"):
         marker = "oc-fav-on" if is_fav else "oc-fav-off"
         st.markdown(
             f'<div class="{marker}" aria-hidden="true"></div>',
             unsafe_allow_html=True,
         )
-        title_col, fav_col = st.columns([5, 1], gap="small")
-        with title_col:
-            st.markdown(
-                f'<div class="oc-hist"><strong>{html.escape(suggestion)}</strong>'
-                f"<span>{html.escape(meta)}</span></div>",
-                unsafe_allow_html=True,
-            )
-        with fav_col:
+        thumb_c, body_c, fav_c = st.columns([0.7, 4.5, 0.7], gap="small")
+        with thumb_c:
+            st.markdown(_hist_thumb_html(row), unsafe_allow_html=True)
+        with body_c:
+            with st.container(key=f"hist_body_{mode}_{rid_i}"):
+                meta_html = (
+                    f'<div class="oc-hist-meta">{html.escape(meta)}</div>' if meta else ""
+                )
+                st.markdown(
+                    f'<div class="oc-hist-text">'
+                    f'<div class="oc-hist-title">{html.escape(suggestion)}</div>'
+                    f"{meta_html}</div>",
+                    unsafe_allow_html=True,
+                )
+                with st.container(key=f"hist_open_{mode}_{rid_i}"):
+                    if st.button(
+                        suggestion or "·",
+                        key=f"hist_open_btn_{mode}_{rid_i}",
+                        use_container_width=True,
+                        type="secondary",
+                        help=suggestion,
+                    ):
+                        if mode == "favorites":
+                            st.session_state["_favorite_browse_id"] = rid_i
+                            st.session_state["_favorite_browse_row"] = dict(row)
+                        else:
+                            st.session_state.pop("_favorite_browse_id", None)
+                            st.session_state.pop("_favorite_browse_row", None)
+                        _restore_decision_from_row(row)
+                        st.rerun()
+        with fav_c:
             with st.container(key=f"hist_fav_{mode}_{rid_i}"):
                 label = t("favorite_remove") if is_fav else t("favorite_add")
                 if st.button(
@@ -5130,37 +5263,26 @@ def _render_history_row(row: dict[str, Any], *, mode: str = "history") -> None:
                 ):
                     _toggle_favorite_by_id(rid_i, currently=is_fav)
                     st.rerun()
-        if mode == "favorites":
-            open_col, cook_col = st.columns(2, gap="small")
-            with open_col:
-                with st.container(key=f"fav_open_{rid_i}"):
-                    if st.button(
-                        t("history_open"),
-                        key=f"fav_open_btn_{rid_i}",
-                        use_container_width=True,
-                        type="secondary",
-                    ):
-                        _restore_decision_from_row(row)
-                        st.rerun()
-            with cook_col:
-                with st.container(key=f"fav_cook_{rid_i}"):
-                    if st.button(
-                        t("cook_tonight"),
-                        key=f"fav_cook_btn_{rid_i}",
-                        use_container_width=True,
-                        type="primary",
-                    ):
-                        _cook_favorite_tonight(row)
-        else:
-            with st.container(key=f"hist_open_{rid_i}"):
-                if st.button(
-                    t("history_open"),
-                    key=f"hist_open_btn_{rid_i}",
-                    use_container_width=True,
-                    type="secondary",
-                ):
-                    _restore_decision_from_row(row)
-                    st.rerun()
+
+
+def _render_history_groups(
+    rows: list[dict[str, Any]],
+    *,
+    mode: str,
+    language: str,
+) -> None:
+    for day, day_rows in _group_history_by_day(rows):
+        label = _hist_date_label(day, language=language) if day else ""
+        if label:
+            st.markdown(
+                f'<div class="oc-hist-date">{html.escape(label)}</div>',
+                unsafe_allow_html=True,
+            )
+        day_key = day.isoformat() if day else "unknown"
+        with st.container(border=True, key=f"hist_group_{mode}_{day_key}"):
+            for r in day_rows:
+                _render_history_row(r, mode=mode)
+
 
 
 def _cook_favorite_tonight(row: dict[str, Any]) -> None:
@@ -7437,6 +7559,22 @@ def page_execute() -> None:
             )
         )
 
+    # Favoriter browse → recipe + ONE CTA (no shopping until they cook tonight)
+    fav_src = st.session_state.get("_favorite_browse_row")
+    if isinstance(fav_src, dict) and fav_src.get("id") is not None:
+        if st.button(
+            t("cook_tonight"),
+            type="primary",
+            use_container_width=True,
+            key="exec_cook_tonight",
+        ):
+            st.session_state.pop("_favorite_browse_id", None)
+            st.session_state.pop("_favorite_browse_row", None)
+            _cook_favorite_tonight(fav_src)
+            return
+        nav()
+        return
+
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
     # Cloud/Supabase may leave recipe as a JSON string — heal before use
     recipe = ctx.get("recipe")
@@ -7771,10 +7909,25 @@ def page_history() -> None:
     _ensure_db_api()
     render_top_chrome()
     require_auth_context()
-    st.markdown(
-        f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("history_title"))}</p>',
-        unsafe_allow_html=True,
-    )
+    language = st.session_state.get("language", "sv")
+    all_rows = _list_decisions(st.session_state.user_id, limit=80)
+    show_all = bool(st.session_state.get("_hist_show_all"))
+
+    head_l, head_r = st.columns([3, 1], gap="small")
+    with head_l:
+        st.markdown(
+            f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("history_title"))}</p>',
+            unsafe_allow_html=True,
+        )
+    with head_r:
+        if all_rows:
+            try:
+                render_share_list()
+            except BaseException as exc:
+                if _is_streamlit_control_flow(exc):
+                    raise
+                log.exception("history share failed: %s", exc)
+
     fav_label = t("history_seg_favorites")
     hist_label = t("history_seg_history")
     with st.container(key="hist_seg"):
@@ -7789,30 +7942,36 @@ def page_history() -> None:
     show_favs = seg == fav_label
 
     if show_favs:
-        rows = _list_decisions(
-            st.session_state.user_id, favorite=True, limit=40
-        )
+        rows = _filter_history_rows(all_rows, show_all=True, favorites_only=True)
         if not rows:
-            st.info(t("history_favorites_empty"))
+            st.markdown(
+                f'<p class="oc-hist-empty">{html.escape(t("history_favorites_empty"))}</p>',
+                unsafe_allow_html=True,
+            )
         else:
-            for r in rows:
-                _render_history_row(r, mode="favorites")
+            _render_history_groups(rows, mode="favorites", language=language)
         nav()
         return
 
-    st.markdown(
-        f'<p class="oc-meta">{html.escape(t("history_hint"))}</p>',
-        unsafe_allow_html=True,
-    )
-    if st.button(t("list_go"), type="secondary", use_container_width=True, key="hist_open_list"):
-        st.session_state.page = "lista"
-        st.rerun()
-    rows = _list_decisions(st.session_state.user_id, limit=30)
+    rows = _filter_history_rows(all_rows, show_all=show_all, favorites_only=False)
     if not rows:
-        st.info(t("history_empty"))
+        st.markdown(
+            f'<p class="oc-hist-empty">{html.escape(t("history_empty"))}</p>',
+            unsafe_allow_html=True,
+        )
     else:
-        for r in rows:
-            _render_history_row(r, mode="history")
+        _render_history_groups(rows, mode="history", language=language)
+
+    has_noise = any(
+        str((r or {}).get("status") or "") not in ("accepted", "locked")
+        for r in all_rows
+    )
+    if has_noise or show_all:
+        with st.container(key="hist_show_all"):
+            toggle_lbl = t("history_show_less") if show_all else t("history_show_all")
+            if st.button(toggle_lbl, key="hist_toggle_all", use_container_width=False):
+                st.session_state["_hist_show_all"] = not show_all
+                st.rerun()
     nav()
 
 
