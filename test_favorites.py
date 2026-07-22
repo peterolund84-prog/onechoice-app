@@ -134,5 +134,52 @@ class FavoritesAppTest(unittest.TestCase):
         )
 
 
+    def test_history_row_has_open_and_favorite_controls(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        with mock.patch("supabase_client.is_configured", return_value=True):
+            with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                with mock.patch("db._use_supabase", return_value=False):
+                    at = AppTest.from_file("app.py", default_timeout=120)
+                    at.run()
+                    uid = "uid-hist-card"
+                    at.session_state["access_token"] = "hist-at"
+                    at.session_state["refresh_token"] = "hist-rt"
+                    at.session_state["user_id"] = uid
+                    at.session_state["guest_mode"] = False
+                    at.session_state["_auth_cookie_checked"] = True
+                    db._SHOPPING_FORCE_SQLITE = True
+                    db._ensure_sqlite_user(uid)
+                    # Wipe prior favorites for this uid (shared sqlite across AppTests)
+                    for old in db.list_decisions(uid, favorite=True, limit=200):
+                        db.set_decision_favorite(int(old["id"]), False)
+                    row = db.create_decision(
+                        user_id=uid,
+                        domain="food",
+                        question="test",
+                        suggestion="Krämig tomatsås-pasta",
+                        justification="x",
+                        status="shown",
+                        context={"meal_type": "middag"},
+                    )
+                    at.session_state["page"] = "history"
+                    at.run()
+        self.assertFalse(at.exception)
+        keys = {getattr(b, "key", None) for b in at.button}
+        rid = int(row["id"])
+        self.assertIn(f"hist_open_btn_{rid}", keys)
+        self.assertIn(f"hist_fav_btn_history_{rid}", keys)
+        # Toggle favorite from history
+        fav_btn = next(
+            b for b in at.button if getattr(b, "key", None) == f"hist_fav_btn_history_{rid}"
+        )
+        fav_btn.click().run()
+        self.assertFalse(at.exception)
+        hit = db.list_decisions(uid, favorite=True)
+        self.assertTrue(any(int(r["id"]) == rid for r in hit))
+        db.set_decision_favorite(rid, False)
+        db._SHOPPING_FORCE_SQLITE = False
+
+
 if __name__ == "__main__":
     unittest.main()
