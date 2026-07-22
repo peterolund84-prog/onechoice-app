@@ -150,15 +150,17 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertNotIn("_render_decide_evictor", src)
 
     def test_css_extracted_and_cached(self) -> None:
-        """Perf pass: static CSS lives in styles.css; inject once per session."""
+        """Static CSS in styles.css; file read cached; emit every rerun."""
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertTrue(_STYLES.is_file())
         self.assertIn("def read_css", src)
         self.assertIn("@st.cache_data", src)
-        self.assertIn("_oc_css_injected", src)
         self.assertIn("def _dynamic_css_block", src)
+        # Must NOT skip injection on later reruns (unstyled app)
+        self.assertNotIn("_oc_css_injected", src)
+        self.assertNotIn("oc-app-css-head", src)
         # Ghost wipe hacks removed after perf pass
         self.assertNotIn("inject_app_runtime", src)
         self.assertNotIn("_oc_pending_nav_runtime_html", src)
