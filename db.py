@@ -1362,6 +1362,12 @@ def delete_shopping_items(
     if _shopping_use_supabase(path):
         import supabase_store as store
 
+        if _AUTH is None:
+            # Auth wiped mid-request — fall back to local mirror
+            _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+            return delete_shopping_items(
+                user_id, ids, path=_shopping_sqlite_path()
+            )
         at, rt = _tokens()
         try:
             return store.delete_shopping_items(
@@ -1374,7 +1380,15 @@ def delete_shopping_items(
                 return delete_shopping_items(
                     user_id, ids, path=_shopping_sqlite_path()
                 )
-            raise
+            # Still try sqlite so Rensa klara never no-ops when cloud delete fails
+            log.warning("supabase delete shopping items failed — trying sqlite: %s", exc)
+            try:
+                _ensure_sqlite_user(user_id, path=_shopping_sqlite_path())
+                return delete_shopping_items(
+                    user_id, ids, path=_shopping_sqlite_path()
+                )
+            except Exception:
+                raise
     placeholders = ",".join("?" for _ in ids)
     with get_conn(path) as conn:
         cur = conn.execute(

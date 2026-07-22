@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "lista-rensa-klara-fix-v42-20260722"
+BUILD_ID = "lista-rensa-klara-v2-v43-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -2597,6 +2597,34 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.oc-shop-pick-marker) [data-
     align-items: center !important;
     gap: 8px !important;
 }}
+.st-key-lista_clear_done {{
+    margin: 4px 0 8px !important;
+    padding: 0 8px !important;
+}}
+.st-key-lista_clear_done div.stButton {{
+    width: 100% !important;
+    margin: 0 !important;
+}}
+.st-key-lista_clear_done div.stButton > button,
+.st-key-lista_clear_done button[data-testid="baseButton-secondary"],
+.st-key-lista_clear_done button[data-testid="stBaseButton-secondary"] {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--oc-muted) !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    min-height: 44px !important;
+    height: 44px !important;
+    padding: 0.5rem 0.75rem !important;
+    justify-content: center !important;
+    width: 100% !important;
+    cursor: pointer !important;
+    -webkit-tap-highlight-color: transparent !important;
+}}
+/* legacy narrow-column clear btn styles kept harmless */
 .st-key-lista_klart_hdr div.stButton > button,
 .st-key-lista_klart_hdr button[data-testid="baseButton-secondary"],
 .st-key-lista_klart_hdr button[data-testid="stBaseButton-secondary"] {{
@@ -5119,38 +5147,29 @@ def render_persistent_shopping_list() -> None:
 
         if done:
             n_done = len(done)
-            # Persist ids for on_click — callback runs before body on next interaction
-            st.session_state["_lista_done_ids"] = [
-                int(r.get("id") or 0) for r in done if int(r.get("id") or 0) > 0
-            ]
-            with st.container(key="lista_klart_hdr"):
-                head_l, head_r = st.columns([3, 1], gap="small")
-                with head_l:
-                    st.markdown(
-                        f'<div class="oc-sec-label oc-klart-label">'
-                        f'{html.escape(t("list_done"))} ({n_done})</div>',
-                        unsafe_allow_html=True,
-                    )
-                with head_r:
-
-                    def _on_clear_done() -> None:
-                        ids = [
-                            int(i)
-                            for i in (st.session_state.get("_lista_done_ids") or [])
-                            if int(i) > 0
-                        ]
-                        rows = [{"id": i} for i in ids]
-                        _clear_done_shopping_items(rows)
-
-                    st.button(
-                        t("list_clear_done"),
-                        key="lista_clear_done",
-                        type="secondary",
-                        use_container_width=True,
-                        on_click=_on_clear_done,
-                    )
+            st.markdown(
+                f'<div class="oc-sec-label oc-klart-label">'
+                f'{html.escape(t("list_done"))} ({n_done})</div>',
+                unsafe_allow_html=True,
+            )
             for row in done:
                 _row_checkbox(row)
+
+    # Outside the card — full-width tap target (column header was untappable on mobile)
+    if done:
+        with st.container(key="lista_clear_done"):
+            if st.button(
+                t("list_clear_done"),
+                key="lista_clear_done_btn",
+                type="secondary",
+                use_container_width=True,
+            ):
+                _clear_done_shopping_items(done)
+                try:
+                    safe_toast(f'{t("list_clear_done")} · {n_done}')
+                except Exception:
+                    pass
+                st.rerun()
 
 
 def render_decision_shopping_added(
