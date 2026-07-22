@@ -1,32 +1,43 @@
 # -*- coding: utf-8 -*-
-"""Share copy, public snapshots, and landing attribution."""
+"""Share copy, public snapshots, list share text, and landing attribution."""
 
 from __future__ import annotations
 
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import db
 import share_domain as sd
 
 
 class ShareCopyTests(unittest.TestCase):
-    def test_food_frames_app_as_decider(self) -> None:
+    def test_food_frames_app_as_decider_tonight(self) -> None:
         msg = sd.share_message(
             domain="food", suggestion="Kycklingwok med ris", language="sv"
         )
         self.assertIn("OneChoice har bestämt", msg)
         self.assertIn("Kycklingwok med ris", msg)
+        self.assertIn("ikväll", msg)
         self.assertTrue(msg.startswith("🍽"))
 
     def test_workout_frames_app_as_decider(self) -> None:
         msg = sd.share_message(
             domain="workout", suggestion="30 min helkroppsstyrka", language="sv"
         )
-        self.assertIn("Dagens pass enligt OneChoice", msg)
+        self.assertIn("OneChoice har bestämt", msg)
         self.assertIn("30 min helkroppsstyrka", msg)
         self.assertTrue(msg.startswith("💪"))
+
+    def test_movie_includes_year(self) -> None:
+        msg = sd.share_message(
+            domain="movie", suggestion="Dune", language="sv", year=2021
+        )
+        self.assertIn("OneChoice har bestämt", msg)
+        self.assertIn("Dune", msg)
+        self.assertIn("(2021)", msg)
+        self.assertTrue(msg.startswith("🎬"))
 
     def test_clothes_movie_weekend_same_pattern(self) -> None:
         for domain, emoji in (
@@ -43,6 +54,54 @@ class ShareCopyTests(unittest.TestCase):
         self.assertIn("share=abc123", path)
         self.assertIn("ref=share", path)
         self.assertIn("decision_id=42", path)
+
+    def test_absolute_share_url_keeps_query_mark(self) -> None:
+        url = sd.absolute_share_url(
+            "https://onechoice.app", token="tok", decision_id=9
+        )
+        self.assertTrue(url.startswith("https://onechoice.app/?"))
+        self.assertIn("share=tok", url)
+        self.assertIn("ref=share", url)
+
+
+class ListShareFormatTests(unittest.TestCase):
+    def test_unchecked_only_grouped_en_dash(self) -> None:
+        items = [
+            {
+                "name": "gul lök",
+                "category": "frukt & grönt",
+                "checked": False,
+            },
+            {
+                "name": "krossade tomater",
+                "category": "frukt & grönt",
+                "checked": False,
+            },
+            {
+                "name": "tonfisk",
+                "category": "kött & fisk",
+                "checked": False,
+            },
+            {
+                "name": "mjölk",
+                "category": "mejeri",
+                "checked": True,
+            },
+        ]
+        text = sd.format_list_share_text(items, language="sv")
+        self.assertTrue(text.startswith("🛒 Inköpslista (OneChoice)"))
+        self.assertIn("FRUKT & GRÖNT", text)
+        self.assertIn("– gul lök", text)
+        self.assertIn("– krossade tomater", text)
+        self.assertIn("KÖTT & FISK", text)
+        self.assertIn("– tonfisk", text)
+        self.assertNotIn("mjölk", text)
+        self.assertNotIn("MEJERI", text)
+
+    def test_empty_list_message(self) -> None:
+        text = sd.format_list_share_text([], language="sv")
+        self.assertIn("Inköpslista", text)
+        self.assertIn("tom", text.lower())
 
 
 class PublicShareDbTests(unittest.TestCase):
@@ -100,15 +159,27 @@ class PublicShareDbTests(unittest.TestCase):
         self.assertEqual(again["token"], share["token"])
         tmp.cleanup()
 
+    def test_list_share_counter_bumps(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        path = str(Path(tmp.name) / "t.db")
+        db.init_db(path)
+        user = db.ensure_user(language="sv", path=path)
+        n1 = db.record_list_share(user["id"], path=path)
+        n2 = db.record_list_share(user["id"], path=path)
+        n3 = db.record_list_share(user["id"], path=path)
+        self.assertEqual(n1, 1)
+        self.assertEqual(n2, 2)
+        self.assertEqual(n3, 3)
+        tmp.cleanup()
+
 
 class ShareLandingUiTests(unittest.TestCase):
-    def test_shared_page_renders_cta(self) -> None:
+    def test_shared_page_renders_cta_and_logs_open(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         tmp = tempfile.TemporaryDirectory()
         path = str(Path(tmp.name) / "share.db")
         db.init_db(path)
-        # Patch default DB so AppTest guest mode hits our temp file
         orig = db.DB_PATH
         db.DB_PATH = Path(path)
         try:
@@ -147,6 +218,9 @@ class ShareLandingUiTests(unittest.TestCase):
             self.assertEqual(at.session_state["page"], "shared")
             body = " ".join(str(m.value or "") for m in at.markdown)
             self.assertIn("30 min helkroppsstyrka", body)
+            self.assertIn('data-oc-share="landing"', body)
+            # Landing has no bottom nav chrome
+            self.assertNotIn('data-oc-nav="glass"', body)
             labels = [b.label or "" for b in at.button]
             self.assertTrue(
                 any("OneChoice" in lab for lab in labels),
@@ -168,6 +242,14 @@ class ShareLandingUiTests(unittest.TestCase):
                 b.click().run()
                 break
         self.assertEqual(at.session_state["page"], "execute")
+        # Share present on execute
+        share_keys = [
+            getattr(b, "key", None) for b in at.button if getattr(b, "key", None)
+        ]
+        self.assertTrue(
+            any(k and str(k).startswith("share_btn_") for k in share_keys),
+            share_keys,
+        )
         # Back to locked result
         for b in at.button:
             if (b.label or "") in ("Tillbaka", "Back"):
@@ -178,10 +260,75 @@ class ShareLandingUiTests(unittest.TestCase):
         cur = at.session_state["current"] or {}
         did = cur.get("decision_id") or at.session_state["decision_id"]
         self.assertIsNotNone(did)
-        # Building a share snapshot must succeed for the locked decision
         share = db.ensure_public_share(dict(cur), language="sv")
         self.assertTrue(share.get("token"))
         self.assertIn("ref=share", sd.share_path(token=share["token"], decision_id=did))
+        # Lock card share icon
+        labels = [b.label or "" for b in at.button]
+        self.assertIn("↗", labels)
+
+    def test_food_decision_and_execute_expose_share(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        with mock.patch("supabase_client.is_configured", return_value=True):
+            with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                with mock.patch("db._use_supabase", return_value=False):
+                    at = AppTest.from_file("app.py", default_timeout=90)
+                    at.run()
+                    at.session_state["access_token"] = "share-at"
+                    at.session_state["refresh_token"] = "share-rt"
+                    at.session_state["user_id"] = "uid-share-food"
+                    at.session_state["guest_mode"] = False
+                    at.session_state["page"] = "home"
+                    at.session_state["_auth_cookie_checked"] = True
+                    at.session_state["food_meal_type"] = "middag"
+                    at.run()
+        mat = next(b for b in at.button if (b.label or "") == "Mat")
+        mat.click().run()
+        self.assertEqual(at.session_state["page"], "result")
+        labels = [b.label or "" for b in at.button]
+        self.assertIn("↗", labels, labels)
+        go = next(b for b in at.button if (b.label or "") == "Gör det")
+        go.click().run()
+        self.assertEqual(at.session_state["page"], "execute")
+        labels = [b.label or "" for b in at.button]
+        self.assertTrue(
+            any(lab in ("Dela", "↗") or lab == "Share" for lab in labels),
+            labels,
+        )
+
+    def test_lista_exposes_share_list_when_items_present(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        db.init_db()
+        db._SHOPPING_FORCE_SQLITE = True
+        uid = "uid-share-lista"
+        db._ensure_sqlite_user(uid)
+        with db.get_conn() as conn:
+            conn.execute("DELETE FROM shopping_items WHERE user_id = ?", (uid,))
+        db.upsert_shopping_item(uid, "banan", "frukt & grönt")
+        db.upsert_shopping_item(uid, "mjölk", "mejeri")
+        try:
+            with mock.patch("supabase_client.is_configured", return_value=True):
+                with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
+                    with mock.patch("db._use_supabase", return_value=False):
+                        at = AppTest.from_file("app.py", default_timeout=90)
+                        at.run()
+                        at.session_state["access_token"] = "lista-share-at"
+                        at.session_state["refresh_token"] = "lista-share-rt"
+                        at.session_state["user_id"] = uid
+                        at.session_state["guest_mode"] = False
+                        at.session_state["page"] = "lista"
+                        at.session_state["_auth_cookie_checked"] = True
+                        at.session_state["shopping_list_cache"] = None
+                        at.run()
+            labels = [b.label or "" for b in at.button]
+            self.assertTrue(
+                any("Dela listan" in lab or "Share list" in lab for lab in labels),
+                labels,
+            )
+        finally:
+            db._SHOPPING_FORCE_SQLITE = False
 
 
 if __name__ == "__main__":

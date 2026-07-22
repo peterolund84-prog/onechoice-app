@@ -866,6 +866,23 @@ def upsert_preference(
         return dict(row)
 
 
+def record_list_share(
+    user_id: str,
+    *,
+    path: Path | str | None = None,
+) -> int:
+    """Bump per-user list-share count (household-mode teaser signal). Returns new total."""
+    if not user_id:
+        return 0
+    row = upsert_preference(
+        user_id, "meta", "list_shares", "count", 1.0, path=path
+    )
+    try:
+        return int(float(row.get("score") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def get_preferences(
     user_id: str,
     domain: str | None = None,
