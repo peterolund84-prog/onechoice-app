@@ -180,6 +180,7 @@ I18N = {
         "list_created": "Inköpslistan är uppdaterad.",
         "list_error": "Kunde inte spara listan just nu. Försök igen.",
         "list_local_note": "Listan sparas lokalt på den här enheten (molntabellen shopping_items saknas ännu).",
+        "list_guest_login_hint": "Logga in för att spara listan.",
         "list_open_history": "Se dina beslut",
         "history_open": "Öppna",
         "history_hint": "Här ser du beslut du tagit — öppna för recept och lista.",
@@ -342,6 +343,7 @@ I18N = {
         "list_created": "Shopping list updated.",
         "list_error": "Could not save the list right now. Try again.",
         "list_local_note": "List is saved on this device (cloud table shopping_items is not set up yet).",
+        "list_guest_login_hint": "Sign in to save your list.",
         "list_open_history": "See your decisions",
         "history_open": "Open",
         "history_hint": "Decisions you took — open for recipe and list.",
@@ -2041,6 +2043,14 @@ div[data-baseweb="input"] {{
     box-shadow: none !important;
     background: transparent !important;
 }}
+/* iOS Safari: inputs <16px trigger auto-zoom that never resets */
+input, textarea, select,
+div[data-baseweb="input"] input,
+div[data-baseweb="textarea"] textarea,
+div[data-testid="stTextInput"] input,
+div[data-testid="stTextArea"] textarea {{
+    font-size: 16px !important;
+}}
 .oc-shop-list {{
     margin: 0.5rem 0 1rem;
 }}
@@ -2445,6 +2455,91 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     )
 
 
+def _is_authenticated() -> bool:
+    return bool(
+        st.session_state.get("access_token")
+        and st.session_state.get("refresh_token")
+        and st.session_state.get("user_id")
+        and not st.session_state.get("guest_mode")
+    )
+
+
+def _apply_auth_session(sess: dict[str, Any]) -> None:
+    """Mirror Supabase session into session_state + DB."""
+    import auth_cookie as ac
+
+    st.session_state.user_id = sess["user_id"]
+    st.session_state.user_email = sess.get("email")
+    st.session_state.access_token = sess["access_token"]
+    st.session_state.refresh_token = sess["refresh_token"]
+    st.session_state.guest_mode = False
+    _clear_guest_query_param()
+    db.set_auth(sess["access_token"], sess["refresh_token"])
+    db.ensure_user(
+        sess["user_id"],
+        language=st.session_state.language,
+        email=sess.get("email"),
+    )
+    ac.set_auth_cookie(sess["access_token"], sess["refresh_token"])
+
+
+def _clear_auth_everywhere() -> None:
+    """Logout / guest — wipe session_state, DB auth context, and cookie."""
+    import auth_cookie as ac
+
+    db.clear_auth()
+    ac.clear_auth_cookie()
+    for key in (
+        "user_id",
+        "user_email",
+        "access_token",
+        "refresh_token",
+        "current",
+        "decision_id",
+    ):
+        st.session_state[key] = None
+    st.session_state["accepted"] = False
+    st.session_state["guest_mode"] = False
+
+
+def _try_restore_auth_from_cookie() -> bool:
+    """
+    Restore Supabase session from browser cookie after a full page reload.
+
+    Returns True when the cookie component is still loading (caller should stop).
+    """
+    import auth_cookie as ac
+    import supabase_client as sb
+
+    if not sb.is_configured():
+        st.session_state["_auth_cookie_checked"] = True
+        return False
+    if _is_authenticated():
+        st.session_state["_auth_cookie_checked"] = True
+        return False
+    if st.session_state.get("guest_mode") or _guest_query_active():
+        st.session_state["_auth_cookie_checked"] = True
+        return False
+    if st.session_state.get("_auth_cookie_checked"):
+        return False
+
+    stored = ac.read_auth_cookie()
+    if stored is None:
+        return True
+    st.session_state["_auth_cookie_checked"] = True
+
+    rt = (stored or {}).get("rt")
+    if not rt:
+        return False
+    try:
+        sess = sb.refresh_session(rt)
+        _apply_auth_session(sess)
+    except Exception as exc:
+        log.warning("auth cookie refresh failed: %s", exc)
+        ac.clear_auth_cookie()
+    return False
+
+
 def init_state() -> None:
     defaults: dict[str, Any] = {
         "language": "sv",
@@ -2495,9 +2590,13 @@ def init_state() -> None:
         "fridge_mode": False,
         "shopping_list_cache": None,  # optimistic mirror of db.list_shopping_items
         "shopping_pending_writes": [],  # [{id, checked}] write-behind queue
+        "_auth_cookie_checked": False,
     }
     for k, v in defaults.items():
         st.session_state.setdefault(k, v)
+
+    if _try_restore_auth_from_cookie():
+        return
 
     # Restore Supabase auth context for RLS-backed writes
     if st.session_state.access_token and st.session_state.refresh_token:
@@ -2511,10 +2610,10 @@ def init_state() -> None:
     if _peek_share_token() and not st.session_state.user_id:
         st.session_state.guest_mode = True
 
-    # Auth gate BEFORE guest bootstrap — never mint a guest UUID while login is pending
+    # Auth gate BEFORE guest bootstrap — first view is login unless guest chosen
     if (
         sb.is_configured()
-        and not st.session_state.user_id
+        and not _is_authenticated()
         and not st.session_state.guest_mode
         and not _guest_query_active()
     ):
@@ -2883,18 +2982,7 @@ def require_auth_context() -> None:
 
 def _go_to_auth_page(*, mode: str = "login") -> None:
     """Clear guest session and open login — used from Profil."""
-    db.clear_auth()
-    for key in (
-        "user_id",
-        "user_email",
-        "access_token",
-        "refresh_token",
-        "current",
-        "decision_id",
-    ):
-        st.session_state[key] = None
-    st.session_state["accepted"] = False
-    st.session_state["guest_mode"] = False
+    _clear_auth_everywhere()
     st.session_state["auth_mode"] = mode
     _clear_guest_query_param()
     _clear_action_query_params()
@@ -2914,6 +3002,9 @@ def page_auth() -> None:
     if not sb.is_configured():
         st.warning(t("no_supabase"))
         if st.button(t("guest"), type="primary", use_container_width=True):
+            import auth_cookie as ac
+
+            ac.clear_auth_cookie()
             db.init_db()
             st.session_state.guest_mode = True
             st.session_state.user_id = str(uuid.uuid4())
@@ -2941,19 +3032,7 @@ def page_auth() -> None:
             try:
                 with st.spinner(t("loading")):
                     sess = sb.sign_in(email.strip(), password)
-                    st.session_state.user_id = sess["user_id"]
-                    st.session_state.user_email = sess.get("email")
-                    st.session_state.access_token = sess["access_token"]
-                    st.session_state.refresh_token = sess["refresh_token"]
-                    st.session_state.guest_mode = False
-                    _clear_guest_query_param()
-                    _clear_action_query_params()
-                    db.set_auth(sess["access_token"], sess["refresh_token"])
-                    db.ensure_user(
-                        sess["user_id"],
-                        language=st.session_state.language,
-                        email=sess.get("email"),
-                    )
+                    _apply_auth_session(sess)
                 st.session_state.page = "home"
                 st.rerun()
             except Exception as exc:
@@ -2981,18 +3060,7 @@ def page_auth() -> None:
                         email.strip(), password, language=st.session_state.language
                     )
                     if sess.get("access_token") and sess.get("refresh_token"):
-                        st.session_state.user_id = sess["user_id"]
-                        st.session_state.user_email = sess.get("email")
-                        st.session_state.access_token = sess["access_token"]
-                        st.session_state.refresh_token = sess["refresh_token"]
-                        st.session_state.guest_mode = False
-                        _clear_guest_query_param()
-                        db.set_auth(sess["access_token"], sess["refresh_token"])
-                        db.ensure_user(
-                            sess["user_id"],
-                            language=st.session_state.language,
-                            email=sess.get("email"),
-                        )
+                        _apply_auth_session(sess)
                         st.session_state.page = "home"
                         st.success("Konto skapat.")
                         st.rerun()
@@ -3009,6 +3077,9 @@ def page_auth() -> None:
 
     st.markdown("<div style='height:0.8rem'></div>", unsafe_allow_html=True)
     if st.button(t("guest"), use_container_width=True):
+        import auth_cookie as ac
+
+        ac.clear_auth_cookie()
         db.clear_auth()
         db.init_db()
         st.session_state.guest_mode = True
@@ -6303,6 +6374,8 @@ def page_lista() -> None:
         f'<p class="oc-logo" style="font-size:1.35rem">{html.escape(t("list_title"))}</p>',
         unsafe_allow_html=True,
     )
+    if st.session_state.guest_mode:
+        st.caption(t("list_guest_login_hint"))
     with st.form("shop_add_form", clear_on_submit=True):
         added = st.text_input(
             t("list_add_placeholder"),
@@ -6708,7 +6781,7 @@ def handle_query_params() -> None:
             pass
         st.rerun()
 
-    if st.session_state.page == "auth" and not st.session_state.user_id:
+    if st.session_state.page == "auth" and not _is_authenticated() and not st.session_state.get("guest_mode"):
         return
 
     nav_q = _qp_one(qp.get("nav"))
@@ -7020,6 +7093,8 @@ def page_shared() -> None:
 
 def main() -> None:
     init_state()
+    if not st.session_state.get("_auth_cookie_checked"):
+        st.stop()
     inject_css()
     require_auth_context()
 
