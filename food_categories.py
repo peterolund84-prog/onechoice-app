@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 
 # ~40 Swedish everyday-dish categories — filenames under assets/dishes/{id}.jpg
+# "generic" is a taxonomy fallback id only (no photo; UI uses tonal placeholder).
 DISH_CATEGORIES: tuple[str, ...] = (
     "wok",
     "gryta",
@@ -205,25 +206,28 @@ def infer_dish_category(suggestion: str, *, meta: dict | None = None) -> str:
 
 
 def dish_image_path(category: str, *, root: Path | None = None) -> Path:
-    """Resolve local jpg path; missing/invalid category → generic.jpg."""
+    """Resolve local jpg path for a category id.
+
+    Unknown / generic / missing file → path that is_file() is False.
+    Callers must treat a missing file as “no photo” (tonal placeholder) —
+    never invent a random fallback photo.
+    """
     base = root or Path(__file__).resolve().parent / "assets" / "dishes"
     cat = normalize_dish_category(category)
-    if cat not in DISH_CATEGORY_SET:
-        cat = "generic"
-    candidate = base / f"{cat}.jpg"
-    if candidate.is_file():
-        return candidate
-    generic = base / "generic.jpg"
-    return generic if generic.is_file() else candidate
+    if cat == "generic" or cat not in DISH_CATEGORY_SET:
+        return base / "__missing__.jpg"
+    return base / f"{cat}.jpg"
 
 
 def manifest_category_ids(*, root: Path | None = None) -> frozenset[str]:
-    """Category ids that have a jpg on disk (excluding MANIFEST)."""
+    """Category ids that have a jpg on disk (excluding MANIFEST / generic)."""
     base = root or Path(__file__).resolve().parent / "assets" / "dishes"
     if not base.is_dir():
         return frozenset()
     return frozenset(
-        p.stem for p in base.glob("*.jpg") if p.is_file() and p.stem in DISH_CATEGORY_SET
+        p.stem
+        for p in base.glob("*.jpg")
+        if p.is_file() and p.stem in DISH_CATEGORY_SET and p.stem != "generic"
     )
 
 

@@ -185,10 +185,12 @@ class DishManifestTests(unittest.TestCase):
         import food_categories as fcat
 
         on_disk = fcat.manifest_category_ids()
-        self.assertTrue(fcat.DISH_CATEGORY_SET.issubset(on_disk | {"generic"}))
-        for cat in fcat.DISH_CATEGORIES:
+        expected = fcat.DISH_CATEGORY_SET - {"generic"}
+        self.assertTrue(expected.issubset(on_disk))
+        for cat in expected:
             path = fcat.dish_image_path(cat)
             self.assertTrue(path.is_file(), cat)
+        self.assertFalse(fcat.dish_image_path("generic").is_file())
 
     def test_no_duplicate_dish_bytes(self) -> None:
         import hashlib
@@ -196,13 +198,18 @@ class DishManifestTests(unittest.TestCase):
 
         import food_categories as fcat
 
-        base = Path(fcat.dish_image_path("generic")).parent
+        base = Path(__file__).resolve().parent / "assets" / "dishes"
         by_hash: dict[str, list[str]] = {}
         for p in base.glob("*.jpg"):
             h = hashlib.md5(p.read_bytes()).hexdigest()
             by_hash.setdefault(h, []).append(p.name)
         dups = {h: names for h, names in by_hash.items() if len(names) > 1}
         self.assertEqual(dups, {}, dups)
+
+    def test_local_pack_images_resolve(self) -> None:
+        import dish_images as dimg
+
+        dimg.assert_local_packs_resolve()
 
 
 if __name__ == "__main__":

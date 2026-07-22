@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "decision-chips-actions-v55-20260722"
+BUILD_ID = "dish-image-loading-v56-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -200,6 +200,15 @@ I18N = {
         "favorite_remove": "Ta bort favorit",
         "cook_tonight": "Laga ikväll",
         "deciding": "Bestämmer…",
+        "decide_status_1": "Kollar vad du åt senast…",
+        "decide_status_2": "Väljer efter tid och väder…",
+        "decide_status_3": "Sätter ihop receptet…",
+        "decide_status_4": "Nästan klart…",
+        "fridge_status_1": "Läser av kylen…",
+        "fridge_status_2": "Ser vad som går att laga…",
+        "fridge_status_3": "Sätter ihop receptet…",
+        "fridge_status_4": "Nästan klart…",
+        "decide_timeout": "Det tog för lång tid — försök igen",
         "history_status_shown": "Visat",
         "history_status_accepted": "Genomfört",
         "history_status_rejected": "Avböjt",
@@ -379,6 +388,15 @@ I18N = {
         "favorite_remove": "Remove favorite",
         "cook_tonight": "Cook tonight",
         "deciding": "Deciding…",
+        "decide_status_1": "Checking what you ate last…",
+        "decide_status_2": "Matching time and weather…",
+        "decide_status_3": "Putting the recipe together…",
+        "decide_status_4": "Almost ready…",
+        "fridge_status_1": "Reading the fridge…",
+        "fridge_status_2": "Seeing what you can cook…",
+        "fridge_status_3": "Putting the recipe together…",
+        "fridge_status_4": "Almost ready…",
+        "decide_timeout": "That took too long — try again",
         "history_status_shown": "Shown",
         "history_status_accepted": "Done",
         "history_status_rejected": "Rejected",
@@ -695,25 +713,27 @@ def _render_food_card_html(
     lock_label_html: str | None = None,
     lock_body_html: str | None = None,
     share_corner_html: str = "",
+    arrive: bool = False,
 ) -> str:
-    """Pre-lock / lock food card: category image + title + justification + meta."""
+    """Pre-lock / lock food card: resolved dish image + title + justification + meta."""
     import base64
 
-    import food_categories as fcat
+    import dish_images as dimg
 
-    cat = fcat.infer_dish_category(
-        suggestion,
-        meta={
-            **(ctx if isinstance(ctx, dict) else {}),
-            "dish_category": (ctx or {}).get("dish_category"),
-        },
-    )
-    img_html = ""
-    raw = fcat.dish_image_bytes(cat)
+    hint = None
+    if isinstance(ctx, dict):
+        hint = ctx.get("dish_category") or ctx.get("category")
+    raw = dimg.resolve_dish_image_bytes(suggestion, str(hint) if hint else None)
     if raw:
         b64 = base64.b64encode(raw).decode("ascii")
         img_html = (
             f'<img class="oc-food-img" src="data:image/jpeg;base64,{b64}" alt=""/>'
+        )
+    else:
+        # Intentional tonal placeholder — never a wrong photo
+        img_html = (
+            '<div class="oc-food-img oc-food-img-ph" aria-hidden="true">'
+            '<div class="oc-food-ph-circle"></div></div>'
         )
 
     shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
@@ -733,9 +753,10 @@ def _render_food_card_html(
     )
     lock_html = lock_label_html or ""
     share_html = share_corner_html or ""
+    arrive_cls = " oc-card-arrive" if arrive else ""
 
     return (
-        '<div class="oc-decision oc-food-decision">'
+        f'<div class="oc-decision oc-food-decision{arrive_cls}">'
         f"{share_html}"
         f"{img_html}"
         '<div class="oc-food-body">'
@@ -1738,19 +1759,20 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     min-height: 36px !important;
     max-height: 36px !important;
     margin: 0 !important;
-    padding: 0 6px !important;
+    padding: 0 4px !important;
     border: none !important;
     border-radius: 999px !important;
     box-shadow: none !important;
     background: transparent !important;
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 13px !important;
+    font-size: 12px !important;
+    letter-spacing: 0 !important;
     font-weight: 500 !important;
     line-height: 1.2 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    text-overflow: clip !important;
 }}
 .st-key-meal_seg [data-testid="stButtonGroup"] button[aria-checked="true"],
 .st-key-meal_seg [data-testid="stPills"] button[aria-checked="true"],
@@ -2067,6 +2089,88 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {{
     object-fit: cover !important;
     border-radius: 24px 24px 0 0 !important;
     background: #eee !important;
+}}
+.oc-food-img-ph {{
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: rgba(79, 70, 229, 0.06) !important;
+}}
+.oc-food-ph-circle {{
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background-color: rgba(79, 70, 229, 0.08);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(79,70,229,0.55)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3'/%3E%3Cpath d='M7 12v9'/%3E%3Cpath d='M15 3v9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2z'/%3E%3Cpath d='M17 12v9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: 28px 28px;
+}}
+@keyframes oc-skel-shimmer {{
+    0% {{ background-position: 100% 0; }}
+    100% {{ background-position: -100% 0; }}
+}}
+.oc-skel-card {{
+    pointer-events: none !important;
+}}
+.oc-skel-shimmer {{
+    background: linear-gradient(
+        90deg,
+        rgba(0,0,0,0.04) 0%,
+        rgba(0,0,0,0.08) 45%,
+        rgba(0,0,0,0.04) 90%
+    ) !important;
+    background-size: 200% 100% !important;
+    animation: oc-skel-shimmer 1.6s ease-in-out infinite !important;
+}}
+.oc-skel-bar {{
+    height: 14px;
+    border-radius: 8px;
+    margin: 0 auto 12px;
+    background: linear-gradient(
+        90deg,
+        rgba(0,0,0,0.06) 0%,
+        rgba(0,0,0,0.11) 45%,
+        rgba(0,0,0,0.06) 90%
+    );
+    background-size: 200% 100%;
+    animation: oc-skel-shimmer 1.6s ease-in-out infinite;
+}}
+.oc-skel-bar.is-title {{ height: 22px; margin-bottom: 16px; }}
+.oc-skel-status {{
+    position: relative;
+    height: 1.4em;
+    margin: 14px auto 0;
+    max-width: 22rem;
+    text-align: center;
+    font-family: "Inter", sans-serif !important;
+    font-size: 13px !important;
+    color: var(--oc-muted) !important;
+    font-weight: 500 !important;
+}}
+.oc-skel-status span {{
+    position: absolute;
+    left: 0; right: 0;
+    opacity: 0;
+    animation: oc-status-cycle 8.8s linear infinite;
+}}
+.oc-skel-status span:nth-child(1) {{ animation-delay: 0s; }}
+.oc-skel-status span:nth-child(2) {{ animation-delay: 2.2s; }}
+.oc-skel-status span:nth-child(3) {{ animation-delay: 4.4s; }}
+.oc-skel-status span:nth-child(4) {{ animation-delay: 6.6s; }}
+@keyframes oc-status-cycle {{
+    0% {{ opacity: 0; }}
+    3% {{ opacity: 1; }}
+    22% {{ opacity: 1; }}
+    25% {{ opacity: 0; }}
+    100% {{ opacity: 0; }}
+}}
+@keyframes oc-card-arrive {{
+    from {{ opacity: 0; }}
+    to {{ opacity: 1; }}
+}}
+.oc-card-arrive {{
+    animation: oc-card-arrive 200ms ease-out both !important;
 }}
 .oc-food-body {{
     padding: 1.15rem 1.35rem 0 !important;
@@ -4359,7 +4463,7 @@ def infer_home_hero(
         local_fn = getattr(fd, "local_now", None)
         now = local_fn() if callable(local_fn) else _stockholm_now()
     meal_type = fd.default_meal_type(now=now)
-    meal_name = fd.meal_label(meal_type, language)
+    meal_name = fd.meal_headline(meal_type, language)
     weekend_label = I18N.get(language, I18N["sv"])["domains"]["weekend"]
     is_weekend = now.weekday() >= 5
     return {
@@ -4515,12 +4619,60 @@ def _safe_decide(user_id: str, question: str, **kwargs: Any):
     return pipeline.decide(user_id, question, **filtered)
 
 
+def _decide_uses_skeleton(*, hint: str | None, meal: str, fridge_mode: bool) -> bool:
+    """LLM-backed paths show a skeleton; local habit meals stay instant."""
+    if fridge_mode:
+        return True
+    domain = str(hint or "")
+    if domain in ("movie", "clothes", "workout", "weekend"):
+        return True
+    if domain == "food" or domain == "":
+        # frukost / kvällsmål are local packs — no theatre
+        if meal in ("frukost", "kvallsmal"):
+            return False
+        return True
+    return True
+
+
+def _decide_status_messages(*, fridge_mode: bool) -> tuple[str, str, str, str]:
+    if fridge_mode:
+        return (
+            t("fridge_status_1"),
+            t("fridge_status_2"),
+            t("fridge_status_3"),
+            t("fridge_status_4"),
+        )
+    return (
+        t("decide_status_1"),
+        t("decide_status_2"),
+        t("decide_status_3"),
+        t("decide_status_4"),
+    )
+
+
+def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
+    """Placeholder matching the decision card — CSS drives status cycling."""
+    msgs = _decide_status_messages(fridge_mode=fridge_mode)
+    status = "".join(f"<span>{html.escape(m)}</span>" for m in msgs)
+    st.html(
+        '<div class="oc-decision oc-food-decision oc-skel-card">'
+        '<div class="oc-food-img oc-skel-shimmer" aria-hidden="true"></div>'
+        '<div class="oc-food-body">'
+        '<div class="oc-skel-bar is-title" style="width:70%"></div>'
+        '<div class="oc-skel-bar" style="width:50%"></div>'
+        '<div class="oc-skel-bar" style="width:40%"></div>'
+        f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
+        "</div></div>"
+    )
+
+
 def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_router: bool = False) -> None:
     """
     via_router=True: free-text path — MUST go through handle_free_text (no bypass).
     Domain chips / ambiguous picks use via_router=False with an explicit domain_hint.
     """
     import router as rt
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
     require_auth_context()
     # Guest mode must never hit Supabase RLS writes
@@ -4593,7 +4745,8 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
             context_extra["in_progress_series"] = st.session_state.movie_in_progress_series
     if reroll and isinstance(cur, dict) and cur.get("suggestion"):
         context_extra["previous_suggestion"] = str(cur.get("suggestion") or "")
-    if st.session_state.get("fridge_mode"):
+    fridge_mode = bool(st.session_state.get("fridge_mode"))
+    if fridge_mode:
         import fridge_domain as fr
 
         context_extra["source"] = fr.SOURCE
@@ -4601,46 +4754,78 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
             st.session_state.get("fridge_inventory") or []
         )
 
+    meal = str(st.session_state.get("food_meal_type") or "")
+    use_skel = _decide_uses_skeleton(
+        hint=str(hint) if hint else None,
+        meal=meal,
+        fridge_mode=fridge_mode,
+    )
+
+    # Capture Streamlit session values on the main thread — worker threads
+    # cannot touch st.session_state (no ScriptRunContext).
+    uid = str(st.session_state.user_id)
+    lang = st.session_state.language
+    grok_key = get_secret("GROK_API_KEY")
+    forced_domain = st.session_state.force_route_domain
+    reroll_index = int(st.session_state.reroll_index or 0)
+    route_log_id = st.session_state.route_log_id
+    hint_s = str(hint) if hint else None
+    ctx_extra = context_extra or None
+
+    def _call_decide():
+        if via_router and not reroll:
+            return pipeline.handle_free_text(
+                uid,
+                q,
+                language=lang,
+                grok_api_key=grok_key,
+                forced_domain=forced_domain,
+                context_extra=ctx_extra,
+            )
+        if via_router and reroll:
+            return pipeline.handle_free_text(
+                uid,
+                q,
+                language=lang,
+                grok_api_key=grok_key,
+                reroll=True,
+                reroll_index=reroll_index,
+                previous_decision_id=prev_id,
+                forced_domain=hint_s,
+                prior_route_log_id=route_log_id,
+                context_extra=ctx_extra,
+            )
+        return _safe_decide(
+            uid,
+            q,
+            domain_hint=hint_s,
+            language=lang,
+            reroll=reroll,
+            reroll_index=reroll_index,
+            previous_decision_id=prev_id,
+            grok_api_key=grok_key,
+            skip_feasibility=(hint_s == "other"),
+            context_extra=ctx_extra,
+        )
+
     try:
-        meal = str(st.session_state.get("food_meal_type") or "")
-        spin = t("deciding") if meal in ("lunch", "middag") else t("loading")
-        with st.spinner(spin):
-            if via_router and not reroll:
-                result = pipeline.handle_free_text(
-                    str(st.session_state.user_id),
-                    q,
-                    language=st.session_state.language,
-                    grok_api_key=get_secret("GROK_API_KEY"),
-                    forced_domain=st.session_state.force_route_domain,
-                    context_extra=context_extra or None,
-                )
-                st.session_state.force_route_domain = None
-            elif via_router and reroll:
-                result = pipeline.handle_free_text(
-                    str(st.session_state.user_id),
-                    q,
-                    language=st.session_state.language,
-                    grok_api_key=get_secret("GROK_API_KEY"),
-                    reroll=True,
-                    reroll_index=int(st.session_state.reroll_index or 0),
-                    previous_decision_id=prev_id,
-                    forced_domain=str(hint) if hint else None,
-                    prior_route_log_id=st.session_state.route_log_id,
-                    context_extra=context_extra or None,
-                )
-            else:
-                result = _safe_decide(
-                    str(st.session_state.user_id),
-                    q,
-                    domain_hint=str(hint) if hint else None,
-                    language=st.session_state.language,
-                    reroll=reroll,
-                    reroll_index=int(st.session_state.reroll_index or 0),
-                    previous_decision_id=prev_id,
-                    grok_api_key=get_secret("GROK_API_KEY"),
-                    skip_feasibility=(str(hint) == "other"),
-                    context_extra=context_extra or None,
-                )
+        if use_skel:
+            _render_decide_skeleton(fridge_mode=fridge_mode)
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_call_decide)
+                try:
+                    result = fut.result(timeout=20)
+                except FuturesTimeout:
+                    log.warning("decide timed out after 20s")
+                    st.session_state.ui_error = True
+                    st.session_state._last_ui_error = "decide_timeout"
+                    st.session_state.force_route_domain = None
+                    st.rerun()
+                    return
+        else:
+            result = _call_decide()
+        if via_router:
+            st.session_state.force_route_domain = None
         # Free-text may land on clothes without occasion — gate before showing
         if (
             getattr(result, "ok", False)
@@ -4658,6 +4843,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
         st.session_state.current = result.to_dict()
         st.session_state.decision_id = getattr(result, "decision_id", None)
         st.session_state.accepted = False
+        st.session_state._decision_just_arrived = True
         # Clear one-shot occasion after a successful clothes decision
         if getattr(result, "domain", None) == "clothes":
             pass  # keep occasion for justification / rerolls this session
@@ -5426,19 +5612,16 @@ def _hist_heart_glyph_html(*, filled: bool) -> str:
 def _hist_thumb_html(row: dict[str, Any]) -> str:
     import base64
 
-    import food_categories as fcat
+    import dish_images as dimg
 
     suggestion = str(row.get("suggestion") or "")
     ctx = row.get("context") if isinstance(row.get("context"), dict) else {}
-    cat = "generic"
+    raw = None
     if (row.get("domain") or "") == "food":
-        cat = fcat.infer_dish_category(
-            suggestion,
-            meta={**(ctx or {}), "dish_category": (ctx or {}).get("dish_category")},
+        hint = (ctx or {}).get("dish_category")
+        raw = dimg.resolve_dish_image_bytes(
+            suggestion, str(hint) if hint else None
         )
-    if cat == "generic" or not cat:
-        return _hist_generic_placeholder_html()
-    raw = fcat.dish_image_bytes(cat)
     if not raw:
         return _hist_generic_placeholder_html()
     b64 = base64.b64encode(raw).decode("ascii")
@@ -5642,19 +5825,31 @@ def _cook_favorite_tonight(row: dict[str, Any]) -> None:
 def _favorite_card_html(row: dict[str, Any], language: str) -> str:
     import base64
 
-    import food_categories as fcat
+    import dish_images as dimg
 
     suggestion = str(row.get("suggestion") or "")
     ctx = row.get("context") if isinstance(row.get("context"), dict) else {}
-    cat = fcat.infer_dish_category(
-        suggestion,
-        meta={**(ctx or {}), "dish_category": (ctx or {}).get("dish_category")},
-    )
+    hint = (ctx or {}).get("dish_category")
+    raw = dimg.resolve_dish_image_bytes(suggestion, str(hint) if hint else None)
     img = ""
-    raw = fcat.dish_image_bytes(cat)
     if raw:
         b64 = base64.b64encode(raw).decode("ascii")
         img = f'<img src="data:image/jpeg;base64,{b64}" alt=""/>'
+    else:
+        img = (
+            '<div class="oc-fav-ph" aria-hidden="true" '
+            'style="width:100%;aspect-ratio:16/10;border-radius:16px 16px 0 0;'
+            "background:rgba(79,70,229,0.08);display:flex;align-items:center;"
+            'justify-content:center"><div class="oc-food-ph-circle" '
+            'style="width:56px;height:56px;border-radius:50%;'
+            "background-color:rgba(79,70,229,0.08);"
+            "background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' "
+            "viewBox='0 0 24 24' fill='none' stroke='rgba(79,70,229,0.55)' stroke-width='1.6' "
+            "stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 3v7a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2V3'"
+            "/%3E%3Cpath d='M7 12v9'/%3E%3Cpath d='M15 3v9h2a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2z'/%3E"
+            "%3Cpath d='M17 12v9'/%3E%3C/svg%3E&quot;);"
+            'background-repeat:no-repeat;background-position:center;background-size:22px"></div></div>'
+        )
     mins = None
     recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
     if recipe and recipe.get("active_minutes") is not None:
@@ -6492,8 +6687,11 @@ def render_recipe_block(
 def render_error_boundary() -> None:
     """Friendly Swedish error — never show a traceback to the user."""
     render_top_chrome()
+    msg = t("error_friendly")
+    if st.session_state.get("_last_ui_error") == "decide_timeout":
+        msg = t("decide_timeout")
     st.markdown(
-        f'<div class="oc-error"><p>{html.escape(t("error_friendly"))}</p></div>',
+        f'<div class="oc-error"><p>{html.escape(msg)}</p></div>',
         unsafe_allow_html=True,
     )
     # Raw exception stays in logs / _last_ui_error — never render to users
@@ -7343,17 +7541,29 @@ def page_result() -> None:
         render_movie_format_mood_chips(cur)
 
     if domain == "movie":
-        _paint_html(
-            _render_movie_card_html(
-                language=language,
-                suggestion=suggestion,
-                justification=justification,
-                ctx=ctx,
-                share_corner_html=share_corner,
-            )
+        arrive = bool(st.session_state.pop("_decision_just_arrived", False))
+        movie_html = _render_movie_card_html(
+            language=language,
+            suggestion=suggestion,
+            justification=justification,
+            ctx=ctx,
+            share_corner_html=share_corner,
         )
+        if arrive:
+            movie_html = movie_html.replace(
+                'class="oc-decision oc-movie-decision"',
+                'class="oc-decision oc-movie-decision oc-card-arrive"',
+                1,
+            )
+            _paint_html(movie_html)
+            st.html(
+                "<script>try{navigator.vibrate&&navigator.vibrate(10)}catch(e){}</script>"
+            )
+        else:
+            _paint_html(movie_html)
     elif domain == "food":
         # Pre-lock: sell the decision — image + title + justification + meta only
+        arrive = bool(st.session_state.pop("_decision_just_arrived", False))
         _paint_html(
             _render_food_card_html(
                 language=language,
@@ -7361,17 +7571,28 @@ def page_result() -> None:
                 justification=justification,
                 ctx=ctx,
                 share_corner_html=share_corner,
+                arrive=arrive,
             )
         )
+        if arrive:
+            st.html(
+                "<script>try{navigator.vibrate&&navigator.vibrate(10)}catch(e){}</script>"
+            )
     else:
+        arrive = bool(st.session_state.pop("_decision_just_arrived", False))
+        arrive_cls = " oc-card-arrive" if arrive else ""
         _paint_html(
-            f'<div class="oc-decision">'
+            f'<div class="oc-decision{arrive_cls}">'
             f"{share_corner}"
             f'<div class="label">{html.escape(domain_label(domain))}</div>'
             f"<h1>{html.escape(suggestion)}</h1>"
             f"<p>{html.escape(justification)}</p>"
             f"</div>"
         )
+        if arrive:
+            st.html(
+                "<script>try{navigator.vibrate&&navigator.vibrate(10)}catch(e){}</script>"
+            )
     render_reroll_dots(reroll_index)
 
     # Shopping list + recipe live on execute only — never on pre-lock food card

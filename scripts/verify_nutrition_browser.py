@@ -48,7 +48,7 @@ def main() -> int:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 430, "height": 900})
-        ok1 = run_meal(page, "Kvällsmål", "Ät nu")
+        ok1 = run_meal(page, "Kväll", "Ät nu")
         ok2 = run_meal(page, "Middag", "Handla")
         browser.close()
     if ok1 and ok2:
