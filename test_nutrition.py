@@ -93,6 +93,14 @@ class NutritionEstimateTests(unittest.TestCase):
         profile = feasibility.parse_profile({"id": "u", "profile_json": {}}, {})
         self.assertTrue(profile["food"]["show_nutrition"])
 
+    def test_leftover_reheat_nutrition_hidden(self) -> None:
+        import food_domain as fd
+
+        recipe = fd.reheat_execution_recipe("Matlåda från gårdagens pasta")
+        self.assertFalse(shopping.nutrition_segment_visible(recipe))
+        line = shopping.format_nutrition_line(recipe.get("nutrition"), language="sv", recipe=recipe)
+        self.assertEqual(line, "Näringsvärden saknas")
+
     def test_profile_nutrition_opt_out_persists(self) -> None:
         profile = feasibility.parse_profile(
             {"id": "u", "profile_json": {"food": {"show_nutrition": False}}},
@@ -158,10 +166,9 @@ class NutritionUiPlacementTests(unittest.TestCase):
         self.assertGreater(nut_i, title_i)
         self.assertLess(nut_i, ings_i)
 
-    def test_recipe_block_legacy_empty_shows_missing_not_blank(self) -> None:
+    def test_recipe_block_legacy_empty_hides_nutrition(self) -> None:
         import app as app_mod
 
-        # Force no estimate by empty ingredients + disallow via mocking ensure
         html_chunks: list[str] = []
 
         def fake_markdown(body, **kwargs):
@@ -179,9 +186,8 @@ class NutritionUiPlacementTests(unittest.TestCase):
                         show_nutrition=True,
                     )
         blob = " ".join(html_chunks)
-        self.assertIn("Näringsvärden saknas", blob)
-        self.assertNotIn("None", blob)
-        self.assertNotIn("null", blob.lower())
+        self.assertNotIn("Näringsvärden saknas", blob)
+        self.assertNotIn("kcal", blob.lower())
 
     def test_decision_result_has_no_nutrition_copy(self) -> None:
         """Decision card path must not surface kcal (opt-in lives in profile + recipe card)."""
@@ -228,17 +234,10 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         at.session_state["food_meal_type"] = "kvallsmal"
         at.query_params["domain"] = "food"
         at.run()
-        hit = False
         for b in at.button:
             if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        for b in at.button:
-            if b.label and "Ät nu" in b.label:
-                b.click().run()
-                hit = True
-                break
-        self.assertTrue(hit)
         self.assertEqual(at.session_state["page"], "execute")
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Ca ", body)
@@ -307,6 +306,7 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         self.assertIn('key="oc_lang_bar"', lang_src)
         nav_src = inspect.getsource(app_mod.nav)
         self.assertIn('key="oc_nav_bar"', nav_src)
+        self.assertIn('key=f"nav_', nav_src)
 
 
 if __name__ == "__main__":

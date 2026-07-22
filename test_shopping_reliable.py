@@ -142,15 +142,15 @@ class ReliableShoppingTests(unittest.TestCase):
         names = {r["name"] for r in db.list_shopping_items(uid, path=self.db_path)}
         self.assertEqual(names, {"banan"})
 
-    def test_nav_uses_pills_not_href(self) -> None:
+    def test_nav_uses_buttons_not_href(self) -> None:
         import inspect
 
         import app as app_mod
 
         src = inspect.getsource(app_mod.nav)
-        self.assertIn("st.pills", src)
+        self.assertIn("st.button", src)
+        self.assertIn('key=f"nav_', src)
         self.assertNotIn("href=", src)
-        self.assertNotIn("nav_btn_", src)
         lang = inspect.getsource(app_mod.lang_bar)
         self.assertIn("st.pills", lang)
         self.assertNotIn("href=", lang)
@@ -223,10 +223,6 @@ class ReliableShoppingUiTests(unittest.TestCase):
             if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        for b in at.button:
-            if b.label and "Handla" in b.label:
-                b.click().run()
-                break
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(bool(at.session_state["ui_error"]))
         # Must choose items — no auto-merge on Handla
@@ -279,8 +275,10 @@ class ReliableShoppingUiTests(unittest.TestCase):
         self.assertGreaterEqual(len(cache), 1)
         self.assertEqual(at.session_state["user_id"], uid)
 
-        # Nav pills present
-        self.assertTrue(len(at.pills) >= 1)
+        # Bottom nav present
+        labels = [b.label or "" for b in at.button]
+        self.assertIn("Lista", labels)
+        self.assertIn("Hem", labels)
 
     def test_premium_shop_css_tokens(self) -> None:
         import inspect

@@ -80,10 +80,6 @@ class ExecuteChecklistUi(unittest.TestCase):
             if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        for b in at.button:
-            if b.label and "Handla" in b.label:
-                b.click().run()
-                break
         self.assertEqual(at.session_state["page"], "execute")
         return at
 

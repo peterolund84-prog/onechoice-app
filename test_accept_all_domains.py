@@ -220,7 +220,7 @@ class AppAcceptUiTests(unittest.TestCase):
                 break
         self.assertTrue(at.session_state["accepted"])
         self.assertFalse(bool(at.session_state["ui_error"]))
-        self.assertEqual(at.session_state["page"], "result")
+        self.assertEqual(at.session_state["page"], "execute")
 
     def test_css_chip_rules_override_ghost_secondary(self) -> None:
         """Regression: grid chips are ghost borders, not underlined secondary links."""

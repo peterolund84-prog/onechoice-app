@@ -96,7 +96,7 @@ class PreLockFoodCardUiTests(unittest.TestCase):
         self.assertTrue(any("Nytt förslag" in lab for lab in labels), labels)
         self.assertFalse(any("Handla" in lab for lab in labels), labels)
 
-    def test_go_for_it_locks_then_handla_opens_execute(self) -> None:
+    def test_go_for_it_opens_execute_directly(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
@@ -109,17 +109,9 @@ class PreLockFoodCardUiTests(unittest.TestCase):
                 b.click().run()
                 break
         self.assertTrue(at.session_state["accepted"])
-        self.assertEqual(at.session_state["page"], "result")
-        body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("oc-food-decision", body)
-        hit = False
-        for b in at.button:
-            if b.label and "Handla" in b.label:
-                b.click().run()
-                hit = True
-                break
-        self.assertTrue(hit)
         self.assertEqual(at.session_state["page"], "execute")
+        labels = [b.label or "" for b in at.button]
+        self.assertFalse(any("Handla" in lab for lab in labels), labels)
 
 
 if __name__ == "__main__":

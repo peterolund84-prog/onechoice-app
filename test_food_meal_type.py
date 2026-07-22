@@ -165,13 +165,6 @@ class MealTypeInferTests(unittest.TestCase):
             if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        hit = False
-        for b in at.button:
-            if b.label and "Ät nu" in b.label:
-                b.click().run()
-                hit = True
-                break
-        self.assertTrue(hit)
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(bool(at.session_state["ui_error"]))
         body = " ".join(str(m.value or "") for m in at.markdown).lower()
@@ -267,6 +260,7 @@ class LeftoverGroundingTests(unittest.TestCase):
             path=self.db_path,
         )
         db.set_decision_status(d["id"], "accepted", path=self.db_path)
+        db.mark_execution_opened(d["id"], path=self.db_path)
         found = False
         for _ in range(8):
             r = self._lunch_decide()
@@ -311,6 +305,24 @@ class LeftoverGroundingTests(unittest.TestCase):
         self.assertIn("kycklingwok", out[0]["suggestion"].lower())
         self.assertNotIn("gryta", out[0]["suggestion"].lower())
 
+    def test_accept_without_execute_does_not_ground_leftover(self) -> None:
+        d = db.create_decision(
+            user_id=self.user["id"],
+            domain="food",
+            question="middag?",
+            suggestion="Krämig pasta",
+            justification="x",
+            context={"meal_type": "middag"},
+            path=self.db_path,
+        )
+        db.set_decision_status(d["id"], "accepted", path=self.db_path)
+        self.assertIsNone(db.recent_cooked_dinner(self.user["id"], path=self.db_path))
+        db.mark_execution_opened(d["id"], path=self.db_path)
+        self.assertEqual(
+            db.recent_cooked_dinner(self.user["id"], path=self.db_path),
+            "Krämig pasta",
+        )
+
     def test_lunch_tonfisk_has_recipe_after_accept(self) -> None:
         r = self._lunch_decide()
         while "tonfisk" not in (r.suggestion or "").lower():
@@ -332,6 +344,7 @@ class LeftoverGroundingTests(unittest.TestCase):
             path=self.db_path,
         )
         db.set_decision_status(d["id"], "accepted", path=self.db_path)
+        db.mark_execution_opened(d["id"], path=self.db_path)
         r = self._lunch_decide()
         if "gårdagens" not in (r.suggestion or "").lower():
             self.skipTest("leftover candidate not selected this roll")

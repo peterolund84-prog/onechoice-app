@@ -154,13 +154,8 @@ class HandlaLagaUiTests(unittest.TestCase):
             at.session_state["food_meal_type"] = "middag"
             at.query_params["domain"] = "food"
             at.run()
-            hit = False
             for b in at.button:
                 if (b.label or "") == "Gör det":
-                    b.click().run()
-                    break
-            for b in at.button:
-                if b.label and "Handla" in b.label:
                     b.click().run()
                     hit = True
                     break
@@ -194,16 +189,6 @@ class HandlaLagaUiTests(unittest.TestCase):
             if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        # Re-apply string context after lock rerun may normalize it
-        cur = dict(at.session_state["current"] or {})
-        ctx = cur.get("context")
-        if isinstance(ctx, dict):
-            cur["context"] = json.dumps(ctx, ensure_ascii=False)
-            at.session_state["current"] = cur
-        for b in at.button:
-            if b.label and "Handla" in b.label:
-                b.click().run()
-                break
         self.assertFalse(bool(at.session_state["ui_error"]))
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(at.exception)
@@ -223,8 +208,14 @@ class HandlaLagaUiTests(unittest.TestCase):
             if (b.label or "") == "Gör det":
                 b.click().run()
                 break
-        self.assertEqual(at.session_state["page"], "result")
+        self.assertEqual(at.session_state["page"], "execute")
         self.assertTrue(at.session_state["accepted"])
+        # Back to lock card on result
+        for b in at.button:
+            if b.label and ("Tillbaka" in b.label or "Back" in b.label):
+                b.click().run()
+                break
+        self.assertEqual(at.session_state["page"], "result")
         # Simulate Cloud leaving context as a string, then return to lock card
         cur = dict(at.session_state["current"] or {})
         ctx = cur.get("context")
