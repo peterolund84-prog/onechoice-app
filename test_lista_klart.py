@@ -181,7 +181,7 @@ class ListaKlartLifecycleTests(unittest.TestCase):
             b for b in at.button if getattr(b, "key", None) == "lista_clear_done"
         )
         clear_btn.click().run()
-        # st.rerun() inside the click handler — flush one more paint
+        # on_click + possible follow-up paint
         at.run()
         self.assertFalse(at.exception)
 
@@ -198,6 +198,20 @@ class ListaKlartLifecycleTests(unittest.TestCase):
         self.assertIn("· 1", self._nav_lista_label(at))
         db_names = {r["name"] for r in db.list_shopping_items(self.UID)}
         self.assertNotIn(first, db_names)
+
+    def test_rensa_klara_deletes_by_id_even_if_db_still_unchecked(self) -> None:
+        """Optimistic check may not have flushed — still delete the row by id."""
+        db.upsert_shopping_item(self.UID, "banan", "frukt & grönt")
+        db.upsert_shopping_item(self.UID, "ost", "mejeri")
+        rows = db.list_shopping_items(self.UID)
+        target = next(r for r in rows if r["name"] == "banan")
+        iid = int(target["id"])
+        # DB still unchecked — Rensa klara must delete by id anyway
+        n = db.delete_shopping_items(self.UID, [iid])
+        self.assertEqual(n, 1)
+        names = {r["name"] for r in db.list_shopping_items(self.UID)}
+        self.assertNotIn("banan", names)
+        self.assertIn("ost", names)
 
 
 if __name__ == "__main__":

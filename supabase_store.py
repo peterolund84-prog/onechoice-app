@@ -703,21 +703,36 @@ def clear_checked_shopping_items(
 ) -> int:
     """Delete all checked shopping rows for the user."""
     client = _client(access_token, refresh_token)
-    try:
-        found = (
-            client.table("shopping_items")
-            .select("id")
-            .eq("user_id", user_id)
-            .eq("checked", True)
-            .execute()
-        )
-        ids = [r["id"] for r in (found.data or []) if r.get("id") is not None]
-        if not ids:
-            return 0
-        client.table("shopping_items").delete().in_("id", ids).execute()
-        return len(ids)
-    except Exception:
+    found = (
+        client.table("shopping_items")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("checked", True)
+        .execute()
+    )
+    ids = [r["id"] for r in (found.data or []) if r.get("id") is not None]
+    if not ids:
         return 0
+    client.table("shopping_items").delete().in_("id", ids).execute()
+    return len(ids)
+
+
+def delete_shopping_items(
+    user_id: str,
+    item_ids: list[int],
+    *,
+    access_token: str,
+    refresh_token: str,
+) -> int:
+    """Delete shopping rows by primary key — used by Rensa klara."""
+    ids = [int(i) for i in item_ids if int(i) > 0]
+    if not ids:
+        return 0
+    client = _client(access_token, refresh_token)
+    client.table("shopping_items").delete().eq("user_id", user_id).in_(
+        "id", ids
+    ).execute()
+    return len(ids)
 
 
 def toggle_shopping_item(
