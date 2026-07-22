@@ -191,17 +191,15 @@ class AppAcceptUiTests(unittest.TestCase):
         at.run()
         self.assertEqual(at.session_state["page"], "result")
         self.assertFalse(at.exception)
-        self.assertTrue(at.pills, "meal pills missing")
-        # pills[0]=lang (SV/EN); meal row is the one with Frukost/Lunch/…
-        meal_pills = next(
-            (p for p in at.pills if "Frukost" in list(p.options)),
-            None,
-        )
-        self.assertIsNotNone(meal_pills, [list(p.options) for p in at.pills])
-        opts = list(meal_pills.options)
+        keys = {getattr(b, "key", None) for b in at.button}
+        for mk in ("frukost", "lunch", "middag", "kvallsmal"):
+            self.assertIn(f"meal_seg_{mk}", keys, keys)
+        labels = [b.label or "" for b in at.button]
         for needle in ("Frukost", "Lunch", "Middag", "Kvällsmål"):
-            self.assertIn(needle, opts)
-        meal_pills.select("Lunch").run()
+            self.assertIn(needle, labels)
+        self.assertNotIn("meal_pills", " ".join(str(m.value or "") for m in at.markdown))
+        lunch = next(b for b in at.button if getattr(b, "key", None) == "meal_seg_lunch")
+        lunch.click().run()
         self.assertFalse(at.exception)
         self.assertFalse(bool(at.session_state["ui_error"]))
         self.assertEqual(at.session_state["food_meal_type"], "lunch")
@@ -210,7 +208,6 @@ class AppAcceptUiTests(unittest.TestCase):
         # Accept must work after meal switch (Välj — or lunch-out map link)
         labels = [b.label or "" for b in at.button]
         if any("karta" in L.lower() or "map" in L.lower() for L in labels):
-            # Eating-out lunch is a valid meal-typed result; no session accept flag
             self.assertEqual((cur.get("context") or {}).get("meal_type"), "lunch")
             self.assertFalse(bool(at.session_state["ui_error"]))
             return
