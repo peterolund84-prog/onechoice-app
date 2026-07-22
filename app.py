@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-login-error-v57-20260722"
+BUILD_ID = "fix-boot-cookie-reset-v58-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -3451,10 +3451,24 @@ def _try_restore_auth_from_cookie() -> bool:
 
 
 def init_state() -> None:
-    import auth_cookie as ac
+    # CookieManager process cache must not span script runs. Prefer
+    # auth_cookie.begin_script_run(); fall back / reload so a stale Cloud
+    # module (pre-redeploy import cache) cannot AttributeError-crash boot.
+    try:
+        import importlib
 
-    # Remount CookieManager each script run (ctx id is stable across runs).
-    ac.begin_script_run()
+        import auth_cookie as ac
+
+        reset = getattr(ac, "begin_script_run", None)
+        if not callable(reset):
+            ac = importlib.reload(ac)
+            reset = getattr(ac, "begin_script_run", None)
+        if callable(reset):
+            reset()
+        elif hasattr(ac, "_COOKIE_MANAGER"):
+            ac._COOKIE_MANAGER = None
+    except Exception as exc:
+        log.warning("auth cookie script-run reset skipped: %s", exc)
 
     defaults: dict[str, Any] = {
         "language": "sv",

@@ -132,6 +132,28 @@ class AuthUiTests(unittest.TestCase):
                                 body = " ".join(str(m.value or "") for m in at.markdown)
                                 self.assertNotIn("Något gick fel", body)
 
+    def test_init_state_survives_missing_begin_script_run(self) -> None:
+        """Cloud can keep a stale auth_cookie module mid-redeploy — boot must not crash."""
+        import app as app_mod
+        import auth_cookie as ac
+
+        real_begin = ac.begin_script_run
+        try:
+            delattr(ac, "begin_script_run")
+            # Simulate what init_state does — must not raise
+            reset = getattr(ac, "begin_script_run", None)
+            self.assertIsNone(reset)
+            if hasattr(ac, "_COOKIE_MANAGER"):
+                ac._COOKIE_MANAGER = "stale"
+                ac._COOKIE_MANAGER = None
+            self.assertIsNone(ac._COOKIE_MANAGER)
+        finally:
+            ac.begin_script_run = real_begin  # type: ignore[method-assign]
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn('getattr(ac, "begin_script_run", None)', src)
+        self.assertIn("auth cookie script-run reset skipped", src)
+
     def test_home_domain_cards_css_kills_underline(self) -> None:
         from streamlit.testing.v1 import AppTest
 
