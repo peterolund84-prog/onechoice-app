@@ -19,18 +19,41 @@ class MealSegFullLabelTests(unittest.TestCase):
         self.assertEqual(fd.meal_label("kvallsmal", "sv"), "Kvällsmål")
         self.assertEqual(fd.meal_label("kvallsmal", "en"), "Evening snack")
 
-    def test_meal_seg_css_full_width_no_ellipsis(self) -> None:
+    def test_meal_seg_css_equal_grid_segments(self) -> None:
         import app as app_mod
 
         src = open(app_mod.__file__, encoding="utf-8").read()
         self.assertIn(".st-key-meal_seg", src)
-        self.assertIn("flex: 1 1 0", src)
+        self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", src)
+        self.assertIn("height: 30px", src)  # active pill fills segment
+        self.assertIn("height: 36px", src)  # track
+        self.assertIn("text-align: center", src)
         self.assertIn("font-size: 12px", src)
-        self.assertIn("font-size: 11px", src)  # 390px fallback
         self.assertIn("letter-spacing: 0", src)
-        self.assertIn("text-overflow: clip", src)
-        self.assertNotIn("text-overflow: ellipsis", src.split(".st-key-meal_seg")[1][:2500])
-        self.assertIn("width: 100%", src)
+
+
+class DecideSlotTests(unittest.TestCase):
+    def test_run_decision_queues_full_width_slot(self) -> None:
+        import app as app_mod
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn('page = "deciding"', src)
+        self.assertIn("def page_deciding", src)
+        self.assertIn('key="decide_slot"', src)
+        self.assertIn("_queue_decide_in_slot", src)
+        self.assertIn('"_decide_in_slot"', src)
+        # Skeleton must not be painted from inside home columns
+        self.assertIn('"deciding": page_deciding', src)
+
+    def test_decide_slot_css_is_full_width(self) -> None:
+        import app as app_mod
+
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        self.assertIn(".st-key-decide_slot", src)
+        self.assertIn(
+            ".oc-skel-card {\n    width: 100% !important;",
+            src.replace("{{", "{").replace("}}", "}"),
+        )
 
 
 class TimeBasedSkeletonTests(unittest.TestCase):
