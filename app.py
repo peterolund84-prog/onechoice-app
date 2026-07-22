@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-boot-cookie-reset-v58-20260722"
+BUILD_ID = "fix-quiet-cookie-no-cm-v59-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 

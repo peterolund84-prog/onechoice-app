@@ -87,8 +87,10 @@ class AuthUiTests(unittest.TestCase):
                 self.assertIn("Logga in", body)
 
     def test_login_lands_home_without_ui_error(self) -> None:
-        """Regression: CookieManager.set after login caused the error boundary."""
+        """Regression: CookieManager mount after login caused the error boundary."""
         from streamlit.testing.v1 import AppTest
+
+        import auth_cookie as ac
 
         sess = {
             "user_id": "uid-login",
@@ -96,41 +98,60 @@ class AuthUiTests(unittest.TestCase):
             "access_token": "at-login",
             "refresh_token": "rt-login",
         }
-        set_calls: list[bool] = []
+        cm_ctors: list[str] = []
+        paint_calls: list[str] = []
 
-        def fake_set(at: str, rt: str, *, quiet: bool = False) -> None:
-            set_calls.append(quiet)
+        class TrackingCM:
+            def __init__(self, key: str = "init") -> None:
+                cm_ctors.append(key)
+                self.cookies: dict[str, str] = {}
 
+            def set(self, *args, **kwargs) -> None:
+                pass
+
+            def delete(self, *args, **kwargs) -> None:
+                pass
+
+        def fake_paint(snippet: str) -> None:
+            paint_calls.append(snippet)
+
+        ac.begin_script_run()
         with mock.patch("supabase_client.is_configured", return_value=True):
             with mock.patch("auth_cookie.read_auth_cookie", return_value={}):
                 with mock.patch("supabase_client.sign_in", return_value=sess):
                     with mock.patch("db.ensure_user", return_value={"id": "uid-login"}):
                         with mock.patch("db.set_auth"):
                             with mock.patch(
-                                "auth_cookie.set_auth_cookie", side_effect=fake_set
+                                "extra_streamlit_components.CookieManager",
+                                TrackingCM,
                             ):
-                                at = AppTest.from_file("app.py", default_timeout=90)
-                                at.run()
-                                self.assertEqual(at.session_state["page"], "auth")
-                                # Seed credentials into widget state
-                                at.session_state["auth_email"] = "a@b.se"
-                                at.session_state["auth_password"] = "secret"
-                                at.run()
-                                for b in at.button:
-                                    if (b.label or "") == "Logga in":
-                                        b.click().run()
-                                        break
-                                else:
-                                    self.fail([b.label for b in at.button])
-                                self.assertEqual(at.session_state["page"], "home")
-                                self.assertFalse(bool(at.session_state["ui_error"]))
-                                self.assertEqual(at.session_state["user_id"], "uid-login")
-                                self.assertFalse(bool(at.session_state["guest_mode"]))
-                                # Must persist via quiet document.cookie, not CookieManager.set
-                                self.assertTrue(set_calls)
-                                self.assertTrue(all(set_calls))
-                                body = " ".join(str(m.value or "") for m in at.markdown)
-                                self.assertNotIn("Något gick fel", body)
+                                with mock.patch.object(ac, "_paint_cookie_js", side_effect=fake_paint):
+                                    at = AppTest.from_file("app.py", default_timeout=90)
+                                    at.run()
+                                    self.assertEqual(at.session_state["page"], "auth")
+                                    # Seed credentials into widget state
+                                    at.session_state["auth_email"] = "a@b.se"
+                                    at.session_state["auth_password"] = "secret"
+                                    at.run()
+                                    for b in at.button:
+                                        if (b.label or "") == "Logga in":
+                                            b.click().run()
+                                            break
+                                    else:
+                                        self.fail([b.label for b in at.button])
+                                    self.assertEqual(at.session_state["page"], "home")
+                                    self.assertFalse(bool(at.session_state["ui_error"]))
+                                    self.assertFalse(bool(at.session_state["_last_ui_error"]))
+                                    self.assertEqual(at.session_state["user_id"], "uid-login")
+                                    self.assertFalse(bool(at.session_state["guest_mode"]))
+                                    # Quiet document.cookie only — never mount oc_auth_cm
+                                    self.assertTrue(paint_calls)
+                                    self.assertTrue(
+                                        any("document.cookie" in s for s in paint_calls)
+                                    )
+                                    self.assertEqual(cm_ctors, [])
+                                    body = " ".join(str(m.value or "") for m in at.markdown)
+                                    self.assertNotIn("Något gick fel", body)
 
     def test_init_state_survives_missing_begin_script_run(self) -> None:
         """Cloud can keep a stale auth_cookie module mid-redeploy — boot must not crash."""

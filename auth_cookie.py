@@ -113,13 +113,26 @@ def set_auth_cookie(
     """
     Persist tokens in a browser cookie (30 days, SameSite=Lax).
 
-    quiet=True — write via document.cookie only (reload/restore path). Avoids
-    CookieManager.set() which mounts a second component and forces an extra
-    full script rerun (double home flash).
+    quiet=True — write via document.cookie only (login/signup + reload restore).
+    Must NOT call get_cookie_manager(): home skips mounting CookieManager when
+    already authenticated, so mounting oc_auth_cm here orphans the component on
+    the next run and surfaces the global "Något gick fel" error boundary.
     """
     if not access_token or not refresh_token:
         return
     payload = _encode({"at": access_token, "rt": refresh_token})
+
+    if quiet:
+        # Mirror into an already-mounted manager only — never mount one here.
+        if _COOKIE_MANAGER is not None:
+            try:
+                if isinstance(_COOKIE_MANAGER.cookies, dict):
+                    _COOKIE_MANAGER.cookies[COOKIE_NAME] = payload
+            except Exception:
+                pass
+        _paint_cookie_js(_cookie_js_snippet(payload))
+        return
+
     manager = get_cookie_manager()
     # Keep in-memory mirror in sync for this run
     try:
@@ -127,10 +140,6 @@ def set_auth_cookie(
             manager.cookies[COOKIE_NAME] = payload
     except Exception:
         pass
-
-    if quiet:
-        _paint_cookie_js(_cookie_js_snippet(payload))
-        return
 
     expires = datetime.now(timezone.utc) + timedelta(days=COOKIE_MAX_AGE_DAYS)
     manager.set(
