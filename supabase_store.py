@@ -695,6 +695,31 @@ def upsert_shopping_item(
     return _shopping_row(frows[0]) if frows else None
 
 
+def clear_checked_shopping_items(
+    user_id: str,
+    *,
+    access_token: str,
+    refresh_token: str,
+) -> int:
+    """Delete all checked shopping rows for the user."""
+    client = _client(access_token, refresh_token)
+    try:
+        found = (
+            client.table("shopping_items")
+            .select("id")
+            .eq("user_id", user_id)
+            .eq("checked", True)
+            .execute()
+        )
+        ids = [r["id"] for r in (found.data or []) if r.get("id") is not None]
+        if not ids:
+            return 0
+        client.table("shopping_items").delete().in_("id", ids).execute()
+        return len(ids)
+    except Exception:
+        return 0
+
+
 def toggle_shopping_item(
     user_id: str,
     item_id: int,

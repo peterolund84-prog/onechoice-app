@@ -102,6 +102,64 @@ class PersistentShoppingListTests(unittest.TestCase):
         self.assertEqual(si.categorize_item("mjölk"), "mejeri")
         self.assertEqual(si.categorize_item("kycklingfilé"), "kött & fisk")
 
+    def test_group_items_excludes_checked_and_newest_first(self) -> None:
+        rows = [
+            {
+                "id": 1,
+                "name": "äldre äpple",
+                "category": "frukt & grönt",
+                "checked": False,
+                "created_at": "2026-01-01T10:00:00",
+            },
+            {
+                "id": 2,
+                "name": "nyare äpple",
+                "category": "frukt & grönt",
+                "checked": False,
+                "created_at": "2026-01-02T10:00:00",
+            },
+            {
+                "id": 3,
+                "name": "mjölk",
+                "category": "mejeri",
+                "checked": True,
+                "created_at": "2026-01-03T10:00:00",
+                "checked_at": "2026-01-03T12:00:00",
+            },
+        ]
+        grouped = si.group_items(rows)
+        self.assertEqual(list(grouped.keys()), ["frukt & grönt"])
+        names = [r["name"] for r in grouped["frukt & grönt"]]
+        self.assertEqual(names, ["nyare äpple", "äldre äpple"])
+        done = si.checked_items(rows)
+        self.assertEqual([r["name"] for r in done], ["mjölk"])
+
+    def test_clear_checked_and_purge_on_load(self) -> None:
+        uid = self.user["id"]
+        fresh = db.upsert_shopping_item(uid, "banan", "frukt & grönt", path=self.db_path)
+        stale = db.upsert_shopping_item(uid, "ägg", "mejeri", path=self.db_path)
+        self.assertIsNotNone(fresh)
+        self.assertIsNotNone(stale)
+        db.toggle_shopping_item(uid, int(fresh["id"]), True, path=self.db_path)  # type: ignore[index]
+        db.toggle_shopping_item(uid, int(stale["id"]), True, path=self.db_path)  # type: ignore[index]
+        with db.get_conn(self.db_path) as conn:
+            conn.execute(
+                """
+                UPDATE shopping_items
+                SET checked_at = datetime('now', '-48 hours')
+                WHERE id = ?
+                """,
+                (int(stale["id"]),),  # type: ignore[index]
+            )
+        purged = db.purge_stale_checked_shopping_items(uid, hours=24, path=self.db_path)
+        self.assertEqual(purged, 1)
+        left = db.list_shopping_items(uid, path=self.db_path)
+        self.assertEqual(len(left), 1)
+        self.assertTrue(left[0]["checked"])
+        cleared = db.clear_checked_shopping_items(uid, path=self.db_path)
+        self.assertEqual(cleared, 1)
+        self.assertEqual(db.list_shopping_items(uid, path=self.db_path), [])
+
     def test_accept_flow_merges_from_pipeline(self) -> None:
         uid = self.user["id"]
         r = pipeline.decide(

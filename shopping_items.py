@@ -80,22 +80,40 @@ def flatten_to_buy(to_buy: dict[str, Any] | None) -> list[tuple[str, str]]:
     return out
 
 
+def _newest_first_key(row: dict[str, Any]) -> tuple[str, int]:
+    """Sort key for newest-first (use with reverse=True)."""
+    return (str(row.get("created_at") or ""), int(row.get("id") or 0))
+
+
+def _checked_at_key(row: dict[str, Any]) -> tuple[str, int]:
+    """Sort key for most-recently-checked first (use with reverse=True)."""
+    return (str(row.get("checked_at") or ""), int(row.get("id") or 0))
+
+
 def group_items(items: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    """Group rows by category; unchecked first within each group."""
+    """Group unchecked rows by aisle; newest first within each category.
+
+    Checked items are excluded — they belong in the Klart section via
+    ``checked_items``. Empty categories are omitted so headers hide.
+    """
     buckets: dict[str, list[dict[str, Any]]] = {c: [] for c in CATEGORIES}
     for row in items:
+        if bool(row.get("checked")):
+            continue
         cat = str(row.get("category") or "övrigt")
         if cat not in buckets:
             cat = "övrigt"
         buckets[cat].append(row)
     for cat in buckets:
-        buckets[cat].sort(
-            key=lambda r: (
-                bool(r.get("checked")),
-                str(r.get("name") or "").lower(),
-            )
-        )
+        buckets[cat].sort(key=_newest_first_key, reverse=True)
     return {k: v for k, v in buckets.items() if v}
+
+
+def checked_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Checked rows for the Klart section — most recently checked first."""
+    done = [row for row in items if bool(row.get("checked"))]
+    done.sort(key=_checked_at_key, reverse=True)
+    return done
 
 
 def _llm_categorize(name: str, api_key: str) -> str | None:
