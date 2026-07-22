@@ -95,44 +95,43 @@ class HomeHeroTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-hero", body)
         self.assertIn("oc-hero-orb", body)
-        self.assertIn('class="oc-cta"', body.replace(" ", ""))
         self.assertIn('<divclass="oc-hero-title"', body.replace(" ", "").lower())
         self.assertNotIn("<h1", body.lower())
-        self.assertIn("oc-domain-grid", body)
-        self.assertIn("oc-domain-card", body)
+        self.assertIn("oc-section-label", body)
+        self.assertIn("oc-domain-card-icon", body)
+        labels = [b.label or "" for b in at.button]
         for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
-            self.assertIn(needle, body, f"missing domain card {needle}")
-        self.assertIn("Fota kylen", body)
+            self.assertIn(needle, labels, f"missing domain button {needle}")
+        self.assertIn("Fota kylen", labels)
+        self.assertIn("Bestäm åt mig", labels)
         self.assertNotIn("Vad finns i kylen?", body)
         # Valid inline SVG icons — no broken glyph placeholders
         self.assertGreaterEqual(body.count('xmlns="http://www.w3.org/2000/svg"'), 6)
         self.assertNotIn("▯", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)
+        self.assertNotIn('href="?domain=', body)
 
     def test_hero_decide_runs_food_decision(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("oc-cta", body)
-        at.query_params["domain"] = "food"
-        at.query_params["auto"] = "1"
-        at.run()
+        hero = next(b for b in at.button if b.label == "Bestäm åt mig")
+        hero.click().run()
         self.assertFalse(at.exception)
         self.assertIn(
             at.session_state["page"],
             ("result", "clothes_occasion", "ambiguous"),
         )
 
-    def test_domain_card_query_navigates(self) -> None:
+    def test_domain_card_button_navigates(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        at.query_params["domain"] = "workout"
-        at.run()
+        workout = next(b for b in at.button if b.label == "Träning")
+        workout.click().run()
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "result")
 
@@ -140,25 +139,25 @@ class HomeHeroTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
 
         cases = [
-            ("food", "result"),
-            ("clothes", "clothes_occasion"),
-            ("movie", "result"),
-            ("workout", "result"),
-            ("weekend", "result"),
+            ("Mat", "result"),
+            ("Kläder", "clothes_occasion"),
+            ("Film", "result"),
+            ("Träning", "result"),
+            ("Helg", "result"),
         ]
-        for domain, expected_page in cases:
-            with self.subTest(domain=domain):
+        for label, expected_page in cases:
+            with self.subTest(label=label):
                 at = AppTest.from_file("app.py", default_timeout=60)
                 at.run()
-                at.query_params["domain"] = domain
-                at.run()
+                btn = next(b for b in at.button if b.label == label)
+                btn.click().run()
                 self.assertFalse(at.exception)
                 self.assertEqual(at.session_state["page"], expected_page)
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        at.query_params["fridge"] = "1"
-        at.run()
+        fridge = next(b for b in at.button if b.label == "Fota kylen")
+        fridge.click().run()
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "fridge")
 
@@ -224,9 +223,10 @@ class HomeHeroTests(unittest.TestCase):
             "oc-hero-title",
             "role=\"heading\"",
             "oc-cta",
+            "st-key-home_hero div.stButton",
             "margin: 0 0 28px",
             "margin: 0 0 48px",
-            "grid-auto-rows: 52px",
+            "st-key-home_domain_",
             "margin: 24px 0 20px",
             "min-width: 72%",
             "white-space: nowrap",
@@ -235,15 +235,25 @@ class HomeHeroTests(unittest.TestCase):
         ):
             self.assertIn(needle, css, needle)
 
-    def test_domain_cards_share_one_class(self) -> None:
+    def test_domain_cards_use_session_safe_buttons(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertEqual(body.count('class="oc-domain-card"'), 6)
-        self.assertNotIn("oc-domain-card-clothes", body)
-        self.assertNotIn("oc-domain-card-food", body)
+        self.assertNotIn('class="oc-domain-card"', body)
+        self.assertNotIn('href="?domain=', body)
+        labels = [b.label or "" for b in at.button]
+        domain_labels = [
+            "Mat",
+            "Kläder",
+            "Film",
+            "Träning",
+            "Helg",
+            "Fota kylen",
+        ]
+        for lab in domain_labels:
+            self.assertIn(lab, labels, labels)
 
     def test_home_domain_card_labels_fit_compact_row(self) -> None:
         import app as app_mod

@@ -1040,12 +1040,20 @@ div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {{
 .st-key-home_hero a.header-anchor {{
     display: none !important;
 }}
-a.oc-cta {{
-    display: block;
-    width: 100%;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 16px 1.5rem;
+/* oc-cta — hero primary button (replaces anchor href navigation) */
+.st-key-home_hero div.stButton {{
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}}
+.st-key-home_hero div.stButton > button,
+.st-key-home_hero div.stButton > button[data-testid="baseButton-primary"],
+.st-key-home_hero div.stButton > button[kind="primary"] {{
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 16px 1.5rem !important;
     background: {ACCENT} !important;
     background-color: {ACCENT} !important;
     color: #fff !important;
@@ -1059,11 +1067,13 @@ a.oc-cta {{
     text-decoration: none !important;
     box-shadow: none !important;
     transition: opacity 150ms ease !important;
+    min-height: 52px !important;
 }}
-a.oc-cta:hover,
-a.oc-cta:focus {{
+.st-key-home_hero div.stButton > button:hover,
+.st-key-home_hero div.stButton > button:focus {{
     color: #fff !important;
     opacity: 0.92 !important;
+    background: {ACCENT} !important;
 }}
 .st-key-home_weekend_alt {{
     margin: 8px 0 0 !important;
@@ -1092,57 +1102,66 @@ a.oc-cta:focus {{
     margin: 0 !important;
     padding: 0 !important;
 }}
-.oc-domain-grid {{
-    display: grid !important;
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    grid-auto-rows: 52px !important;
-    align-items: stretch !important;
+.st-key-home_domains [data-testid="stHorizontalBlock"] {{
     gap: 10px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
+    margin-bottom: 10px !important;
 }}
-.oc-domain-grid > a.oc-domain-card,
-.oc-domain-grid > a.oc-domain-card:link,
-.oc-domain-grid > a.oc-domain-card:visited,
-.oc-domain-grid > a.oc-domain-card:active {{
+/* oc-domain-card — session-safe button cards (no <a href>) */
+[class*="st-key-home_domain_"] {{
     display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 10px !important;
-    padding: 14px 16px !important;
+    flex-direction: column !important;
+    justify-content: center !important;
     background: #fff !important;
     border-radius: 14px !important;
     border: 1px solid rgba(0, 0, 0, 0.06) !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
-    text-decoration: none !important;
-    color: var(--oc-ink) !important;
-    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
     min-height: 52px !important;
-    height: 52px !important;
     max-height: 52px !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-    transform: none !important;
-    align-self: stretch !important;
-    justify-self: stretch !important;
-    box-sizing: border-box !important;
     overflow: hidden !important;
-    outline: none !important;
-    vertical-align: top !important;
-    position: relative !important;
-    top: 0 !important;
+    box-sizing: border-box !important;
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
     -webkit-tap-highlight-color: transparent !important;
 }}
-.oc-domain-grid > a.oc-domain-card:hover,
-.oc-domain-grid > a.oc-domain-card:focus {{
+[class*="st-key-home_domain_"]:hover {{
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
     border-color: rgba(0, 0, 0, 0.1) !important;
+}}
+[class*="st-key-home_domain_"] [data-testid="stHorizontalBlock"] {{
+    align-items: center !important;
+    gap: 6px !important;
+    margin: 0 !important;
+    padding: 0 8px 0 12px !important;
+    min-height: 52px !important;
+}}
+[class*="st-key-home_domain_"] div.stButton {{
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+}}
+[class*="st-key-home_domain_"] div.stButton > button {{
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
     color: var(--oc-ink) !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 500 !important;
+    line-height: 1.2 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+    min-height: 44px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}}
+[class*="st-key-home_domain_"] div.stButton > button:hover,
+[class*="st-key-home_domain_"] div.stButton > button:focus {{
+    background: transparent !important;
+    color: var(--oc-ink) !important;
+    border: none !important;
+    box-shadow: none !important;
 }}
 .oc-domain-card-icon {{
     display: flex !important;
@@ -3348,57 +3367,74 @@ def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
         run_decision(question="", domain_hint="weekend", reroll=False, via_router=False)
 
 
-def _home_hero_decide_href(inferred: dict[str, Any]) -> str:
-    """Query-param CTA — auto=1 runs infer_home_hero decision (meal-aware)."""
-    domain = str(inferred.get("domain") or "food")
-    return _qp_href(domain=domain, auto="1")
+def _start_fridge_flow() -> None:
+    """Open fridge capture — session-safe (no ?fridge= navigation)."""
+    st.session_state.fridge_step = "capture"
+    st.session_state.fridge_inventory = []
+    st.session_state.fridge_mode = False
+    st.session_state.page = "fridge"
+    st.rerun()
 
 
 def render_home_hero(inferred: dict[str, Any]) -> None:
     headline = html.escape(str(inferred.get("headline") or ""))
-    href = html.escape(_home_hero_decide_href(inferred), quote=True)
-    cta = html.escape(t("decide"))
     st.markdown(
         '<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<div class="oc-hero">'
         f'<div class="oc-hero-title" role="heading" aria-level="1">{headline}</div>'
-        f'<a class="oc-cta" href="{href}">{cta}</a>'
         f"</div>",
         unsafe_allow_html=True,
     )
-
-
-def _domain_card_href(**params: str) -> str:
-    return _qp_href(**params)
-
-
-def _render_domain_card(domain: str, *, href_params: dict[str, str] | None = None) -> str:
-    params = href_params or {"domain": domain}
-    href = html.escape(_domain_card_href(**params), quote=True)
-    icon = _DOMAIN_CARD_ICONS.get(domain, "")
-    if domain == "fridge":
-        label = t("home_fridge_card")
-    else:
-        label = domain_label(domain)
-    return (
-        f'<a class="oc-domain-card" href="{href}">'
-        f'<span class="oc-domain-card-icon">{icon}</span>'
-        f'<span class="oc-domain-card-label">{html.escape(label)}</span>'
-        f"</a>"
-    )
+    if st.button(
+        t("decide"),
+        key="home_hero_cta",
+        type="primary",
+        use_container_width=True,
+    ):
+        _run_inferred_home_decision(inferred)
 
 
 def render_home_domain_grid() -> None:
-    """Secondary tier — compact icon cards in a 2-column grid (query-param navigation)."""
+    """Secondary tier — compact icon cards in a 2-column grid (session-safe buttons)."""
     domains = ("food", "clothes", "movie", "workout", "weekend")
-    cards = "".join(_render_domain_card(d) for d in domains)
-    cards += _render_domain_card("fridge", href_params={"fridge": "1"})
+    entries: list[tuple[str, str, str]] = [
+        (d, domain_label(d), _DOMAIN_CARD_ICONS.get(d, "")) for d in domains
+    ]
+    entries.append(
+        ("fridge", t("home_fridge_card"), _DOMAIN_CARD_ICONS.get("fridge", ""))
+    )
     with st.container(key="home_domains"):
         st.markdown(
-            f'<div class="oc-section-label">{html.escape(t("home_or_choose"))}</div>'
-            f'<div class="oc-domain-grid">{cards}</div>',
+            f'<div class="oc-section-label">{html.escape(t("home_or_choose"))}</div>',
             unsafe_allow_html=True,
         )
+        for i in range(0, len(entries), 2):
+            cols = st.columns(2, gap="small")
+            for j in range(2):
+                idx = i + j
+                if idx >= len(entries):
+                    break
+                domain, label, icon = entries[idx]
+                with cols[j]:
+                    with st.container(key=f"home_domain_{domain}"):
+                        icon_col, btn_col = st.columns(
+                            [0.2, 0.8], gap="small", vertical_alignment="center"
+                        )
+                        with icon_col:
+                            st.markdown(
+                                f'<div class="oc-domain-card-icon">{icon}</div>',
+                                unsafe_allow_html=True,
+                            )
+                        with btn_col:
+                            if st.button(
+                                label,
+                                key=f"home_domain_btn_{domain}",
+                                use_container_width=True,
+                            ):
+                                if domain == "fridge":
+                                    _start_fridge_flow()
+                                else:
+                                    _start_domain_decision(domain)
 
 
 def render_logo() -> None:
@@ -7092,6 +7128,9 @@ def page_shared() -> None:
 
 
 def main() -> None:
+    import auth_cookie as ac
+
+    ac.get_cookie_manager()
     init_state()
     if not st.session_state.get("_auth_cookie_checked"):
         st.stop()
