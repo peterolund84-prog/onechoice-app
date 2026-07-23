@@ -75,6 +75,9 @@ class PageButtonInventoryTests(unittest.TestCase):
                 any(str(k).startswith(f"home_domain_{domain}") for k in keys),
                 keys,
             )
+        # Hem is the active tab on home
+        nav_home = next(b for b in at.button if getattr(b, "key", None) == "nav_home")
+        self.assertEqual(getattr(nav_home.proto, "type", None), "primary")
 
     def test_unlocked_result_has_valj_and_reroll(self) -> None:
         at = _boot(
@@ -174,6 +177,18 @@ class PageButtonInventoryTests(unittest.TestCase):
             or any("Lägg till" in lab for lab in _labels(at)),
             keys,
         )
+        # Nav: no tab is primary on execute — only the active mode lights up
+        for b in at.button:
+            key = getattr(b, "key", None)
+            if key not in ("nav_home", "nav_lista", "nav_history", "nav_profile"):
+                continue
+            proto = getattr(b, "proto", None)
+            btype = getattr(proto, "type", None) if proto is not None else None
+            self.assertEqual(
+                btype,
+                "secondary",
+                f"{key} must be secondary on execute, got {btype!r}",
+            )
 
     def test_execute_frukost_has_no_list_cta(self) -> None:
         at = _boot(
@@ -245,7 +260,7 @@ class PageButtonInventoryTests(unittest.TestCase):
         self.assertNotIn("1 portioner", html)
 
     def test_css_hides_result_ctas_outside_result(self) -> None:
-        """Orphan CTA defense is session clear + result marker — not the old Hard kill CSS."""
+        """Orphan Välj defense: CSS belt hides result CTAs when .oc-result is absent."""
         import app as app_mod
         from pathlib import Path
 
@@ -255,8 +270,14 @@ class PageButtonInventoryTests(unittest.TestCase):
         self.assertIn("food_go_for_it", src)
         self.assertIn("oc-fav-corner", src)
         self.assertIn("top: 12px", css)
-        # Perf pass removed the Hard kill belt
-        self.assertNotIn("Hard kill: result/meal CTAs", css)
+        self.assertIn(
+            "body:not(:has(.oc-result)) .st-key-result_primary_btn",
+            css,
+        )
+        self.assertIn(
+            'body:not(:has(.oc-result)) [class*="st-key-food_go_for_it"]',
+            css,
+        )
 
 
 if __name__ == "__main__":
