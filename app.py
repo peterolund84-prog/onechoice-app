@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-footer-polish-v85-20260723"
+BUILD_ID = "home-chrome-fix-v86-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -4533,7 +4533,15 @@ def page_home() -> None:
     q = ""
     if free_open:
         with st.container(key="home_free_form"):
-            with st.form("home_free_form", clear_on_submit=False, border=False):
+            # enter_to_submit=False + no max_chars on the widget — kills Streamlit's
+            # English "Press Enter to submit form · 0/200" overlay at the source.
+            # Char limit still enforced below (and in the router).
+            with st.form(
+                "home_free_form",
+                clear_on_submit=False,
+                border=False,
+                enter_to_submit=False,
+            ):
                 col_in, col_go = st.columns(
                     [5, 1.6], gap="small", vertical_alignment="bottom"
                 )
@@ -4543,11 +4551,11 @@ def page_home() -> None:
                         label_visibility="collapsed",
                         key="home_free_input",
                         placeholder=t("home_free_placeholder"),
-                        max_chars=rt.MAX_INPUT_CHARS,
                     )
                 with col_go:
                     submitted = st.form_submit_button(
                         t("home_free_submit"),
+                        type="primary",
                         use_container_width=True,
                     )
         # Focus the disclosed field after expand (session-safe; no anchors).

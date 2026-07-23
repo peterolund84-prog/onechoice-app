@@ -235,8 +235,8 @@ class NavBleedTests(unittest.TestCase):
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
-        # Compact footer: 64px + safe-area, 44px pills, 4px icon/label gap
-        self.assertIn("min-height: calc(64px + env(safe-area-inset-bottom))", bar)
+        # Compact footer: hard 64px + safe-area, 44px pills, 4px icon/label gap
+        self.assertIn("height: calc(64px + env(safe-area-inset-bottom))", bar)
         self.assertIn("padding: 8px 0.4rem calc(8px + env(safe-area-inset-bottom))", bar)
         self.assertIn("min-height: 44px !important", bar)
         self.assertIn("gap: 4px !important", bar)
@@ -254,15 +254,21 @@ class NavBleedTests(unittest.TestCase):
         self.assertIn('[data-testid="InputInstructions"]', css)
         self.assertRegex(
             css,
-            r'\[data-testid="InputInstructions"\][\s\S]{0,400}?display:\s*none\s*!important',
+            r'\[data-testid="InputInstructions"\][\s\S]{0,800}?display:\s*none\s*!important',
         )
         import router as rt
-
-        self.assertEqual(rt.MAX_INPUT_CHARS, 200)
-        # Char limit still enforced on the disclosed home field
         import app as app_mod
 
-        self.assertIn("max_chars=rt.MAX_INPUT_CHARS", open(app_mod.__file__, encoding="utf-8").read())
+        self.assertEqual(rt.MAX_INPUT_CHARS, 200)
+        src = open(app_mod.__file__, encoding="utf-8").read()
+        # Kill chrome at the source — not only via CSS
+        self.assertIn("enter_to_submit=False", src)
+        # Widget must not pass max_chars (that paints 0/200); Python still enforces
+        self.assertNotIn(
+            "key=\"home_free_input\",\n                        placeholder=t(\"home_free_placeholder\"),\n                        max_chars=",
+            src,
+        )
+        self.assertIn("len(question) > rt.MAX_INPUT_CHARS", src)
 
 
 if __name__ == "__main__":
