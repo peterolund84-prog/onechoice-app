@@ -243,10 +243,35 @@ class NavBleedTests(unittest.TestCase):
         # Content clears nav + 16px
         self.assertIn("calc(80px + env(safe-area-inset-bottom))", css)
         self.assertNotIn("calc(88px + env(safe-area-inset-bottom))", css)
+        # In-flow host of fixed nav must collapse (no dead band above footer)
+        self.assertIn(
+            '[data-testid="stElementContainer"]:has(.st-key-oc_nav_bar)',
+            css,
+        )
+        self.assertIn(
+            '[data-testid="element-container"]:has(.st-key-oc_nav_bar)',
+            css,
+        )
         # Dead legacy nav generations must stay gone
         self.assertNotIn(".oc-nav-btns-marker", css)
         self.assertNotIn(".st-key-oc_nav_pills", css)
         self.assertNotIn(".oc-nav {", css)
+
+    def test_nav_icons_present_for_inactive_and_active(self) -> None:
+        """All four tabs keep background-image; shorthand must not wipe inactive icons."""
+        css = _styles()
+        nav_before = css.split("/* Longhand only")[1].split(".oc-decision")[0]
+        self.assertIn("background-size: contain", nav_before)
+        self.assertIn("background-position: center", nav_before)
+        self.assertIn("background-repeat: no-repeat", nav_before)
+        self.assertNotIn("background: center / contain no-repeat", nav_before)
+        for tab in ("nav_home", "nav_lista", "nav_history", "nav_profile"):
+            self.assertIn(
+                f".st-key-oc_nav_bar .st-key-{tab} div.stButton > button::before",
+                css,
+            )
+        self.assertIn("stroke='%233B3BC4'", css)
+        self.assertEqual(css.count("stroke='%236B6B66'"), 4)
 
     def test_input_instructions_chrome_hidden(self) -> None:
         """English Streamlit 'Press Enter… · 0/200' must never paint over placeholders."""

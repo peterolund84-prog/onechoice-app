@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-chrome-fix-v86-20260723"
+BUILD_ID = "nav-icons-freetext-cta-v87-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -4542,22 +4542,18 @@ def page_home() -> None:
                 border=False,
                 enter_to_submit=False,
             ):
-                col_in, col_go = st.columns(
-                    [5, 1.6], gap="small", vertical_alignment="bottom"
+                q = st.text_input(
+                    " ",
+                    label_visibility="collapsed",
+                    key="home_free_input",
+                    placeholder=t("home_free_placeholder"),
                 )
-                with col_in:
-                    q = st.text_input(
-                        " ",
-                        label_visibility="collapsed",
-                        key="home_free_input",
-                        placeholder=t("home_free_placeholder"),
-                    )
-                with col_go:
-                    submitted = st.form_submit_button(
-                        t("home_free_submit"),
-                        type="primary",
-                        use_container_width=True,
-                    )
+                # Same label + primary styling as the hero CTA ("Bestäm åt mig").
+                submitted = st.form_submit_button(
+                    t("decide"),
+                    type="primary",
+                    use_container_width=True,
+                )
         # Focus the disclosed field after expand (session-safe; no anchors).
         try:
             st.html(

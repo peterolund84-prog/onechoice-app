@@ -219,8 +219,11 @@ class HomeHeroTests(unittest.TestCase):
         disclose.click().run()
         self.assertTrue(bool(at.session_state["home_free_open"]))
         self.assertTrue(at.text_input, "expanded free-text input missing")
-        submit_btns = [b for b in at.button if b.label == "Bestäm"]
+        submit_btns = [b for b in at.button if b.label == "Bestäm åt mig"]
         self.assertTrue(submit_btns, [b.label for b in at.button])
+        # Hero CTA and free-text submit share the same label
+        decide_labels = [b.label for b in at.button if b.label == "Bestäm åt mig"]
+        self.assertGreaterEqual(len(decide_labels), 2, decide_labels)
         at.text_input[0].set_value("Vad ska jag laga till middag?").run()
         submit_btns[0].click().run()
         self.assertFalse(at.exception)
@@ -239,7 +242,7 @@ class HomeHeroTests(unittest.TestCase):
             b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
         ).click().run()
         at.text_input[0].set_value("Film ikväll").run()
-        submit = next(b for b in at.button if b.label == "Bestäm")
+        submit = next(b for b in at.button if b.label == "Bestäm åt mig")
         submit.click().run()
         self.assertFalse(at.exception)
         self.assertIn(at.session_state["page"], ("result", "ambiguous", "clothes_occasion"))
@@ -286,13 +289,15 @@ class HomeHeroTests(unittest.TestCase):
             "margin: 0 0 48px",
             "st-key-home_domain_",
             "margin: 4px 0 20px",
-            "min-width: 72%",
-            "white-space: nowrap",
+            "min-height: 48px",
+            "border-radius: 999px",
             "oc-section-label",
             "oc-header-wordmark",
             "st-key-home_free_disclose",
         ):
             self.assertIn(needle, css, needle)
+        # Stacked free-text CTA — no side-by-side column layout
+        self.assertNotIn("min-width: 72%", css)
         self.assertIn('role="heading"', body)
 
     def test_domain_cards_use_session_safe_buttons(self) -> None:
