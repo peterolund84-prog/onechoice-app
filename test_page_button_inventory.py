@@ -190,6 +190,63 @@ class PageButtonInventoryTests(unittest.TestCase):
                 f"{key} must be secondary on execute, got {btype!r}",
             )
 
+    def test_nav_from_execute_reaches_lista_and_home(self) -> None:
+        """Footer taps must change page even when every tab is secondary."""
+        at = _boot(
+            page="execute",
+            accepted=True,
+            food_meal_type="frukost",
+            current={
+                "ok": True,
+                "domain": "food",
+                "suggestion": "Havregrynsgröt med banan",
+                "justification": "Test",
+                "accepted": True,
+                "locked": True,
+                "decision_id": 42,
+                "context": {
+                    "meal_type": "frukost",
+                    "recipe": {
+                        "title": "Havregrynsgröt med banan",
+                        "steps": [
+                            "Koka upp 2 dl vatten med 1 krm salt.",
+                            "Rör ner 1 dl havregryn. Sjud 3–4 min.",
+                            "Skiva banan ovanpå. Servera varm.",
+                        ],
+                        "ingredient_lines": [
+                            "havregryn 1 dl",
+                            "vatten 2 dl",
+                            "salt 1 krm",
+                            "banan 1 st",
+                        ],
+                        "portioner": 1,
+                        "active_minutes": 5,
+                        "nutrition": {
+                            "kcal": 350,
+                            "protein_g": 10,
+                            "fat_g": 5,
+                            "carbs_g": 65,
+                        },
+                    },
+                },
+                "execution_type": "checklist",
+                "execution_label": "Laga",
+            },
+        )
+        self.assertEqual(at.session_state["page"], "execute")
+        next(b for b in at.button if getattr(b, "key", None) == "nav_lista").click().run()
+        self.assertEqual(at.session_state["page"], "lista")
+        self.assertFalse(at.exception)
+        # Direct home chooser — same path as tapping Hem in the footer
+        at.session_state["_force_home_chooser"] = True
+        at.session_state["page"] = "home"
+        at.run()
+        self.assertEqual(at.session_state["page"], "home")
+        self.assertIn("Mat", _labels(at))
+        # Hem is primary only on home; Lista was reachable while all tabs were secondary
+        nav_home = next(b for b in at.button if getattr(b, "key", None) == "nav_home")
+        self.assertEqual(getattr(nav_home.proto, "type", None), "primary")
+
     def test_execute_frukost_has_no_list_cta(self) -> None:
         at = _boot(
             page="execute",
