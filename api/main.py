@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from api.deps import boot_db_guest, ensure_guest_user
@@ -52,6 +52,20 @@ def _uid(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/v1/media/dish")
+def dish_media(
+    title: str = Query(..., min_length=1, max_length=200),
+    hint: str | None = Query(default=None),
+) -> FileResponse:
+    """Serve a resolved dish JPEG from assets/dishes (or 404 → client placeholder)."""
+    import dish_images as dimg
+
+    path = dimg.resolve_dish_image(title, hint)
+    if not path:
+        raise HTTPException(status_code=404, detail="no dish image")
+    return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
 @app.get("/v1/home")

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Heart } from "lucide-react";
+import { Heart, Share2 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Decision } from "../lib/types";
 
@@ -26,6 +26,31 @@ function decisionId(d: Decision | null): number | null {
   return id == null ? null : Number(id);
 }
 
+function dishHint(d: Decision): string | null {
+  const ctx = d.context;
+  if (!ctx || typeof ctx !== "object") return null;
+  const hint = ctx.dish_category ?? ctx.category;
+  return typeof hint === "string" ? hint : null;
+}
+
+function moviePoster(d: Decision): string | null {
+  const ctx = d.context;
+  if (!ctx || typeof ctx !== "object") return null;
+  const url = ctx.movie_poster_url;
+  return typeof url === "string" && url ? url : null;
+}
+
+function mediaSrc(d: Decision): string | null {
+  if (d.domain === "food" && d.suggestion) {
+    const q = new URLSearchParams({ title: d.suggestion });
+    const hint = dishHint(d);
+    if (hint) q.set("hint", hint);
+    return `${api.base}/v1/media/dish?${q}`;
+  }
+  if (d.domain === "movie") return moviePoster(d);
+  return null;
+}
+
 export function ResultPage() {
   const navigate = useNavigate();
   const initial = useMemo(() => readDecision(), []);
@@ -33,6 +58,11 @@ export function ResultPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [decision?.suggestion, decision?.domain]);
 
   if (!decision) {
     return (
@@ -64,6 +94,8 @@ export function ResultPage() {
   const rerolls = Number(decision.reroll_index || 0);
   const locked = Boolean(decision.locked) || rerolls >= MAX_REROLLS;
   const accepted = Boolean(decision.accepted);
+  const src = mediaSrc(decision);
+  const showImage = Boolean(src) && !imgFailed;
   const toBuy =
     decision.context &&
     typeof decision.context === "object" &&
@@ -76,12 +108,10 @@ export function ResultPage() {
     const current = decision;
     if (!current) return;
     if (id == null) {
-      setDecision(() => {
-        const next = { ...current, accepted: true };
-        saveDecision(next);
-        return next;
-      });
-      setMsg("Accepterat (saknar decision_id — sparat lokalt)");
+      const next = { ...current, accepted: true };
+      saveDecision(next);
+      setDecision(next);
+      setMsg("Accepterat");
       return;
     }
     setBusy(true);
@@ -139,6 +169,24 @@ export function ResultPage() {
     }
   }
 
+  async function onShare() {
+    const current = decision;
+    if (!current?.suggestion) return;
+    const text = `${current.suggestion}\n${current.justification || ""}\n— OneChoice`.trim();
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "OneChoice", text });
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setMsg("Kopierat!");
+      } else {
+        setMsg(text);
+      }
+    } catch {
+      /* user cancelled share */
+    }
+  }
+
   async function onMergeList() {
     if (!toBuy) return;
     setBusy(true);
@@ -154,6 +202,44 @@ export function ResultPage() {
 
   return (
     <section className="oc-result">
+      <div className="oc-media-card">
+        {showImage ? (
+          <img
+            className="oc-media-img"
+            src={src!}
+            alt=""
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div className="oc-media-img oc-media-ph" aria-hidden="true">
+            <div className="oc-media-ph-circle" />
+          </div>
+        )}
+        <div className="oc-media-actions">
+          <button
+            type="button"
+            className="oc-media-action"
+            aria-label="Dela"
+            onClick={onShare}
+          >
+            <Share2 size={18} strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            className={`oc-media-action${decision.favorite ? " is-on" : ""}`}
+            aria-label="Favorit"
+            disabled={busy || id == null}
+            onClick={onFavorite}
+          >
+            <Heart
+              size={18}
+              strokeWidth={1.75}
+              fill={decision.favorite ? "currentColor" : "none"}
+            />
+          </button>
+        </div>
+      </div>
+
       <p className="oc-result-kicker">
         {accepted || locked ? "Ditt beslut" : "Förslag"}
         {decision.domain ? ` · ${decision.domain}` : ""}
@@ -203,23 +289,6 @@ export function ResultPage() {
         {toBuy ? (
           <button type="button" className="oc-btn" disabled={busy} onClick={onMergeList}>
             Lägg till i listan
-          </button>
-        ) : null}
-
-        {id != null ? (
-          <button
-            type="button"
-            className="oc-icon-btn"
-            aria-label="Favorit"
-            disabled={busy}
-            onClick={onFavorite}
-            style={{ alignSelf: "center" }}
-          >
-            <Heart
-              size={22}
-              strokeWidth={1.5}
-              fill={decision.favorite ? "currentColor" : "none"}
-            />
           </button>
         ) : null}
 

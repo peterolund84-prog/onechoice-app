@@ -62,8 +62,7 @@ input {
   z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
   min-height: var(--oc-header);
   padding: calc(8px + env(safe-area-inset-top, 0px)) 22px 8px;
   background: transparent;
@@ -71,22 +70,29 @@ input {
 }
 
 .oc-wordmark {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   font-family: Sora, Inter, sans-serif;
   font-weight: 700;
   font-size: 26px;
   letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--oc-ink);
+  pointer-events: none;
 }
 
 .oc-header-user {
-  max-width: 42%;
+  margin-left: auto;
+  max-width: 38%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 500;
   color: #6b6b66;
+  position: relative;
+  z-index: 1;
 }
 
 .oc-lang {
@@ -367,8 +373,72 @@ input {
   animation: oc-fade-up 420ms ease both;
 }
 
+.oc-media-card {
+  position: relative;
+  width: 100%;
+  max-width: 340px;
+  margin: 4px 0 16px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+.oc-media-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.oc-media-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #efeae1 0%, #e4dfd5 100%);
+}
+
+.oc-media-ph-circle {
+  width: 72px;
+  height: 72px;
+  border-radius: 999px;
+  background: rgba(59, 59, 196, 0.1);
+}
+
+.oc-media-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+}
+
+.oc-media-action {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1a1a1a;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+.oc-media-action.is-on {
+  color: #3b3bc4;
+}
+
+.oc-media-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .oc-result-kicker {
-  margin: 8px 0 10px;
+  margin: 0 0 8px;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.16em;
@@ -377,9 +447,9 @@ input {
 }
 
 .oc-result-title {
-  margin: 0 0 12px;
+  margin: 0 0 10px;
   font-family: "Playfair Display", "Times New Roman", serif;
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
