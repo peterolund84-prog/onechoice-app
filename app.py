@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-disclose-freetext-v84-20260723"
+BUILD_ID = "home-footer-polish-v85-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -143,7 +143,7 @@ I18N = {
         "decide": "Bestäm åt mig",
         "home_or_choose": "Eller välj själv",
         "home_free_disclose": "Något annat?",
-        "home_free_placeholder": "Skriv ditt beslut…",
+        "home_free_placeholder": "Vad ska du bestämma?",
         "home_free_submit": "Bestäm",
         "home_fridge_card": "Fota kylen",
         "new": "Nytt förslag",
@@ -335,7 +335,7 @@ I18N = {
         "decide": "Decide for me",
         "home_or_choose": "Or choose yourself",
         "home_free_disclose": "Something else?",
-        "home_free_placeholder": "Type your decision…",
+        "home_free_placeholder": "What do you need to decide?",
         "home_free_submit": "Decide",
         "home_fridge_card": "Snap the fridge",
         "new": "New suggestion",

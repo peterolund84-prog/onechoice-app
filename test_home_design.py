@@ -75,6 +75,17 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("Eller välj själv", body)
         self.assertIn("Något annat?", " ".join(labels))
         self.assertEqual(len(list(getattr(at, "text_input", []) or [])), 0)
+        # Expanded placeholder is Swedish product-premise copy (not English chrome)
+        import app as app_mod
+
+        self.assertEqual(
+            app_mod.I18N["sv"]["home_free_placeholder"],
+            "Vad ska du bestämma?",
+        )
+        self.assertEqual(
+            app_mod.I18N["en"]["home_free_placeholder"],
+            "What do you need to decide?",
+        )
         self.assertIn("SV", body)
         self.assertIn("EN", body)
         self.assertNotIn("build ", body.lower())

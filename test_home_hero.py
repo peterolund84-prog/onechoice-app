@@ -193,6 +193,10 @@ class HomeHeroTests(unittest.TestCase):
             for inp in getattr(at, "text_input", [])
         ]
         self.assertTrue(
+            any("Vad ska du bestämma?" in p for p in placeholders),
+            placeholders,
+        )
+        self.assertFalse(
             any("Skriv ditt beslut" in p for p in placeholders),
             placeholders,
         )
