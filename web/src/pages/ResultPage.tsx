@@ -65,7 +65,49 @@ export function ResultPage() {
 
   useEffect(() => {
     setImgFailed(false);
-  }, [decision?.suggestion, decision?.domain]);
+  }, [decision?.suggestion, decision?.domain, decision?.image_data_url]);
+
+  // Hydrate dish image for older sessionStorage payloads (pre-embed).
+  useEffect(() => {
+    const current = decision;
+    if (!current || current.domain !== "food" || current.image_data_url) return;
+    if (!current.suggestion) return;
+    let cancelled = false;
+    const q = new URLSearchParams({ title: current.suggestion });
+    const hint = dishHint(current);
+    if (hint) q.set("hint", hint);
+    const url = `${api.base}/v1/media/dish?${q}`;
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error("no image");
+        return res.blob();
+      })
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(new Error("read failed"));
+            reader.readAsDataURL(blob);
+          }),
+      )
+      .then((dataUrl) => {
+        if (cancelled || !dataUrl.startsWith("data:")) return;
+        setDecision((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, image_data_url: dataUrl };
+          saveDecision(next);
+          return next;
+        });
+        setImgFailed(false);
+      })
+      .catch(() => {
+        /* keep placeholder */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [decision?.suggestion, decision?.domain, decision?.image_data_url]);
 
   if (!decision) {
     return (
@@ -243,10 +285,6 @@ export function ResultPage() {
         </div>
       </div>
 
-      <p className="oc-result-kicker">
-        {accepted || locked ? "Ditt beslut" : "Förslag"}
-        {decision.domain ? ` · ${decision.domain}` : ""}
-      </p>
       <h1 className="oc-result-title">{decision.suggestion || "—"}</h1>
       {decision.justification ? (
         <p className="oc-result-body">{decision.justification}</p>
@@ -274,9 +312,7 @@ export function ResultPage() {
           >
             Nytt förslag
           </button>
-        ) : (
-          <p className="oc-page-sub">Låst — max antal förslag nått.</p>
-        )}
+        ) : null}
 
         {decision.execution_url && decision.execution_label ? (
           <a
