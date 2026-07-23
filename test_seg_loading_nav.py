@@ -211,7 +211,7 @@ class NavBleedTests(unittest.TestCase):
         self.assertIn("z-index: 10000", css)
         # Must not wipe nav bar background back to transparent
         # (children may be transparent; the bar itself must keep glass)
-        nav_block = css.split("/* Bottom nav — floating pill")[1].split(
+        nav_block = css.split("/* Bottom nav — floating frosted pill")[1].split(
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
         self.assertIn("rgba(246, 243, 234, 0.88)", nav_block)
