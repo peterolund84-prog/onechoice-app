@@ -136,74 +136,78 @@ export function HomePage() {
   return (
     <section className="oc-home">
       <div className="oc-hero-glow" aria-hidden="true" />
-      <h1 className="oc-hero-title">{home.headline}</h1>
-      <p className="oc-hero-sub">{home.sub}</p>
-      <button
-        type="button"
-        className="oc-cta"
-        disabled={busy}
-        onClick={() =>
-          runDecide({ domain_hint: "food", meal_type: home.meal_type ?? null })
-        }
-      >
-        {busy ? "Bestämmer…" : home.cta}
-      </button>
-
-      <p className="oc-section-label">{home.section_label}</p>
-      <div className="oc-domain-grid">
-        {home.domains.map((d) => (
-          <button
-            key={d.id}
-            type="button"
-            className="oc-domain"
-            disabled={busy}
-            onClick={() => {
-              if (d.id === "fridge") {
-                navigate("/profil"); // fridge capture comes next iteration
-                return;
-              }
-              runDecide({
-                domain_hint: d.id,
-                meal_type: d.id === "food" ? home.meal_type ?? null : null,
-              });
-            }}
-          >
-            <DomainIcon id={d.id} />
-            <span>{d.label}</span>
-          </button>
-        ))}
+      <div className="oc-hero-block">
+        <h1 className="oc-hero-title">{home.headline}</h1>
+        <p className="oc-hero-sub">{home.sub}</p>
+        <button
+          type="button"
+          className="oc-cta"
+          disabled={busy}
+          onClick={() =>
+            runDecide({ domain_hint: "food", meal_type: home.meal_type ?? null })
+          }
+        >
+          {busy ? "Bestämmer…" : home.cta}
+        </button>
       </div>
 
-      <button
-        type="button"
-        className="oc-something-else"
-        onClick={() => setFreeOpen((v) => !v)}
-      >
-        {home.something_else}
-      </button>
+      <div className="oc-choose-block">
+        <p className="oc-section-label">{home.section_label}</p>
+        <div className="oc-domain-grid">
+          {home.domains.map((d) => (
+            <button
+              key={d.id}
+              type="button"
+              className="oc-domain"
+              disabled={busy}
+              onClick={() => {
+                if (d.id === "fridge") {
+                  navigate("/profil");
+                  return;
+                }
+                runDecide({
+                  domain_hint: d.id,
+                  meal_type: d.id === "food" ? home.meal_type ?? null : null,
+                });
+              }}
+            >
+              <DomainIcon id={d.id} />
+              <span>{d.label}</span>
+            </button>
+          ))}
+        </div>
 
-      {freeOpen && (
-        <form
-          className="oc-free"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const q = freeText.trim();
-            if (!q) return;
-            runDecide({ question: q, domain_hint: null });
-          }}
+        <button
+          type="button"
+          className="oc-something-else"
+          onClick={() => setFreeOpen((v) => !v)}
         >
-          <input
-            value={freeText}
-            onChange={(e) => setFreeText(e.target.value)}
-            placeholder="Vad ska du bestämma?"
-            maxLength={200}
-            aria-label="Fri text"
-          />
-          <button type="submit" className="oc-cta" disabled={busy || !freeText.trim()}>
-            Bestäm åt mig
-          </button>
-        </form>
-      )}
+          {home.something_else}
+        </button>
+
+        {freeOpen && (
+          <form
+            className="oc-free"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = freeText.trim();
+              if (!q) return;
+              runDecide({ question: q, domain_hint: null });
+            }}
+          >
+            <input
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              placeholder="Vad ska du bestämma?"
+              maxLength={200}
+              aria-label="Fri text"
+            />
+            <button type="submit" className="oc-cta" disabled={busy || !freeText.trim()}>
+              Bestäm åt mig
+            </button>
+          </form>
+        )}
+      </div>
 
       {error && <p className="oc-error">{error}</p>}
     </section>

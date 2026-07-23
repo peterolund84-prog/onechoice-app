@@ -7,6 +7,11 @@ export function AppShell() {
       <div className="oc-fiber" aria-hidden="true" />
       <header className="oc-header">
         <div className="oc-wordmark">OneChoice</div>
+        <div className="oc-lang" aria-hidden="true">
+          <span className="is-on">SV</span>
+          <span className="oc-lang-sep">|</span>
+          <span>EN</span>
+        </div>
       </header>
       <main className="oc-main">
         <Outlet />
