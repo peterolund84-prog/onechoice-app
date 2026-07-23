@@ -15,6 +15,10 @@ import {
   MOOD_OPTIONS,
   SERVICE_LABELS,
 } from "../lib/domainMeta";
+import {
+  displayMovieTitle,
+  resolveMoviePosterPath,
+} from "../lib/moviePoster";
 import type { Decision } from "../lib/types";
 
 const MAX_REROLLS = 3;
@@ -63,6 +67,9 @@ function ctxNumber(d: Decision, key: string): number | null {
 }
 
 function moviePoster(d: Decision): string | null {
+  // Prefer Vite-hosted /posters — phone on LAN often cannot load image.tmdb.org.
+  const local = resolveMoviePosterPath(d.suggestion);
+  if (local) return local;
   return ctxString(d, "movie_poster_url");
 }
 
@@ -118,29 +125,34 @@ function SegControl({
   value,
   disabled,
   onChange,
+  variant = "default",
 }: {
   label: string;
-  options: readonly { id: string; label: string }[];
+  options: readonly { id: string; label: string; fullLabel?: string }[];
   value: string;
   disabled?: boolean;
   onChange: (id: string) => void;
+  variant?: "default" | "mood";
 }) {
   return (
     <div className="oc-seg-block">
       {label ? <div className="oc-sec-label">{label}</div> : null}
       <div
-        className={`oc-meal-seg${options.length >= 5 ? " oc-meal-seg--dense" : ""}`}
+        className={`oc-meal-seg${variant === "mood" ? " oc-meal-seg--mood" : ""}`}
         role="tablist"
         aria-label={label || "Val"}
       >
         {options.map((m) => {
           const active = value === m.id;
+          const title = m.fullLabel || m.label;
           return (
             <button
               key={m.id}
               type="button"
               role="tab"
               aria-selected={active}
+              aria-label={title}
+              title={title}
               className={active ? "is-active" : undefined}
               disabled={disabled}
               onClick={() => {
@@ -519,6 +531,7 @@ export function ResultPage() {
             options={MOOD_OPTIONS}
             value={movieMood}
             disabled={busy}
+            variant="mood"
             onChange={(id) => void redecideWith({ mood: id })}
           />
         </>
@@ -566,18 +579,24 @@ export function ResultPage() {
         <p className="oc-result-kicker">{movieKindLabel(decision)}</p>
       ) : null}
 
-      <h1 className="oc-result-title">{decision.suggestion || "—"}</h1>
+      <h1 className="oc-result-title">
+        {isMovie
+          ? displayMovieTitle(decision.suggestion)
+          : decision.suggestion || "—"}
+      </h1>
       {isMovie && movieYear != null ? (
         <p className="oc-result-year">{Math.round(movieYear)}</p>
       ) : null}
-      {locked || accepted ? <div className="oc-lock">Låst</div> : null}
-      {locked && !accepted ? (
-        <p className="oc-result-body">Det är {decision.suggestion}. Kör.</p>
-      ) : decision.justification ? (
-        <p className="oc-result-body">{decision.justification}</p>
-      ) : null}
       {isMovie && movieMeta ? (
         <p className="oc-result-meta">{movieMeta}</p>
+      ) : null}
+      {locked || accepted ? <div className="oc-lock">Låst</div> : null}
+      {locked && !accepted ? (
+        <p className="oc-result-body">
+          Det är {displayMovieTitle(decision.suggestion)}. Kör.
+        </p>
+      ) : decision.justification ? (
+        <p className="oc-result-body">{decision.justification}</p>
       ) : null}
 
       <div className="oc-reroll-dots" aria-label="Omrullningar">

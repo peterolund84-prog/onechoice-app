@@ -11,12 +11,13 @@ export const FORMAT_OPTIONS = [
   { id: "ny_serie", label: "Ny serie" },
 ] as const;
 
+/** Short labels so Läge stays one meal-seg row on mobile. */
 export const MOOD_OPTIONS = [
-  { id: "avkopplat", label: "Avkopplat" },
-  { id: "spanning", label: "Spänning" },
-  { id: "skratta", label: "Skratta" },
-  { id: "lar_mig", label: "Lär mig" },
-  { id: "med_barnen", label: "Med barnen" },
+  { id: "avkopplat", label: "Mys", fullLabel: "Avkopplat" },
+  { id: "spanning", label: "Spänning", fullLabel: "Spänning" },
+  { id: "skratta", label: "Skratta", fullLabel: "Skratta" },
+  { id: "lar_mig", label: "Lär", fullLabel: "Lär mig" },
+  { id: "med_barnen", label: "Barn", fullLabel: "Med barnen" },
 ] as const;
 
 export const STREAMING_SERVICE_OPTIONS = [

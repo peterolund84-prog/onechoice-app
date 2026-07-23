@@ -791,6 +791,22 @@ input {
   cursor: default;
 }
 
+/* Five equal segments in one row — same track as Format / meal */
+.oc-meal-seg--mood {
+  height: 40px;
+  flex-wrap: nowrap;
+  border-radius: 999px;
+}
+
+.oc-meal-seg--mood button {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 32px;
+  font-size: 12px;
+  padding: 0 2px;
+  letter-spacing: -0.01em;
+}
+
 .oc-meal-seg--dense {
   height: auto;
   min-height: 40px;
