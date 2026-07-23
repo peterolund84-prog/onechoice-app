@@ -31,7 +31,7 @@ function DomainIcon({ id }: { id: DomainId }) {
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.35"
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden
@@ -48,7 +48,7 @@ function DomainIcon({ id }: { id: DomainId }) {
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
-        strokeWidth="1.5"
+        strokeWidth="1.35"
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden
@@ -62,7 +62,7 @@ function DomainIcon({ id }: { id: DomainId }) {
   }
   const Icon = ICONS[id];
   if (!Icon) return null;
-  return <Icon className="oc-domain-icon" strokeWidth={1.5} aria-hidden />;
+  return <Icon className="oc-domain-icon" strokeWidth={1.35} aria-hidden />;
 }
 
 const FALLBACK: HomePayload = {
