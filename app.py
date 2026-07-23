@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "home-exact-mockup-v96-20260723"
+BUILD_ID = "home-exact-mockup-v97-20260723"
 # Keep i18n + lang_bar() for later; hide the SV/EN control while we ship Swedish-first.
 SHOW_LANG_TOGGLE = False
 

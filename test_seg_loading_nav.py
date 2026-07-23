@@ -237,8 +237,8 @@ class NavBleedTests(unittest.TestCase):
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
         # Floating pill: inset sides/bottom, ~56px content, 44px tabs
-        self.assertIn("left: 16px !important", bar)
-        self.assertIn("right: 16px !important", bar)
+        self.assertIn("left: 22px !important", bar)
+        self.assertIn("right: 22px !important", bar)
         self.assertIn("min-height: 56px !important", bar)
         self.assertIn("padding: 6px 0.55rem !important", bar)
         self.assertIn("overflow: visible !important", bar)

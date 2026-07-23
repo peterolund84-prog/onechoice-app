@@ -510,8 +510,8 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     width: 100% !important;
 }
 .st-key-home_domains [data-testid="stHorizontalBlock"] {
-    gap: 20px !important;
-    margin-bottom: 4px !important;
+    gap: 12px !important;
+    margin-bottom: 2px !important;
 }
 .st-key-home_domains [data-testid="stMarkdownContainer"],
 .st-key-home_domains [data-testid="stMarkdownContainer"] p {
@@ -789,12 +789,12 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
    Content row ~52px; safe-area via bottom offset so labels stay clear. */
 .st-key-oc_nav_bar {
     position: fixed !important;
-    left: 16px !important;
-    right: 16px !important;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 22px !important;
+    right: 22px !important;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
     z-index: 10000 !important;
     width: auto !important;
-    max-width: 420px !important;
+    max-width: 360px !important;
     margin: 0 auto !important;
     height: auto !important;
     min-height: 56px !important;
