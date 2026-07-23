@@ -837,8 +837,8 @@ def inject_css() -> None:
             "if(n)n.remove()}catch(e){}</script>",
             unsafe_allow_javascript=True,
         )
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "inject_css", exc)
 
 
 
@@ -1071,8 +1071,8 @@ def get_secret(name: str, default: str = "") -> str:
         raw = st.secrets.get(name, None)
         if raw is not None and not isinstance(raw, dict):
             return str(raw)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "get_secret", exc)
     try:
         # Nested: [api] GROK_API_KEY = "..." → st.secrets["api"]["GROK_API_KEY"]
         for section in st.secrets.keys():  # type: ignore[attr-defined]
@@ -1084,8 +1084,8 @@ def get_secret(name: str, default: str = "") -> str:
                 val = block.get(name)
                 if val is not None and not isinstance(val, dict):
                     return str(val)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "get_secret", exc)
     return default
 
 
@@ -1132,8 +1132,8 @@ def _secret_leaf_map() -> dict[str, str]:
                         out[str(k2)] = str(v2)
             elif val is not None:
                 out[str(key)] = str(val)
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_secret_leaf_map", exc)
     return out
 
 
@@ -1242,8 +1242,8 @@ def _as_dict(value: Any) -> dict[str, Any]:
             parsed = _json.loads(value)
             if isinstance(parsed, dict):
                 return parsed
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_as_dict", exc)
     return {}
 
 
@@ -1291,8 +1291,8 @@ def _session_pop(key: str, default: Any = None) -> Any:
     except Exception:
         try:
             st.session_state[key] = default
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_session_pop", exc)
     return val
 
 
@@ -1465,8 +1465,8 @@ def _paint_html(body: str) -> None:
         # Last resort — markdown strips handlers; still show static corner if present
         try:
             st.markdown(body or "", unsafe_allow_html=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_paint_html", exc)
 
 
 def decision_share_button_html(cur: dict[str, Any], *, key: str) -> str:
@@ -1729,8 +1729,8 @@ def _clear_action_query_params() -> None:
     for key in ("domain", "pick", "nav", "shop_toggle", "shop_check", "occasion", "meal", "lang"):
         try:
             del st.query_params[key]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_clear_action_query_params", exc)
 
 
 def lang_bar() -> None:
@@ -1754,8 +1754,8 @@ def lang_bar() -> None:
         if st.session_state.user_id and not st.session_state.get("guest_mode"):
             try:
                 db.update_user(st.session_state.user_id, language=pending)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "lang_bar", exc)
         st.rerun()
         return
 
@@ -2528,8 +2528,8 @@ def _is_streamlit_control_flow(exc: BaseException) -> bool:
 
         if isinstance(exc, (RerunException, StopException)):
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_is_streamlit_control_flow", exc)
     try:
         from streamlit.runtime.scriptrunner_utils.exceptions import (
             RerunException as RE2,
@@ -2538,8 +2538,8 @@ def _is_streamlit_control_flow(exc: BaseException) -> bool:
 
         if isinstance(exc, (RE2, SE2)):
             return True
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_is_streamlit_control_flow", exc)
     return False
 
 
@@ -2745,8 +2745,8 @@ def _ensure_shopping_user() -> str | None:
             log.warning("ensure shopping user failed: %s", exc)
             try:
                 db._ensure_sqlite_user(uid)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "_ensure_shopping_user", exc)
         return uid
     # Soft recover — never leave Skapa lista without a user
     try:
@@ -2781,8 +2781,8 @@ def _merge_to_buy_into_list(
             st.session_state.shopping_merged_for = decision_id
         try:
             _load_shopping_items(force=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_merge_to_buy_into_list", exc)
         return len(rows or [])
     except Exception as exc:
         log.warning("merge shopping to_buy failed: %s", exc)
@@ -2797,8 +2797,8 @@ def _merge_to_buy_into_list(
                 st.session_state.shopping_merged_for = decision_id
             try:
                 _load_shopping_items(force=True)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "_merge_to_buy_into_list", exc)
             return len(rows or [])
         except Exception as exc2:
             _flag_shopping_list_error(exc2)
@@ -2940,8 +2940,8 @@ def _reset_execute_shopping_checks(decision_id: int | None = None) -> None:
     for k in drop:
         try:
             del st.session_state[k]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_reset_execute_shopping_checks", exc)
     _ = decision_id
 
 
@@ -3086,8 +3086,8 @@ def on_accept_food_and_execute(cur: dict[str, Any]) -> None:
         st.session_state.accepted = True
     try:
         safe_toast(t("accepted"))
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "on_accept_food_and_execute", exc)
     st.session_state.ui_error = None
     open_execute_now(cur)
 
@@ -3106,8 +3106,8 @@ def on_accept_primary(cur: dict[str, Any]) -> None:
         st.session_state.accepted = True
     try:
         safe_toast(t("accepted"))
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "on_accept_primary", exc)
     st.session_state.ui_error = None
     st.rerun()
 
@@ -3585,8 +3585,8 @@ def _list_decisions(
             import supabase_store as store
 
             importlib.reload(store)
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "_list_decisions", exc)
         return db.list_decisions(user_id, **kwargs)
 
 
@@ -3964,8 +3964,8 @@ def render_execute_sticky_cta(shop: dict[str, Any] | None) -> None:
                 if n:
                     try:
                         safe_toast(t("list_created"))
-                    except Exception:
-                        pass
+                    except Exception as exc:
+                        log.warning("%s failed: %s", "render_execute_sticky_cta", exc)
                     st.session_state.shopping_list_error = None
                 elif not st.session_state.get("shopping_list_error"):
                     st.session_state.shopping_list_error = True
@@ -4139,8 +4139,8 @@ def _nutrition_stats_from_recipe(recipe: dict[str, Any] | None) -> dict[str, int
                 suggestion=str(recipe.get("title") or ""),
                 allow_estimate=True,
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_nutrition_stats_from_recipe", exc)
     nut = recipe.get("nutrition") if isinstance(recipe.get("nutrition"), dict) else {}
     def _i(*keys: str) -> int | None:
         for k in keys:
@@ -4206,8 +4206,8 @@ def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
         visible = getattr(shopping_mod, "nutrition_segment_visible", None)
         if callable(visible) and not visible(recipe):
             return missing, False
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_nutrition_display_line", exc)
     try:
         ensure = getattr(shopping_mod, "ensure_recipe_nutrition", None)
         if callable(ensure):
@@ -4450,15 +4450,15 @@ def _qp_href(**params: str) -> str:
 def _set_guest_query_param() -> None:
     try:
         st.query_params["guest"] = "1"
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_set_guest_query_param", exc)
 
 
 def _clear_guest_query_param() -> None:
     try:
         del st.query_params["guest"]
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "_clear_guest_query_param", exc)
 
 
 def page_home() -> None:
@@ -4637,8 +4637,8 @@ def page_fridge() -> None:
 
                 if "resolution" in _inspect.signature(st.camera_input).parameters:
                     cam_kwargs["resolution"] = "1080p"
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "page_fridge", exc)
             cam = st.camera_input(
                 " ",
                 label_visibility="collapsed",
@@ -5782,8 +5782,8 @@ def page_execute() -> None:
             nav()
             try:
                 _flush_db_accept()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "page_execute", exc)
             return
         except BaseException as exc:
             if _is_streamlit_control_flow(exc):
@@ -5815,8 +5815,8 @@ def page_execute() -> None:
             is_fav = any(int(r.get("id") or 0) == int(did) for r in rows)
             cur["favorite"] = is_fav
             st.session_state.current = cur
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "page_execute", exc)
     with st.container(key="exec_food_host"):
         fav_corner = _favorite_corner_html(
             int(did) if did else None, is_favorite=is_fav
@@ -5901,8 +5901,8 @@ def page_execute() -> None:
             nav()
             try:
                 _flush_db_accept()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "page_execute", exc)
             return
     except Exception as exc:
         log.warning("leftover execute shortcut failed: %s", exc)
@@ -5923,8 +5923,8 @@ def page_execute() -> None:
                 meal_type,
                 language=st.session_state.get("language", "sv"),
             ) or None
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "page_execute", exc)
     # Title-only stub seeds break validation — drop them
     if seed_ings and len(seed_ings) == 1:
         if seed_ings[0].strip().lower() == suggestion.strip().lower():
@@ -5969,8 +5969,8 @@ def page_execute() -> None:
                 recipe = shop_mod.ensure_recipe_nutrition(
                     recipe, suggestion=suggestion, allow_estimate=True
                 )
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "page_execute", exc)
         render_food_recipe(
             recipe if isinstance(recipe, dict) else None,
             show_nutrition=_profile_show_nutrition(),
@@ -5982,8 +5982,8 @@ def page_execute() -> None:
         nav()
         try:
             _flush_db_accept()
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "page_execute", exc)
         return
 
     # Prefer recipe/shopping already on the decision — do NOT re-call Grok here
@@ -6084,8 +6084,8 @@ def page_execute() -> None:
             recipe_ok = reng.recipe_is_valid(recipe, suggestion)
             if not recipe_ok:
                 recipe = None
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "page_execute", exc)
 
     # Card already shows time · portions — no duplicate visible meta.
     # Keep a zero-height markdown slot here: removing this node entirely
@@ -6099,8 +6099,8 @@ def page_execute() -> None:
                 suggestion=suggestion,
                 allow_estimate=True,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "page_execute", exc)
     st.markdown(
         '<div class="oc-exec-meta-slot" aria-hidden="true"></div>',
         unsafe_allow_html=True,
@@ -6171,8 +6171,8 @@ def page_lista() -> None:
             n = _clear_done_shopping_items([{"id": i} for i in ids])
             try:
                 safe_toast(f'{t("list_clear_done")} · {n}')
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "page_lista", exc)
 
     render_top_chrome()
     require_auth_context()
@@ -6357,8 +6357,8 @@ def page_profile() -> None:
             st.caption(f"AI: offline — ingen modell svarade ({d.get('detail', '')[:120]})")
         else:
             st.caption("AI: ej testad ännu")
-    except Exception:
-        pass
+    except Exception as exc:
+        log.warning("%s failed: %s", "page_profile", exc)
     # Owner-only: last soft-recover error (never on the user-facing error card).
     last_err = st.session_state.get("_last_ui_error")
     if last_err:
@@ -6604,8 +6604,8 @@ def handle_query_params() -> None:
             return
         try:
             del st.query_params["share"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
 
     if st.session_state.page == "auth" and not st.session_state.user_id:
         # still allow language toggle on auth
@@ -6617,12 +6617,12 @@ def handle_query_params() -> None:
             require_auth_context()
             try:
                 db.update_user(st.session_state.user_id, language=lang)
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "handle_query_params", exc)
         try:
             del st.query_params["lang"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         st.rerun()
 
     if st.session_state.page == "auth" and not _is_authenticated() and not st.session_state.get("guest_mode"):
@@ -6633,8 +6633,8 @@ def handle_query_params() -> None:
         st.session_state.page = nav_q
         try:
             del st.query_params["nav"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         st.rerun()
 
     fav_q = _qp_one(qp.get("fav"))
@@ -6645,8 +6645,8 @@ def handle_query_params() -> None:
             log.warning("invalid fav toggle %r: %s", fav_q, exc)
         try:
             del st.query_params["fav"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         st.rerun()
 
     shop_toggle = _qp_one(qp.get("shop_toggle"))
@@ -6658,8 +6658,8 @@ def handle_query_params() -> None:
         for key in ("shop_toggle", "guest"):
             try:
                 del st.query_params[key]
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "handle_query_params", exc)
         if st.session_state.get("guest_mode"):
             _set_guest_query_param()
         st.rerun()
@@ -6675,8 +6675,8 @@ def handle_query_params() -> None:
         for key in ("shop_check", "guest"):
             try:
                 del st.query_params[key]
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "handle_query_params", exc)
         if st.session_state.get("guest_mode"):
             _set_guest_query_param()
         st.rerun()
@@ -6687,8 +6687,8 @@ def handle_query_params() -> None:
         for key in ("auto", "domain", "meal"):
             try:
                 del st.query_params[key]
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "handle_query_params", exc)
         inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
         if domain != str(inferred.get("domain") or "food"):
             inferred = {**inferred, "domain": domain}
@@ -6698,8 +6698,8 @@ def handle_query_params() -> None:
     if domain in pipeline.ALLOWED_DOMAINS:
         try:
             del st.query_params["domain"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         if domain == "clothes":
             st.session_state.last_domain_hint = "clothes"
             st.session_state.pending_clothes_question = pipeline._default_question(
@@ -6720,8 +6720,8 @@ def handle_query_params() -> None:
     if fridge_q in ("1", "true", "yes"):
         try:
             del st.query_params["fridge"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         st.session_state.fridge_step = "capture"
         st.session_state.fridge_inventory = []
         st.session_state.fridge_mode = False
@@ -6737,8 +6737,8 @@ def handle_query_params() -> None:
     if occasion in cd.OCCASIONS:
         try:
             del st.query_params["occasion"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         from datetime import datetime
 
         hour = str(datetime.now().astimezone().hour)
@@ -6765,8 +6765,8 @@ def handle_query_params() -> None:
     if meal in fd.MEAL_TYPES:
         try:
             del st.query_params["meal"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         prev = st.session_state.get("food_meal_type")
         st.session_state.food_meal_type = meal
         # Only regenerate when user actually changed the inferred type
@@ -6790,8 +6790,8 @@ def handle_query_params() -> None:
     if pick in pipeline.ALLOWED_DOMAINS or pick == "other":
         try:
             del st.query_params["pick"]
-        except Exception:
-            pass
+        except Exception as exc:
+            log.warning("%s failed: %s", "handle_query_params", exc)
         pending = st.session_state.pending_free_text or st.session_state.last_question or ""
         st.session_state.force_route_domain = pick
         st.session_state.last_domain_hint = pick
@@ -6956,8 +6956,8 @@ def page_shared() -> None:
         for k in ("share", "ref", "decision_id"):
             try:
                 del st.query_params[k]
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("%s failed: %s", "page_shared", exc)
         st.rerun()
 
 
