@@ -235,14 +235,19 @@ class NavBleedTests(unittest.TestCase):
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
-        # Compact footer: hard 64px + safe-area, 44px pills, 4px icon/label gap
-        self.assertIn("height: calc(64px + env(safe-area-inset-bottom))", bar)
-        self.assertIn("padding: 8px 0.4rem calc(8px + env(safe-area-inset-bottom))", bar)
+        # Compact footer: ~56px content + safe-area, 44px pills; no overflow clip
+        self.assertIn("min-height: calc(56px + env(safe-area-inset-bottom", bar)
+        self.assertIn("padding: 6px 0.4rem calc(6px + env(safe-area-inset-bottom", bar)
+        self.assertIn("overflow: visible !important", bar)
         self.assertIn("min-height: 44px !important", bar)
-        self.assertIn("gap: 4px !important", bar)
-        # Content clears nav + 16px
-        self.assertIn("calc(80px + env(safe-area-inset-bottom))", css)
+        self.assertIn("gap: 2px !important", bar)
+        # Marker must collapse — it was eating height and clipping labels
+        self.assertIn(".oc-nav-chrome", css)
+        self.assertIn('data-oc-nav="glass"', css)
+        # Content clears nav + ~16px
+        self.assertIn("calc(72px + env(safe-area-inset-bottom", css)
         self.assertNotIn("calc(88px + env(safe-area-inset-bottom))", css)
+        self.assertNotIn("calc(80px + env(safe-area-inset-bottom))", css)
         # In-flow host of fixed nav must collapse (no dead band above footer)
         self.assertIn(
             '[data-testid="stElementContainer"]:has(.st-key-oc_nav_bar)',
@@ -256,6 +261,15 @@ class NavBleedTests(unittest.TestCase):
         self.assertNotIn(".oc-nav-btns-marker", css)
         self.assertNotIn(".st-key-oc_nav_pills", css)
         self.assertNotIn(".oc-nav {", css)
+
+    def test_nav_chrome_marker_collapsed(self) -> None:
+        css = _styles()
+        self.assertIn(".st-key-oc_nav_bar .oc-nav-chrome", css)
+        marker = css.split(".st-key-oc_nav_bar .oc-nav-chrome")[1].split(
+            ".st-key-oc_nav_bar [data-testid=\"stHorizontalBlock\"]"
+        )[0]
+        self.assertIn("display: none !important", marker)
+        self.assertIn("height: 0 !important", marker)
 
     def test_nav_icons_present_for_inactive_and_active(self) -> None:
         """All four tabs keep background-image; shorthand must not wipe inactive icons."""

@@ -110,12 +110,12 @@ section.main, [data-testid="stAppViewContainer"] > .main {
 }
 .block-container {
     max-width: 420px !important;
-    /* Nav 64px + 16px gap + safe-area */
-    padding: calc(52px + env(safe-area-inset-top) + 40px) 20px calc(80px + env(safe-area-inset-bottom)) !important;
+    /* Nav ~56px content + 16px gap + safe-area */
+    padding: calc(52px + env(safe-area-inset-top) + 40px) 20px calc(72px + env(safe-area-inset-bottom, 0px)) !important;
     margin: 0 auto !important;
 }
 @media (max-width: 768px) {
-    .block-container { padding: calc(52px + env(safe-area-inset-top) + 40px) 20px calc(80px + env(safe-area-inset-bottom)) !important; }
+    .block-container { padding: calc(52px + env(safe-area-inset-top) + 40px) 20px calc(72px + env(safe-area-inset-bottom, 0px)) !important; }
 }
 /* Collapse in-flow chrome wrappers — fixed header/lang/nav must not reserve vertical space */
 div[data-testid="element-container"]:has(.oc-header),
@@ -703,7 +703,10 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     font-weight: 600 !important;
 }
 /* Bottom nav — frosted glass bar (must fully obscure page content below)
-   Total chrome: 64px + safe-area-inset-bottom. Active pill 44px. */
+   Content row 56px + safe-area padding below (labels stay above the clip).
+   What used to block labels: (1) uncollapsed .oc-nav-chrome marker eating
+   height inside overflow:hidden, (2) iOS Safari bottom toolbar overlaying
+   bottom:0 fixed chrome. */
 .st-key-oc_nav_bar {
     position: fixed !important;
     left: 0 !important;
@@ -712,44 +715,71 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     z-index: 10000 !important;
     width: 100% !important;
     margin: 0 !important;
-    height: calc(64px + env(safe-area-inset-bottom)) !important;
-    min-height: calc(64px + env(safe-area-inset-bottom)) !important;
-    max-height: calc(64px + env(safe-area-inset-bottom)) !important;
-    padding: 8px 0.4rem calc(8px + env(safe-area-inset-bottom)) !important;
+    height: auto !important;
+    min-height: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
+    max-height: none !important;
+    padding: 6px 0.4rem calc(6px + env(safe-area-inset-bottom, 0px)) !important;
     background: rgba(250, 250, 247, 0.92) !important;
     backdrop-filter: blur(20px) !important;
     -webkit-backdrop-filter: blur(20px) !important;
     border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-sizing: border-box !important;
-    overflow: hidden !important;
-    /* Never let a parent overlay / hide-belt steal taps from the footer */
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
     pointer-events: auto !important;
+}
+/* Marker must not steal vertical space — it was pushing labels into the clip */
+.st-key-oc_nav_bar .oc-nav-chrome,
+.st-key-oc_nav_bar [data-oc-nav="glass"] {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+.st-key-oc_nav_bar [data-testid="stElementContainer"]:has(.oc-nav-chrome),
+.st-key-oc_nav_bar [data-testid="element-container"]:has(.oc-nav-chrome),
+.st-key-oc_nav_bar [data-testid="stElementContainer"]:has([data-oc-nav="glass"]),
+.st-key-oc_nav_bar [data-testid="element-container"]:has([data-oc-nav="glass"]) {
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
 }
 .st-key-oc_nav_bar [data-testid="stHorizontalBlock"],
 .st-key-oc_nav_bar [data-testid="stVerticalBlock"],
 .st-key-oc_nav_bar [data-testid="stVerticalBlockBorderWrapper"] {
-    gap: 0.15rem !important;
-    align-items: center !important;
+    gap: 0 !important;
+    align-items: flex-start !important;
     pointer-events: auto !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-    height: 48px !important;
-    max-height: 48px !important;
+    height: auto !important;
+    max-height: none !important;
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
 }
 .st-key-oc_nav_bar [class*="st-key-nav_"],
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
-    height: 44px !important;
-    max-height: 44px !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
     background: transparent !important;
     border: none !important;
     pointer-events: auto !important;
+    overflow: visible !important;
 }
 [class*="st-key-nav_"] div.stButton {
     margin: 0 !important;
@@ -779,19 +809,20 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     min-height: 44px !important;
     height: 44px !important;
     max-height: 44px !important;
-    padding: 0 0.25rem !important;
+    padding: 4px 0.25rem 2px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 4px !important;
-    line-height: 1.1 !important;
+    gap: 2px !important;
+    line-height: 1.15 !important;
     text-decoration: none !important;
     text-underline-offset: unset !important;
     cursor: pointer !important;
     pointer-events: auto !important;
     touch-action: manipulation !important;
     -webkit-tap-highlight-color: rgba(59, 59, 196, 0.12) !important;
+    overflow: visible !important;
 }
 /* Longhand only — `background:` shorthand resets background-image and was
    beating inactive-tab icon rules after the .st-key-oc_nav_bar specificity bump. */
@@ -2486,7 +2517,7 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
-    bottom: calc(64px + env(safe-area-inset-bottom)) !important;
+    bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
     z-index: 998 !important;
     width: 100% !important;
     max-width: 420px !important;

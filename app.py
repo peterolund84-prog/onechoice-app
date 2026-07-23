@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-movie-chips-sok-v90-20260723"
+BUILD_ID = "fix-nav-clip-height-v91-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -871,12 +871,19 @@ def inject_css() -> None:
         f'<style id="oc-app-css">{css}</style>',
         unsafe_allow_html=True,
     )
-    # Remove leftover parent-head stylesheet from the short-lived first-paint
-    # experiment (perf pass) — stale rules there can hide result cards forever.
+    # viewport-fit=cover so env(safe-area-inset-*) is non-zero on iOS Safari;
+    # without it the fixed footer sits under the browser chrome and clips labels.
     try:
         st.html(
-            "<script>try{var n=document.getElementById('oc-app-css-head');"
-            "if(n)n.remove()}catch(e){}</script>",
+            "<script>try{"
+            "var m=document.querySelector('meta[name=viewport]');"
+            "if(m){var c=m.getAttribute('content')||'';"
+            "if(c.indexOf('viewport-fit')<0){"
+            "m.setAttribute('content',c+(c?',':'')+'viewport-fit=cover');"
+            "}}"
+            "var n=document.getElementById('oc-app-css-head');"
+            "if(n)n.remove()"
+            "}catch(e){}</script>",
             unsafe_allow_javascript=True,
         )
     except Exception as exc:
