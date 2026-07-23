@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "recipe-grounding-nutrition-v77-20260723"
+BUILD_ID = "fix-exec-valj-nav-v78-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1813,11 +1813,11 @@ def _go_home_chooser() -> None:
 def nav() -> None:
     """Fixed bottom glass nav — ONE shared component; no view may restyle it."""
     page = st.session_state.page
-    highlight = "home" if page in ("home", "result", "execute", "fridge", "ambiguous", "deciding") else page
     options = ("home", "lista", "history", "profile")
-    if highlight not in options:
-        highlight = "home"
-    unchecked = _unchecked_shopping_count() if highlight != "auth" else 0
+    # Only highlight the tab for the page you are actually on.
+    # result/execute/deciding/fridge must NOT light up Hem.
+    highlight = page if page in options else ""
+    unchecked = _unchecked_shopping_count() if page != "auth" else 0
     labels = {
         "home": t("home"),
         "lista": (
