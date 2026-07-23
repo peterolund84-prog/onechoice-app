@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-dish-img-visible-v74-20260722"
+BUILD_ID = "fix-dish-img-force-v75-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -794,8 +794,9 @@ def _domain_card_button_css() -> str:
 
 
 @st.cache_data(show_spinner=False)
-def read_css() -> str:
-    """Load static stylesheet once per process (file → cache)."""
+def read_css(build_id: str) -> str:
+    """Load static stylesheet once per process (keyed by BUILD_ID so deploys bust cache)."""
+    _ = build_id  # cache key only
     return (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
 
 
@@ -818,12 +819,22 @@ def inject_css() -> None:
     read_css() is @st.cache_data — file read is cached; injection is not.
     """
     dyn = _dynamic_css_block()
-    css = read_css()
+    css = read_css(BUILD_ID)
     st.markdown(
         f'<style id="oc-dyn-css">{dyn}</style>\n'
         f'<style id="oc-app-css">{css}</style>',
         unsafe_allow_html=True,
     )
+    # Remove leftover parent-head stylesheet from the short-lived first-paint
+    # experiment (perf pass) — stale rules there can hide result cards forever.
+    try:
+        st.html(
+            "<script>try{var n=document.getElementById('oc-app-css-head');"
+            "if(n)n.remove()}catch(e){}</script>",
+            unsafe_allow_javascript=True,
+        )
+    except Exception:
+        pass
 
 
 

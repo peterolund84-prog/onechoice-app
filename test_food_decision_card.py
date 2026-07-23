@@ -164,6 +164,54 @@ class PreLockFoodCardUiTests(unittest.TestCase):
         self.assertIn("oc-fav-corner", exec_body)
         self.assertIn("oc-share-corner", exec_body)
 
+    def test_result_page_paints_real_jpeg_not_placeholder(self) -> None:
+        """Device gate: after Mat → result, painted HTML must embed a real dish JPEG.
+
+        Asserts the actual st.html payload (not just the renderer helper). Style
+        tags are stripped so class names in CSS do not false-positive.
+        """
+        import base64
+        import re
+        from pathlib import Path
+
+        from streamlit.testing.v1 import AppTest
+
+        from test_share import _html_blobs
+
+        at = AppTest.from_file("app.py", default_timeout=90)
+        at.run()
+        at.session_state["food_meal_type"] = "middag"
+        at.query_params["domain"] = "food"
+        at.run()
+        self.assertEqual(at.session_state["page"], "result")
+        self.assertFalse(at.exception)
+
+        painted = re.sub(r"<style[\s\S]*?</style>", "", _html_blobs(at))
+        self.assertIn("oc-food-decision", painted)
+        self.assertIn('class="oc-food-img"', painted)
+        self.assertNotIn("oc-food-img-ph", painted)
+        self.assertNotIn("oc-skel-card", painted)
+        self.assertNotIn("data-oc-deciding", painted)
+        self.assertIn("data:image/jpeg;base64,", painted)
+
+        m = re.search(
+            r'<img class="oc-food-img" src="data:image/jpeg;base64,([A-Za-z0-9+/=]+)"',
+            painted,
+        )
+        self.assertIsNotNone(m, "missing oc-food-img data URL in painted HTML")
+        raw = base64.b64decode(m.group(1))
+        self.assertTrue(raw.startswith(b"\xff\xd8\xff"), "not a JPEG payload")
+        self.assertGreater(len(raw), 8_000, len(raw))
+
+        # CSS must force the image visible on result (beats leftover skeleton hide)
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".block-container:has(.oc-result) .oc-food-img", css)
+        self.assertIn('st-key-decide_slot"] .oc-skel-card', css)
+        self.assertNotIn(
+            "body:has(.oc-skel-card):not(:has(.oc-result))",
+            css,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
