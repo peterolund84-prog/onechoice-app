@@ -225,14 +225,18 @@ class NavBleedTests(unittest.TestCase):
         # Must not force fully transparent fills on nav secondaries
         self.assertIn("rgba(250, 250, 247, 0.01)", css)
         self.assertIn(
-            ".st-key-oc_nav_bar,\n.st-key-oc_nav_pills",
+            ".st-key-oc_nav_bar {",
             css,
         )
         # Footer must claim pointer-events even if a ghost overlay exists
-        bar = css.split(".st-key-oc_nav_bar,\n.st-key-oc_nav_pills")[1].split(
+        bar = css.split(".st-key-oc_nav_bar {")[1].split(
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
+        # Dead legacy nav generations must stay gone
+        self.assertNotIn(".oc-nav-btns-marker", css)
+        self.assertNotIn(".st-key-oc_nav_pills", css)
+        self.assertNotIn(".oc-nav {", css)
 
 
 if __name__ == "__main__":

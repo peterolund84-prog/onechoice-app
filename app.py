@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-nav-tap-v79-20260723"
+BUILD_ID = "css-diet-nav-v80-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
