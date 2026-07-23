@@ -716,18 +716,24 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     -webkit-backdrop-filter: blur(20px) !important;
     border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
     box-sizing: border-box !important;
+    /* Never let a parent overlay / hide-belt steal taps from the footer */
+    pointer-events: auto !important;
 }
 .st-key-oc_nav_bar [data-testid="stHorizontalBlock"] {
     gap: 0.15rem !important;
     align-items: stretch !important;
+    pointer-events: auto !important;
 }
 [class*="st-key-nav_"] div.stButton {
     margin: 0 !important;
     width: 100% !important;
+    pointer-events: auto !important;
 }
 [class*="st-key-nav_"] div.stButton > button {
     width: 100% !important;
-    background: transparent !important;
+    /* iOS Safari ignores taps on fully transparent controls — keep a
+       near-invisible fill so secondary tabs (execute/result) still work. */
+    background: rgba(250, 250, 247, 0.01) !important;
     border: none !important;
     border-radius: 999px !important;
     box-shadow: none !important;
@@ -743,6 +749,10 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     justify-content: center !important;
     gap: 0.15rem !important;
     line-height: 1.1 !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: rgba(59, 59, 196, 0.12) !important;
 }
 [class*="st-key-nav_"] div.stButton > button::before {
     content: "" !important;
@@ -994,16 +1004,26 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     padding: 0 !important;
 }
 /* Hide result/meal CTAs outside the result page — Streamlit can leave
-   keyed widgets (Välj / Nytt förslag / meal seg) ghost-visible after lock. */
+   keyed widgets (Välj / Nytt förslag / meal seg) ghost-visible after lock.
+   Also collapse host wrappers so invisible hit-targets cannot cover the footer. */
 body:not(:has(.oc-result)) .st-key-result_primary_btn,
 body:not(:has(.oc-result)) .st-key-result_secondary_btn,
 body:not(:has(.oc-result)) [class*="st-key-food_go_for_it"],
 body:not(:has(.oc-result)) [class*="st-key-reroll_btn"],
 body:not(:has(.oc-result)) [class*="st-key-do_it_primary"],
+body:not(:has(.oc-result)) [class*="st-key-do_it_locked"],
+body:not(:has(.oc-result)) [class*="st-key-handla_reopen"],
+body:not(:has(.oc-result)) [class*="st-key-eat_reopen"],
 body:not(:has(.oc-result)) [class*="st-key-fridge_cook_accept"],
 body:not(:has(.oc-result)) [class*="st-key-fridge_shop_escape"],
+body:not(:has(.oc-result)) [class*="st-key-fridge_reopen"],
+body:not(:has(.oc-result)) [class*="st-key-fridge_shop_reopen"],
 body:not(:has(.oc-result)) [class*="st-key-meal_seg_"],
-body:not(:has(.oc-result)) .st-key-meal_seg {
+body:not(:has(.oc-result)) .st-key-meal_seg,
+body:not(:has(.oc-result)) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-result_primary_btn),
+body:not(:has(.oc-result)) [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-result_secondary_btn),
+body:not(:has(.oc-result)) [data-testid="stElementContainer"]:has([class*="st-key-food_go_for_it"]),
+body:not(:has(.oc-result)) [data-testid="stElementContainer"]:has([class*="st-key-reroll_btn"]) {
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;
@@ -1011,7 +1031,6 @@ body:not(:has(.oc-result)) .st-key-meal_seg {
     padding: 0 !important;
     overflow: hidden !important;
     visibility: hidden !important;
-    pointer-events: none !important;
 }
 /* Decision page: header → 24px → content (kill the ~270px dead band) */
 .block-container:has(.oc-result) {
@@ -2911,8 +2930,9 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="secondary"],
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"] {
     width: 100% !important;
-    background: transparent !important;
-    background-color: transparent !important;
+    /* Keep a non-transparent fill — iOS drops taps on background:transparent */
+    background: rgba(250, 250, 247, 0.01) !important;
+    background-color: rgba(250, 250, 247, 0.01) !important;
     border: none !important;
     border-radius: 999px !important;
     box-shadow: none !important;
@@ -2931,6 +2951,10 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     line-height: 1.1 !important;
     text-decoration: none !important;
     text-underline-offset: unset !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: rgba(59, 59, 196, 0.12) !important;
 }
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"],
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"],

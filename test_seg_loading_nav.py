@@ -217,6 +217,23 @@ class NavBleedTests(unittest.TestCase):
         bar_only = nav_block.split(".st-key-oc_nav_bar [data-testid")[0]
         self.assertNotIn("background: transparent", bar_only)
 
+    def test_nav_buttons_remain_tappable_when_secondary(self) -> None:
+        """iOS drops taps on background:transparent — secondary tabs must stay hittable."""
+        css = _styles()
+        self.assertIn("cursor: pointer !important", css)
+        self.assertIn("touch-action: manipulation !important", css)
+        # Must not force fully transparent fills on nav secondaries
+        self.assertIn("rgba(250, 250, 247, 0.01)", css)
+        self.assertIn(
+            ".st-key-oc_nav_bar,\n.st-key-oc_nav_pills",
+            css,
+        )
+        # Footer must claim pointer-events even if a ghost overlay exists
+        bar = css.split(".st-key-oc_nav_bar,\n.st-key-oc_nav_pills")[1].split(
+            "[class*=\"st-key-nav_\"] div.stButton > button::before"
+        )[0]
+        self.assertIn("pointer-events: auto !important", bar)
+
 
 if __name__ == "__main__":
     unittest.main()
