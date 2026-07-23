@@ -749,6 +749,16 @@ input {
   font-size: 14px;
 }
 
+.oc-lock {
+  display: inline-block;
+  margin: 2px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--oc-accent, #1a5cff);
+}
+
 .oc-reroll-dots {
   display: flex;
   gap: 6px;

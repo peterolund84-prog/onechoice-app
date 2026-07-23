@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Heart, Share2 } from "lucide-react";
 import { api } from "../lib/api";
@@ -6,6 +6,10 @@ import { resolveDishPublicPath } from "../lib/dishImage";
 import type { Decision } from "../lib/types";
 
 const MAX_REROLLS = 3;
+
+function isRerollLocked(d: Decision): boolean {
+  return Boolean(d.locked) || Number(d.reroll_index || 0) >= MAX_REROLLS;
+}
 
 function readDecision(): Decision | null {
   try {
@@ -78,6 +82,7 @@ export function ResultPage() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [imgFailed, setImgFailed] = useState(false);
+  const autoAcceptKey = useRef<string | null>(null);
 
   useEffect(() => {
     setImgFailed(false);
@@ -127,6 +132,63 @@ export function ResultPage() {
     };
   }, [decision?.suggestion, decision?.domain, decision?.image_data_url]);
 
+  // After max rerolls the API marks locked — auto-accept so the user isn't stuck.
+  useEffect(() => {
+    const current = decision;
+    if (!current || current.accepted || current.refused || current.ui_message) return;
+    if (!isRerollLocked(current)) return;
+    const key = String(decisionId(current) ?? current.suggestion ?? "locked");
+    if (autoAcceptKey.current === key) return;
+    autoAcceptKey.current = key;
+
+    let cancelled = false;
+    let done = false;
+    (async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        const id = decisionId(current);
+        if (id != null) {
+          await api.acceptDecision(id, current.route_log_id);
+        }
+        done = true;
+        if (cancelled) return;
+        const next = {
+          ...current,
+          accepted: true,
+          locked: true,
+          status: "accepted",
+        };
+        saveDecision(next);
+        setDecision(next);
+        setMsg("Valt automatiskt — inga omval kvar.");
+      } catch (e) {
+        if (cancelled) return;
+        // Allow retry via effect remount / explicit button if API accept fails.
+        autoAcceptKey.current = null;
+        setError(e instanceof Error ? e.message : "Kunde inte låsa valet");
+      } finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (!done && autoAcceptKey.current === key) {
+        autoAcceptKey.current = null;
+      }
+    };
+  }, [
+    decision?.accepted,
+    decision?.locked,
+    decision?.reroll_index,
+    decision?.suggestion,
+    decision?.id,
+    decision?.decision_id,
+    decision?.refused,
+    decision?.ui_message,
+  ]);
+
   if (!decision) {
     return (
       <section className="oc-result">
@@ -155,7 +217,7 @@ export function ResultPage() {
 
   const id = decisionId(decision);
   const rerolls = Number(decision.reroll_index || 0);
-  const locked = Boolean(decision.locked) || rerolls >= MAX_REROLLS;
+  const locked = isRerollLocked(decision);
   const accepted = Boolean(decision.accepted);
   const src = mediaSrc(decision);
   const showImage = Boolean(src) && !imgFailed;
@@ -171,20 +233,20 @@ export function ResultPage() {
     const current = decision;
     if (!current) return;
     if (id == null) {
-      const next = { ...current, accepted: true };
+      const next = { ...current, accepted: true, locked: true };
       saveDecision(next);
       setDecision(next);
-      setMsg("Accepterat");
+      setMsg("Sparat — bra val.");
       return;
     }
     setBusy(true);
     setError(null);
     try {
       await api.acceptDecision(id, current.route_log_id);
-      const next = { ...current, accepted: true, status: "accepted" };
+      const next = { ...current, accepted: true, locked: true, status: "accepted" };
       saveDecision(next);
       setDecision(next);
-      setMsg("Accepterat");
+      setMsg("Sparat — bra val.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte acceptera");
     } finally {
@@ -194,7 +256,7 @@ export function ResultPage() {
 
   async function onReroll() {
     const current = decision;
-    if (!current || locked) return;
+    if (!current || locked || accepted) return;
     setBusy(true);
     setError(null);
     try {
@@ -205,6 +267,7 @@ export function ResultPage() {
         reroll_index: rerolls + 1,
         previous_decision_id: id,
       });
+      autoAcceptKey.current = null;
       saveDecision(next);
       setDecision(next);
       setMsg(null);
@@ -305,7 +368,10 @@ export function ResultPage() {
       </div>
 
       <h1 className="oc-result-title">{decision.suggestion || "—"}</h1>
-      {decision.justification ? (
+      {locked || accepted ? <div className="oc-lock">Låst</div> : null}
+      {locked && !accepted ? (
+        <p className="oc-result-body">Det är {decision.suggestion}. Kör.</p>
+      ) : decision.justification ? (
         <p className="oc-result-body">{decision.justification}</p>
       ) : null}
 
@@ -316,13 +382,13 @@ export function ResultPage() {
       </div>
 
       <div className="oc-stack" style={{ width: "100%", maxWidth: 320 }}>
-        {!accepted && !locked ? (
+        {!accepted ? (
           <button type="button" className="oc-cta" disabled={busy} onClick={onAccept}>
-            Acceptera
+            Välj
           </button>
         ) : null}
 
-        {!locked ? (
+        {!accepted && !locked ? (
           <button
             type="button"
             className="oc-btn oc-btn-ghost"
@@ -330,6 +396,23 @@ export function ResultPage() {
             onClick={onReroll}
           >
             Nytt förslag
+          </button>
+        ) : null}
+
+        {accepted && toBuy ? (
+          <button type="button" className="oc-cta" disabled={busy} onClick={onMergeList}>
+            Lägg till i listan
+          </button>
+        ) : null}
+
+        {accepted ? (
+          <button
+            type="button"
+            className={toBuy ? "oc-btn oc-btn-ghost" : "oc-cta"}
+            disabled={busy}
+            onClick={() => navigate(toBuy ? "/lista" : "/")}
+          >
+            {toBuy ? "Till listan" : "Klar"}
           </button>
         ) : null}
 
@@ -344,7 +427,7 @@ export function ResultPage() {
           </a>
         ) : null}
 
-        {toBuy ? (
+        {!accepted && toBuy ? (
           <button type="button" className="oc-btn" disabled={busy} onClick={onMergeList}>
             Lägg till i listan
           </button>
