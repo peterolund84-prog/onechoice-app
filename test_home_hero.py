@@ -112,7 +112,7 @@ class HomeHeroTests(unittest.TestCase):
         self.assertIn("st-key-home_domain_", css)
         self.assertGreaterEqual(css.count("data:image/svg+xml"), 6)
         # Lucide motifs (soft stroke) — soup / coat-hanger / clapperboard / palm / fridge
-        self.assertIn("%239A9A94", css)  # soft blend stroke
+        self.assertIn("%232C2C2A", css)  # soft blend stroke
         self.assertIn("M12%2021a9%209%200%200%200%209-9H3", css)  # soup bowl
         self.assertIn("M5%206a4%204%200%200%201%204-4h6", css)  # refrigerator
         self.assertNotIn("▯", body)
@@ -300,7 +300,7 @@ class HomeHeroTests(unittest.TestCase):
             "oc-section-label",
             "oc-header-wordmark",
             "st-key-home_free_disclose",
-            "linear-gradient(180deg, #F7F4EC",
+            "linear-gradient(180deg, #F8F4EB",
         ):
             self.assertIn(needle, css, needle)
         # Stacked free-text CTA — no side-by-side column layout
