@@ -872,10 +872,146 @@ def format_nutrition_line(
     return " · ".join(parts)
 
 
+def _hint_tokens(ingredients: list[str]) -> list[str]:
+    """Bare ingredient names for coverage (skip empty)."""
+    out: list[str] = []
+    for raw in ingredients:
+        n = _strip_hint(str(raw or ""))
+        if n and n not in out:
+            out.append(n)
+    return out
+
+
+def _ing_blob(ingredients: list[str]) -> str:
+    return " ".join(_hint_tokens(ingredients)).lower()
+
+
+def _hint_grounded_steps(suggestion: str, ingredients: list[str]) -> list[str]:
+    """Per-category step skeleton built from the actual hint list.
+
+    Replaces the old protein+ris / 'Förbered ingredienserna' prose that passed
+    surface validation while contradicting the dish. Every non-pantry hint is
+    named in the steps (coverage); quantified foods only appear if listed.
+    """
+    s = (suggestion or "").lower()
+    names = _hint_tokens(ingredients)
+    blob = " ".join(names)
+    pantry = {"salt", "peppar", "olja", "smör", "vatten", "svartpeppar"}
+    mains = [n for n in names if n not in pantry]
+    join = ", ".join(mains[:8]) if mains else (", ".join(names[:6]) or "ingredienserna")
+    has = lambda *cues: any(c in blob or c in s for c in cues)
+
+    if has("taco", "tacoskal") or "taco" in s:
+        return [
+            f"Stek färs (eller annan fyllning) i 1 msk olja 6–8 min. Krydda med salt och peppar.",
+            f"Hacka tillbehör: {join}.",
+            "Värm tacoskal enligt förpackningen.",
+            f"Fyll skalen med färs och {join}. Servera med gräddfil om du har.",
+        ]
+    if has("nudlar", "ramen", "pad thai") or any(x in s for x in ("ramen", "nudel", "noodle")):
+        return [
+            f"Koka nudlar enligt förpackningen. Skölj övrigt: {join}.",
+            "Hetta upp 1 msk olja. Fräs vitlök (och ingefära om du har) 1 min.",
+            f"Tillsätt grönsaker och protein från listan ({join}). Stek 4–6 min.",
+            "Rör ner nudlarna med 2 msk sojasås. Smaka av med salt och peppar. Servera.",
+        ]
+    if has("quinoa") or "quinoa" in s or ("sallad" in s and not has("tonfisk", "tuna")):
+        return [
+            f"Koka quinoa eller skölj basen. Skär grönt: {join}.",
+            f"Blanda allt i en skål: {join}.",
+            "Ringla 1 msk olja och pressa citron om du har. Krydda med salt och peppar.",
+            "Servera kallt eller ljummet.",
+        ]
+    if has("soppa", "buljong") or "soppa" in s or "soup" in s:
+        return [
+            f"Hacka grönsakerna: {join}.",
+            "Fräs lök i 1 msk olja 3 min. Tillsätt övrigt och 8 dl buljong eller vatten.",
+            "Koka 12–15 min tills grönsakerna är mjuka. Smaka av med salt och peppar.",
+            "Servera varm soppa.",
+        ]
+    if has("korv") or "korv" in s or "sausage" in s:
+        return [
+            "Stek korvarna i 1 msk olja eller smör 8–10 min tills genomstekta.",
+            f"Koka potatis mjuk (ca 15 min). Mosa med mjölk och smör. Krydda med salt och peppar.",
+            f"Servera korv med mos och eventuellt övrigt ({join}).",
+        ]
+    if has("köttbull", "nötfärs") and ("köttbull" in s or "meatball" in s or "gräddsås" in s):
+        return [
+            "Blanda nötfärs med ägg, ströbröd, salt och peppar. Forma köttbullar.",
+            "Bryn i 1 msk smör 8–10 min tills genomstekta.",
+            "Häll i grädde, låt sjuda 5 min till en gräddsås. Smaka av.",
+            f"Servera med tillbehören: {join}.",
+        ]
+    if has("lax", "torsk", "fisk") or any(x in s for x in ("lax", "salmon", "fisk", "fish", "torsk")):
+        return [
+            f"Sätt ugnen på 200°. Skär potatis/grönt: {join}.",
+            "Lägg fisken i en form med smör, citron och dill om du har. Salta och peppra.",
+            "Ugnbaka 12–18 min tills fisken är genomstekt och grönsakerna mjuka.",
+            f"Servera fisken med {join}.",
+        ]
+    if has("kikärt") or "curry" in s or "kikärt" in s:
+        return [
+            f"Fräs lök och vitlök i 1 msk olja 3 min. Tillsätt kryddor.",
+            f"Häll i kikärtor, tomatpuré/kokosmjölk och övrigt: {join}. Sjud 12–15 min.",
+            "Koka ris enligt förpackningen om ris finns i listan.",
+            "Smaka av med salt och peppar. Servera varmt.",
+        ]
+    if has("avokado") and has("bröd") or "toast" in s or "avokado" in s:
+        return [
+            "Rosta brödet 1–2 min.",
+            "Krossa avokado med citron, salt och peppar.",
+            f"Bred avokadon på brödet. Toppa med övrigt om du har ({join}). Servera direkt.",
+        ]
+    if (has("ris") and has("ägg")) or ("ris" in s and "ägg" in s) or ("rice" in s and "egg" in s):
+        return [
+            "Koka 2 dl ris enligt förpackningen (ca 12 min).",
+            "Stek 2 ägg i 1 msk olja 3–4 min. Krydda med salt och peppar.",
+            f"Fräs grönt ({join}) 2–3 min. Ringla sojasås om du har.",
+            "Servera riset med stekt ägg och grönt.",
+        ]
+    if has("pesto") or "pesto" in s:
+        return [
+            "Koka pasta enligt förpackningen i saltat vatten.",
+            f"Häll av pastan. Rör ner pesto och övrigt: {join}.",
+            "Smaka av med salt och peppar. Servera direkt.",
+        ]
+    if "carbonara" in s:
+        return [
+            "Koka spaghetti enligt förpackningen. Spara 1 dl pastavatten.",
+            "Stek bacon knaprigt. Vispa ägg med parmesan och svartpeppar.",
+            "Rör ihop het pasta, bacon och äggblandning av plattan (sås ska inte bli äggröra).",
+            "Smaka av med salt och peppar. Servera genast.",
+        ]
+    if "lasagne" in s or "lasagna" in s:
+        return [
+            f"Fräs gul lök, vitlök och grönsaker ({join}) i 1 msk olja. Tillsätt krossade tomater, sjud 10 min.",
+            "Varva lasagneplattor, sås och ost i en form.",
+            "Gratinera i ugn 200° i 25–30 min. Vila 5 min. Servera.",
+        ]
+    if has("grädde") and has("kyckling") or ("gryta" in s and has("kyckling", "chicken")):
+        return [
+            "Skär kycklingfilé i bitar. Fräs i 1 msk olja 5–6 min.",
+            f"Tillsätt lök och övrigt: {join}. Häll i grädde och sjud 10–12 min.",
+            "Smaka av med salt och peppar. Servera varmt (med ris endast om ris finns i listan).",
+        ]
+
+    # Generic but dish-aware: name every main ingredient, no invented sides
+    return [
+        f"Skölj och skär det som behövs: {join}.",
+        f"Hetta upp 1 msk olja i en panna eller gryta. Tillaga huvudråvarorna 6–10 min.",
+        f"Tillsätt resten ({join}). Låt sjuda eller steka 5–8 min. Smaka av med salt och peppar.",
+        "Servera varmt. Klart.",
+    ]
+
+
 def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
     """Deterministic Swedish cook steps for known dishes (metric)."""
     s = (suggestion or "").lower()
-    join = ", ".join(ingredients[:6])
+    names = _hint_tokens(ingredients)
+    pantry = {"salt", "peppar", "olja", "smör", "vatten", "svartpeppar"}
+    mains = [n for n in names if n not in pantry]
+    join = ", ".join(mains[:10]) if mains else ", ".join(names[:8])
+    blob = " ".join(names)
     protein = _missing_main_protein(suggestion, [])  # canonical from name, if any
     # If protein already in ingredients, still resolve display name from aliases
     if protein is None:
@@ -885,7 +1021,7 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
         return [
             "Skölj och strimla sallad (ca 4 dl). Skär 1 gurka i kuber.",
             "Öppna 1 burk tonfisk i vatten och låt rinna av.",
-            "Blanda sallad, gurka och tonfisk i en skål. Ringla 1 msk olivaolja.",
+            "Blanda sallad, gurka och tonfisk i en skål. Ringla 1 msk olja.",
             "Krydda med salt och peppar. Servera direkt.",
         ]
     if "äggmacka" in s or ("egg" in s and "sandwich" in s):
@@ -894,37 +1030,63 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Rosta 2 skivor bröd i brödrost eller torr panna (1 min).",
             "Lägg äggen på brödet. Smaka av med salt och peppar. Servera med kaffe.",
         ]
-    if "kycklingwok" in s or ("kyckling" in s and "wok" in s):
+    if (
+        "kycklingwok" in s
+        or ("kyckling" in s and "wok" in s)
+        or ("chicken" in s and "wok" in s)
+        or ("chicken" in s and "stir" in s)
+    ):
+        veg = join or "lök, morot, broccoli, paprika"
         return [
             "Skölj 2 dl ris och koka enligt förpackningen (ca 1,5 dl vatten per dl ris).",
-            "Skär 400 g kycklingfilé i bitar. Strimla grönsakerna (lök, morot, broccoli, paprika).",
+            f"Skär 400 g kycklingfilé i bitar. Strimla grönsakerna ({veg}).",
             "Hetta upp 1 msk olja i en wok. Stek kycklingen 5–6 min tills den är genomstekt.",
             "Tillsätt grönsakerna och stek 4–5 min. Krydda med 2 msk sojasås, salt och peppar.",
             "Servera woket över riset. Klart.",
         ]
-    if "kyckling" in s or "chicken" in s:
+    # Wrap / tortilla BEFORE generic kyckling (else protein+ris template leaks in)
+    if "wrap" in s or "tortilla" in s or "burrito" in s or "quesadilla" in s:
         return [
-            "Skölj 2 dl ris (eller annat tillbehör) och koka enligt förpackningen.",
-            "Skär 400 g kycklingfilé i bitar. Hacka grönsakerna.",
-            "Hetta upp 1 msk olja. Stek kycklingen 6–8 min tills den är genomstekt.",
-            "Tillsätt grönsaker och kryddor. Stek/sjuda 5–8 min. Smaka av med salt och peppar.",
-            "Servera kycklingen med tillbehöret. Klart.",
+            "Värm 2 tortilla i torr panna 20 sek per sida (eller 15 sek i mikro).",
+            "Skär 200 g kycklingfilé i strimlor. Stek i 1 msk olja 5–6 min tills genomstekt. Krydda med salt och peppar.",
+            "Strimla sallad och skär tomat i klyftor.",
+            "Fördela kyckling, sallad och tomat på tortillan. Ringla 2 msk yoghurt ovanpå.",
+            "Rulla ihop wrapen tätt. Servera direkt.",
         ]
-    if "pasta" in s or "tomatsås" in s:
+    if "pesto" in s:
         return [
             "Koka pasta enligt förpackningen i saltat vatten (ca 100 g per person).",
-            "Fräs finhackad gul lök och 1 klyfta vitlök i 1 msk olja i 3 min.",
+            f"Häll av pastan. Rör ner pesto och övrigt: {join}.",
+            "Smaka av med salt och peppar. Toppa med riven parmesan om du har. Servera.",
+        ]
+    if "carbonara" in s:
+        return [
+            "Koka spaghetti enligt förpackningen. Spara 1 dl pastavatten.",
+            f"Stek bacon knaprigt. Vispa ägg med parmesan och svartpeppar. (Ingredienser: {join})",
+            "Rör ihop het pasta, bacon och äggblandning av plattan. Späd med pastavatten.",
+            "Smaka av med salt och peppar. Servera genast.",
+        ]
+    if "lasagne" in s or "lasagna" in s:
+        return [
+            f"Fräs gul lök, vitlök och grönsaker. Tillsätt krossade tomater, sjud 10 min. ({join})",
+            f"Gör en snabb béchamel av smör, mjöl och mjölk om du har. Varva lasagneplattor, sås och ost ({join}).",
+            "Gratinera i ugn 200° i 25–30 min. Vila 5 min. Servera.",
+        ]
+    if "pasta" in s or "tomatsås" in s or "spaghetti" in s:
+        return [
+            "Koka pasta enligt förpackningen i saltat vatten (ca 100 g per person).",
+            f"Fräs finhackad gul lök och vitlök i 1 msk olja i 3 min. ({join})",
             "Häll i 400 g krossade tomater, låt sjuda 8–10 min. Krydda med oregano, salt och peppar.",
             "Rör ihop pastan med såsen. Toppa med riven parmesan.",
         ]
-    if "lins" in s:
+    if "lins" in s or "lentil" in s:
         return [
-            "Skölj 2 dl ris och koka. Skölj 2 dl röda linser.",
+            f"Skölj 2 dl ris och koka. Skölj 2 dl röda linser. Övrigt: {join}.",
             "Fräs lök, vitlök och morot i 1 msk olja i 4 min. Tillsätt curry.",
             "Häll i linser, 4 dl vatten och 2 dl kokosmjölk. Koka 15–18 min.",
             "Rör i spenat sista minuten. Smaka av med salt och peppar. Servera med ris.",
         ]
-    if "havregrynsgröt" in s or ("havregryn" in s and "banan" in s):
+    if "havregrynsgröt" in s or ("havregryn" in s and "banan" in s) or "oatmeal" in s:
         return [
             "Koka upp 2 dl vatten med 1 krm salt (ca 2 min).",
             "Rör ner 1 dl havregryn. Sjud på låg värme 3–4 min under omrörning.",
@@ -950,15 +1112,15 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Häll i äggen och rör långsamt 2–3 min tills röran är krämig. Servera direkt.",
         ]
     if "yoghurt" in s or s.startswith("fil ") or "fil eller" in s or "filmjölk" in s:
-        if "müsli" in s or "musli" in s:
+        if "müsli" in s or "musli" in s or "muesli" in s:
             return [
-                "Häll 2 dl fil i en skål.",
+                f"Häll 2 dl fil i en skål. ({join})",
                 "Strö över 0,5 dl müsli.",
                 "Servera direkt — ingen värme behövs (0 min).",
             ]
         return [
-            "Häll 2 dl fil eller yoghurt i en skål.",
-            "Toppa med frukt eller sylt om du vill.",
+            f"Häll 2 dl fil eller yoghurt i en skål. ({join})",
+            "Toppa med frukt, sylt eller honung om du har.",
             "Servera direkt (0 min).",
         ]
     if "värm en rest" in s or "reheat leftover" in s:
@@ -988,22 +1150,20 @@ def _recipe_steps(suggestion: str, ingredients: list[str]) -> list[str]:
             "Tillsätt nudlar, lök, vitlök, 2 msk sojasås och 1 msk fisksås. Rör om 3–4 min.",
             "Servera med limeklyftor. Smaka av med salt och peppar.",
         ]
+    # Chicken with rice only when ris is actually in the dish/hints
+    if "kyckling" in s or "chicken" in s:
+        if "ris" in s or "ris" in blob or "rice" in s:
+            return [
+                "Skölj 2 dl ris och koka enligt förpackningen.",
+                "Skär 400 g kycklingfilé i bitar. Hacka grönsakerna.",
+                "Hetta upp 1 msk olja. Stek kycklingen 6–8 min tills den är genomstekt.",
+                f"Tillsätt grönsaker ({join}). Stek/sjuda 5–8 min. Smaka av med salt och peppar.",
+                "Servera kycklingen med riset. Klart.",
+            ]
+        return _hint_grounded_steps(suggestion, ingredients)
 
-    if protein:
-        return [
-            f"Förbered ingredienserna: {join}.",
-            f"Tillaga proteinkällan ({protein}) tills den är genomstekt.",
-            "Fräs lök/vitlök i 1 msk olja, tillsätt övrigt och låt sjuda 8–12 min.",
-            "Smaka av med salt och peppar. Servera med tillbehöret.",
-        ]
-
-    return [
-        f"Förbered ingredienserna: {join}.",
-        "Fräs lök och vitlök i 1 msk olja i 3–4 minuter.",
-        "Tillsätt huvudråvaran och övriga ingredienser. Tillaga tills allt är genomstekt (ca 10–15 min).",
-        "Krydda med salt och peppar. Servera med tillbehöret (ris/pasta/bröd).",
-    ]
-
+    # Everything else: category skeleton from the real hint list
+    return _hint_grounded_steps(suggestion, ingredients)
 
 def _norm_item(name: str) -> str:
     n = name.strip().lower()
@@ -1098,10 +1258,8 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
     """Complete ingredient list for known local dishes — never leave protein implied."""
     s = suggestion.lower()
 
-    if (
-        "kycklingwok" in s
-        or ("kyckling" in s and "wok" in s)
-        or ("chicken" in s and ("stir" in s or "wok" in s))
+    if "kycklingwok" in s or ("kyckling" in s and "wok" in s) or (
+        "chicken" in s and ("stir" in s or "wok" in s)
     ):
         return [
             "kycklingfilé",
@@ -1112,6 +1270,17 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
             "paprika (färsk)",
             "ris",
             "sojasås",
+            "olja",
+            "salt",
+            "peppar",
+        ]
+    if "wrap" in s or "tortilla" in s or "burrito" in s:
+        return [
+            "tortilla",
+            "kycklingfilé",
+            "sallad",
+            "tomat",
+            "yoghurt",
             "olja",
             "salt",
             "peppar",

@@ -243,7 +243,7 @@ def lunch_pack(language: str = "sv") -> list[dict[str, Any]]:
             meal_type="lunch",
             minutes=12,
             ingredients=["tortilla", "kycklingfilé", "sallad", "tomat", "yoghurt"],
-            dish_category="sandwich",
+            dish_category="wrap",
         ),
         _dish(
             "Ris med stekt ägg och grönt" if sv else "Rice with fried egg and greens",

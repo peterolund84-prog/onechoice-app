@@ -139,7 +139,7 @@ class NutritionUiPlacementTests(unittest.TestCase):
         self.assertNotIn("kcal", blob)
         self.assertNotIn("näringsvärden saknas", blob)
 
-    def test_recipe_block_shows_approx_line_when_on(self) -> None:
+    def test_recipe_block_shows_stat_row_when_on(self) -> None:
         import app as app_mod
 
         recipe = shopping.build_recipe(
@@ -155,13 +155,20 @@ class NutritionUiPlacementTests(unittest.TestCase):
             with mock.patch.object(app_mod.st, "session_state", {"language": "sv"}):
                 app_mod.render_recipe_block(recipe, show_nutrition=True)
         blob = " ".join(html_chunks)
-        self.assertIn("oc-nutrition", blob)
-        self.assertIn("Ca ", blob)
-        self.assertIn("kcal", blob)
-        self.assertIn("protein", blob)
-        # Directly under RECEPT title, before ingredients
+        self.assertIn("oc-nut-stats", blob)
+        self.assertIn("oc-nut-val", blob)
+        self.assertIn("KCAL", blob)
+        self.assertIn("PROTEIN", blob)
+        self.assertIn("FETT", blob)
+        self.assertIn("KOLH", blob)
+        self.assertIn("Per portion", blob)
+        self.assertIn("oc-nut-per", blob)
+        # No boxed legacy sentence on the recipe card
+        self.assertNotIn("oc-nutrition", blob)
+        self.assertNotIn("Ca ", blob)
+        # Stat row sits under RECEPT title, before ingredients
         title_i = blob.lower().find("recept")
-        nut_i = blob.find("Ca ")
+        nut_i = blob.find("oc-nut-stats")
         ings_i = blob.find("Ingredienser") if "Ingredienser" in blob else blob.lower().find("ingredients")
         self.assertGreater(nut_i, title_i)
         self.assertLess(nut_i, ings_i)
@@ -178,8 +185,8 @@ class NutritionUiPlacementTests(unittest.TestCase):
             with mock.patch.object(app_mod.st, "session_state", {"language": "sv"}):
                 with mock.patch.object(
                     app_mod,
-                    "_nutrition_display_line",
-                    return_value=("Näringsvärden saknas", False),
+                    "_nutrition_stat_row_html",
+                    return_value="",
                 ):
                     app_mod.render_recipe_block(
                         {"title": "X", "ingredients": [], "steps": ["Ät"]},
@@ -188,6 +195,7 @@ class NutritionUiPlacementTests(unittest.TestCase):
         blob = " ".join(html_chunks)
         self.assertNotIn("Näringsvärden saknas", blob)
         self.assertNotIn("kcal", blob.lower())
+        self.assertNotIn("oc-nut-stats", blob)
 
     def test_decision_result_has_no_nutrition_copy(self) -> None:
         """Decision card path must not surface kcal (opt-in lives in profile + recipe card)."""
@@ -225,7 +233,7 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         raw["food"] = food
         db.update_user(uid, profile_json=raw)
 
-    def test_profile_nutrition_shows_ca_line_on_execute(self) -> None:
+    def test_profile_nutrition_shows_stat_row_on_execute(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
@@ -240,16 +248,18 @@ class NutritionExecuteFlowTests(unittest.TestCase):
                 break
         self.assertEqual(at.session_state["page"], "execute")
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("Ca ", body)
-        self.assertIn("kcal", body.lower())
-        self.assertIn("protein", body.lower())
-        self.assertIn("oc-nutrition", body)
+        self.assertIn("oc-nut-stats", body)
+        self.assertIn("KCAL", body)
+        self.assertIn("PROTEIN", body)
+        self.assertIn("FETT", body)
+        self.assertIn("KOLH", body)
+        self.assertIn("Per portion", body)
         self.assertNotIn("oc-nut-banner", body)
         self.assertNotIn("None", body)
-        self.assertRegex(body, r"Ca\s+\d+\s*kcal")
+        self.assertNotRegex(body, r"Ca\s+\d+\s*kcal")
 
     def test_legacy_history_recipe_without_fields_on_execute(self) -> None:
-        """Old accepted decision missing nutrition fields must still paint a line."""
+        """Old accepted decision missing nutrition fields must still paint a stat row."""
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
@@ -277,8 +287,8 @@ class NutritionExecuteFlowTests(unittest.TestCase):
         self.assertEqual(at.session_state["page"], "execute")
         self.assertFalse(at.exception)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("Ca ", body)
-        self.assertIn("kcal", body.lower())
+        self.assertIn("oc-nut-stats", body)
+        self.assertIn("KCAL", body)
         self.assertNotIn("Näringsvärden saknas", body)
         self.assertNotIn("None", body)
 
