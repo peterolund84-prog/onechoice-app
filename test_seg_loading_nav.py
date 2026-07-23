@@ -235,10 +235,34 @@ class NavBleedTests(unittest.TestCase):
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
+        # Compact footer: 64px + safe-area, 44px pills, 4px icon/label gap
+        self.assertIn("min-height: calc(64px + env(safe-area-inset-bottom))", bar)
+        self.assertIn("padding: 8px 0.4rem calc(8px + env(safe-area-inset-bottom))", bar)
+        self.assertIn("min-height: 44px !important", bar)
+        self.assertIn("gap: 4px !important", bar)
+        # Content clears nav + 16px
+        self.assertIn("calc(80px + env(safe-area-inset-bottom))", css)
+        self.assertNotIn("calc(88px + env(safe-area-inset-bottom))", css)
         # Dead legacy nav generations must stay gone
         self.assertNotIn(".oc-nav-btns-marker", css)
         self.assertNotIn(".st-key-oc_nav_pills", css)
         self.assertNotIn(".oc-nav {", css)
+
+    def test_input_instructions_chrome_hidden(self) -> None:
+        """English Streamlit 'Press Enter… · 0/200' must never paint over placeholders."""
+        css = _styles()
+        self.assertIn('[data-testid="InputInstructions"]', css)
+        self.assertRegex(
+            css,
+            r'\[data-testid="InputInstructions"\][\s\S]{0,400}?display:\s*none\s*!important',
+        )
+        import router as rt
+
+        self.assertEqual(rt.MAX_INPUT_CHARS, 200)
+        # Char limit still enforced on the disclosed home field
+        import app as app_mod
+
+        self.assertIn("max_chars=rt.MAX_INPUT_CHARS", open(app_mod.__file__, encoding="utf-8").read())
 
 
 if __name__ == "__main__":
