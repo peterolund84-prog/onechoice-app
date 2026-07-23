@@ -133,18 +133,23 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         css = _styles()
         src = open(app_mod.__file__, encoding="utf-8").read()
-        # Hide prior cards under skeleton — but NEVER on result (leftover
-        # .oc-skel-card from st.html would blank the dish image otherwise).
-        self.assertIn(
-            "body:has(.oc-skel-card):not(:has(.oc-result)):not(:has(.oc-exec-lock))",
+        # Hide prior cards only while decide_slot hosts the skeleton — never
+        # via broad body:has(.oc-skel-card) (orphaned st.html blanked images).
+        self.assertIn('st-key-decide_slot"] .oc-skel-card', css)
+        self.assertIn('st-key-decide_slot"] [data-oc-deciding]', css)
+        self.assertNotIn(
+            "body:has(.oc-skel-card):not(:has(.oc-result))",
             css,
         )
+        # Result/execute hard-override keeps dish image visible
         self.assertIn(
-            "body:has([data-oc-deciding]):not(:has(.oc-result)):not(:has(.oc-exec-lock))",
+            ".block-container:has(.oc-result) .oc-food-img",
             css,
         )
         self.assertIn("data-oc-deciding", src)
         self.assertIn("_decide_skel_painted", src)
+        self.assertIn("oc-app-css-head", src)
+        self.assertIn("read_css(BUILD_ID)", src)
 
     def test_page_deciding_marks_slot_painted(self) -> None:
         """Cold Bestäm åt mig must not remount decide_slot (DuplicateElementKey → ui_error)."""
@@ -169,7 +174,10 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         self.assertIn("def _dynamic_css_block", src)
         # Must NOT skip injection on later reruns (unstyled app)
         self.assertNotIn("_oc_css_injected", src)
-        self.assertNotIn("oc-app-css-head", src)
+        # May mention oc-app-css-head only to REMOVE leftover head CSS — never re-inject
+        self.assertNotIn('id="oc-app-css-head"', src)
+        self.assertIn("oc-app-css-head", src)  # cleanup script
+        self.assertIn("read_css(BUILD_ID)", src)
         # Ghost wipe hacks removed after perf pass
         self.assertNotIn("inject_app_runtime", src)
         self.assertNotIn("_oc_pending_nav_runtime_html", src)

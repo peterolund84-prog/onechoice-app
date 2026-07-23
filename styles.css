@@ -1245,14 +1245,11 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     width: 100% !important;
     max-width: 100% !important;
 }
-/* While deciding / skeleton is up: hide ANY prior real decision card
-   (Streamlit can leave the previous run's card dimmed underneath).
-   Never apply on result/execute hosts — a leftover .oc-skel-card from
-   st.html would otherwise hide the real card (no dish image). */
-body:has([data-oc-deciding]):not(:has(.oc-result)):not(:has(.oc-exec-lock)):not(:has(.oc-exec-meta-slot)):not(:has([class*="st-key-exec_food_host"]))
-  .oc-decision:not(.oc-skel-card),
-body:has(.oc-skel-card):not(:has(.oc-result)):not(:has(.oc-exec-lock)):not(:has(.oc-exec-meta-slot)):not(:has([class*="st-key-exec_food_host"]))
-  .oc-decision:not(.oc-skel-card) {
+/* While deciding: hide prior real decision cards ONLY while the active
+   decide_slot hosts a skeleton. Never match orphaned leftover .oc-skel-card
+   nodes from prior st.html (those used to blank the dish image on result). */
+body:has([class*="st-key-decide_slot"] .oc-skel-card) .oc-decision:not(.oc-skel-card),
+body:has([class*="st-key-decide_slot"] [data-oc-deciding]) .oc-decision:not(.oc-skel-card) {
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;
@@ -1262,6 +1259,29 @@ body:has(.oc-skel-card):not(:has(.oc-result)):not(:has(.oc-exec-lock)):not(:has(
     opacity: 0 !important;
     pointer-events: none !important;
     visibility: hidden !important;
+}
+/* Hard override: result/execute food cards must stay visible even if a stale
+   stylesheet (e.g. leftover #oc-app-css-head) still has the old hide rule. */
+.block-container:has(.oc-result) .oc-decision,
+.block-container:has(.oc-result) .oc-decision.oc-food-decision,
+[class*="st-key-exec_food_host"] .oc-decision {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    max-height: none !important;
+    pointer-events: auto !important;
+}
+.block-container:has(.oc-result) .oc-food-img,
+[class*="st-key-exec_food_host"] .oc-food-img {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    max-height: none !important;
+    width: 100% !important;
+    aspect-ratio: 16 / 10 !important;
+    object-fit: cover !important;
 }
 /* No page-wide dim while deciding — keep chrome crisp */
 body:has(.oc-skel-card) [data-testid="stStatusWidget"],
