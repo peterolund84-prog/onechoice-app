@@ -993,6 +993,26 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     margin: 0 !important;
     padding: 0 !important;
 }
+/* Hide result/meal CTAs outside the result page — Streamlit can leave
+   keyed widgets (Välj / Nytt förslag / meal seg) ghost-visible after lock. */
+body:not(:has(.oc-result)) .st-key-result_primary_btn,
+body:not(:has(.oc-result)) .st-key-result_secondary_btn,
+body:not(:has(.oc-result)) [class*="st-key-food_go_for_it"],
+body:not(:has(.oc-result)) [class*="st-key-reroll_btn"],
+body:not(:has(.oc-result)) [class*="st-key-do_it_primary"],
+body:not(:has(.oc-result)) [class*="st-key-fridge_cook_accept"],
+body:not(:has(.oc-result)) [class*="st-key-fridge_shop_escape"],
+body:not(:has(.oc-result)) [class*="st-key-meal_seg_"],
+body:not(:has(.oc-result)) .st-key-meal_seg {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
 /* Decision page: header → 24px → content (kill the ~270px dead band) */
 .block-container:has(.oc-result) {
     padding-top: calc(52px + env(safe-area-inset-top) + 24px) !important;

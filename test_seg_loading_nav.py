@@ -184,6 +184,11 @@ class TimeBasedSkeletonTests(unittest.TestCase):
         css = _styles()
         self.assertNotIn("html.oc-pending", css)
         self.assertNotIn("#oc-nav-wipe", css)
+        # Orphan CTA belt is back (without the old "Hard kill" comment / nav-wipe)
+        self.assertIn(
+            "body:not(:has(.oc-result)) .st-key-result_primary_btn",
+            css,
+        )
         self.assertNotIn("Hard kill: result/meal CTAs", css)
         self.assertIn("Kollar vad du åt senast", open(app_mod.__file__, encoding="utf-8").read())
         self.assertIn("oc-status-cycle", css)
