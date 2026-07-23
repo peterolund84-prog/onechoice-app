@@ -7079,12 +7079,14 @@ def page_shared() -> None:
                 unsafe_allow_html=True,
             )
     else:
-        detail = ctx.get("execution_detail")
-        if detail:
-            st.markdown(
-                f'<p class="oc-meta">{html.escape(str(detail))}</p>',
-                unsafe_allow_html=True,
-            )
+        # Movie: skip "Sök X · Netflix" meta — CTA/link is enough
+        if domain != "movie":
+            detail = ctx.get("execution_detail")
+            if detail:
+                st.markdown(
+                    f'<p class="oc-meta">{html.escape(str(detail))}</p>',
+                    unsafe_allow_html=True,
+                )
         exec_url = payload.get("execution_url")
         if exec_url:
             label = payload.get("execution_label") or t("do_it")
