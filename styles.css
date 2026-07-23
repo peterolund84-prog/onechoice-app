@@ -61,18 +61,39 @@
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20aria-hidden%3D%22true%22%3E%3Cpath%20d%3D%22M4%208h3l2-2h6l2%202h3v10H4z%22/%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2213%22%20r%3D%223%22/%3E%3C/svg%3E");
 }
 
-html, body, .stApp, [data-testid="stAppViewContainer"],
-[data-testid="stAppViewContainer"] > .main,
-section.main, .main .block-container {
-    background: var(--oc-bg) !important;
-    background-color: var(--oc-bg) !important;
-    background-image: none !important;
+/* Flat fill only on leaf containers — keep .stApp free for atmosphere below */
+html, body,
+[data-testid="stAppViewContainer"] > .main .block-container,
+.main .block-container {
+    background-color: transparent !important;
 }
 html, body, .stApp, [data-testid="stAppViewContainer"] {
     font-family: "Inter", "Helvetica Neue", sans-serif !important;
     font-weight: 400;
     color: var(--oc-ink) !important;
     -webkit-font-smoothing: antialiased;
+}
+/* Soft atmosphere — warm mist gradient + faint grain (not flat white) */
+.stApp,
+[data-testid="stAppViewContainer"],
+.stApp > header,
+section.main,
+[data-testid="stAppViewContainer"] > .main {
+    background:
+        radial-gradient(90% 55% at 50% -8%, rgba(59, 59, 196, 0.07) 0%, rgba(59, 59, 196, 0) 62%),
+        linear-gradient(180deg, #F6F5F1 0%, #FAFAF7 42%, #F2F1EC 100%) !important;
+    background-color: #FAFAF7 !important;
+}
+.stApp::before {
+    content: "" !important;
+    position: fixed !important;
+    inset: 0 !important;
+    pointer-events: none !important;
+    z-index: 0 !important;
+    opacity: 0.035 !important;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") !important;
+    background-repeat: repeat !important;
+    background-size: 180px 180px !important;
 }
 h1, h2, h3, h4, h5, h6, .oc-logo, .oc-decision h1, .oc-pro h2 {
     font-family: "Sora", "Inter", sans-serif !important;
@@ -287,10 +308,10 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     margin: 0 !important;
     box-sizing: border-box !important;
     min-height: 52px !important;
-    background: rgba(250, 250, 247, 0.72) !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05) !important;
+    background: rgba(246, 245, 241, 0.55) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04) !important;
     pointer-events: none !important;
 }
 .oc-header-wordmark, .oc-header .oc-logo {
@@ -300,9 +321,9 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     margin: 0 !important;
     padding: 0 !important;
     font-family: "Sora", "Inter", sans-serif !important;
-    font-size: 22px !important;
+    font-size: 26px !important;
     font-weight: 700 !important;
-    letter-spacing: -0.02em !important;
+    letter-spacing: -0.03em !important;
     color: var(--oc-ink) !important;
     text-align: center !important;
     line-height: 1.1 !important;
@@ -321,7 +342,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 .st-key-home_hero {
     position: relative !important;
     width: 100% !important;
-    margin: 0 0 48px !important;
+    margin: 8px 0 56px !important;
     padding: 0 !important;
     max-height: none !important;
     min-height: 0 !important;
@@ -341,19 +362,25 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 .st-key-home_hero .oc-hero-orb {
     position: absolute;
     left: 50%;
-    top: 0;
-    width: 55vw;
-    height: 55vw;
-    max-width: 280px;
-    max-height: 280px;
+    top: 8%;
+    width: 70vw;
+    height: 70vw;
+    max-width: 320px;
+    max-height: 320px;
     margin: 0;
-    background: radial-gradient(circle, rgba(79, 70, 229, 0.9) 0%, rgba(79, 70, 229, 0) 68%);
-    filter: blur(60px);
-    opacity: 0.12;
+    /* Soft indigo bloom — presence without purple glow cliché */
+    background: radial-gradient(
+        circle,
+        rgba(59, 59, 196, 0.22) 0%,
+        rgba(59, 59, 196, 0.06) 42%,
+        rgba(59, 59, 196, 0) 72%
+    );
+    filter: blur(48px);
+    opacity: 0.9;
     pointer-events: none;
     z-index: 0;
     transform: translateX(-50%) translateY(-42%);
-    animation: oc-orb-breathe 8s ease-in-out infinite alternate;
+    animation: oc-orb-breathe 9s ease-in-out infinite alternate;
     overflow: hidden;
     clip-path: inset(-40% -20% 20% -20%);
 }
@@ -364,23 +391,36 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     z-index: 1100 !important;
 }
 @keyframes oc-orb-breathe {
-    from { transform: translateX(-50%) translateY(-42%) scale(1); }
-    to { transform: translateX(-50%) translateY(-42%) scale(1.06); }
+    from { transform: translateX(-50%) translateY(-42%) scale(1); opacity: 0.75; }
+    to { transform: translateX(-50%) translateY(-42%) scale(1.08); opacity: 1; }
 }
 .oc-hero-title {
     position: relative;
     z-index: 1;
     display: block;
     font-family: "Sora", "Inter", sans-serif !important;
-    font-size: clamp(38px, 10vw, 52px) !important;
+    font-size: clamp(40px, 11vw, 56px) !important;
     font-weight: 700 !important;
-    letter-spacing: -0.02em !important;
-    line-height: 1.05 !important;
+    letter-spacing: -0.035em !important;
+    line-height: 1.02 !important;
     color: var(--oc-ink) !important;
     text-align: center !important;
-    margin: 0 0 28px !important;
+    margin: 0 0 12px !important;
     padding: 0 !important;
     width: 100% !important;
+}
+.oc-hero-sub {
+    position: relative;
+    z-index: 1;
+    display: block;
+    margin: 0 0 28px !important;
+    padding: 0 12px !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 400 !important;
+    line-height: 1.4 !important;
+    color: var(--oc-muted) !important;
+    text-align: center !important;
 }
 .st-key-home_hero [data-testid="stHeaderActionElements"],
 .st-key-home_hero a.header-anchor {
@@ -411,15 +451,20 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     line-height: 1.2 !important;
     text-align: center !important;
     text-decoration: none !important;
-    box-shadow: none !important;
-    transition: opacity 150ms ease !important;
+    box-shadow: 0 8px 24px rgba(59, 59, 196, 0.18) !important;
+    transition: opacity 150ms ease, transform 150ms ease, box-shadow 150ms ease !important;
     min-height: 52px !important;
 }
 .st-key-home_hero div.stButton > button:hover,
 .st-key-home_hero div.stButton > button:focus {
     color: #fff !important;
-    opacity: 0.92 !important;
+    opacity: 0.94 !important;
     background: #3B3BC4 !important;
+    box-shadow: 0 10px 28px rgba(59, 59, 196, 0.22) !important;
+}
+.st-key-home_hero div.stButton > button:active {
+    transform: scale(0.985) !important;
+    box-shadow: 0 4px 14px rgba(59, 59, 196, 0.16) !important;
 }
 .st-key-home_weekend_alt {
     margin: 8px 0 0 !important;
@@ -429,17 +474,17 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 .oc-section-label {
     display: block !important;
     font-size: 11px !important;
-    letter-spacing: 0.1em !important;
+    letter-spacing: 0.12em !important;
     text-transform: uppercase !important;
     color: var(--oc-muted) !important;
     font-weight: 600 !important;
     text-align: center !important;
-    margin: 0 0 12px !important;
+    margin: 0 0 16px !important;
     padding: 0 !important;
     font-family: "Inter", sans-serif !important;
 }
 .st-key-home_domains {
-    margin: 0 0 20px !important;
+    margin: 0 0 28px !important;
     padding: 0 !important;
     width: 100% !important;
 }
@@ -475,6 +520,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     padding: 0 !important;
     width: 100% !important;
 }
+/* Quiet domain rows — light wash, not heavy white cards */
 [class*="st-key-home_domain_"] div.stButton > button,
 [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"],
 [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"],
@@ -488,11 +534,11 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     min-height: 52px !important;
     height: 52px !important;
     max-height: 52px !important;
-    background: #fff !important;
-    background-color: #fff !important;
+    background: rgba(255, 255, 255, 0.42) !important;
+    background-color: rgba(255, 255, 255, 0.42) !important;
     border-radius: 14px !important;
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+    border: 1px solid rgba(0, 0, 0, 0.045) !important;
+    box-shadow: none !important;
     box-sizing: border-box !important;
     color: var(--oc-ink) !important;
     font-family: "Inter", sans-serif !important;
@@ -506,7 +552,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     text-overflow: ellipsis !important;
     text-decoration: none !important;
     text-underline-offset: unset !important;
-    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease !important;
+    transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease !important;
     -webkit-tap-highlight-color: transparent !important;
 }
 [class*="st-key-home_domain_"] div.stButton > button:hover,
@@ -514,10 +560,10 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"]:hover,
 [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"]:hover {
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
-    border-color: rgba(0, 0, 0, 0.1) !important;
-    background: #fff !important;
-    background-color: #fff !important;
+    box-shadow: none !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+    background: rgba(255, 255, 255, 0.72) !important;
+    background-color: rgba(255, 255, 255, 0.72) !important;
     color: var(--oc-ink) !important;
     text-decoration: none !important;
 }

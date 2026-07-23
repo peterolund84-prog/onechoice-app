@@ -132,7 +132,9 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-nav-clip-height-v91-20260723"
+BUILD_ID = "premium-home-hide-lang-v92-20260723"
+# Keep i18n + lang_bar() for later; hide the SV/EN control while we ship Swedish-first.
+SHOW_LANG_TOGGLE = False
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -142,6 +144,7 @@ I18N = {
         "ask": "Vad behöver du bestämma?",
         "decide": "Bestäm åt mig",
         "home_or_choose": "Eller välj själv",
+        "home_hero_sub": "Ett tryck — jag tar beslutet.",
         "home_free_disclose": "Något annat?",
         "home_free_placeholder": "Vad ska du bestämma?",
         "home_free_submit": "Bestäm",
@@ -354,6 +357,7 @@ I18N = {
         "ask": "What do you need decided?",
         "decide": "Decide for me",
         "home_or_choose": "Or choose yourself",
+        "home_hero_sub": "One tap — I’ll decide.",
         "home_free_disclose": "Something else?",
         "home_free_placeholder": "What do you need to decide?",
         "home_free_submit": "Decide",
@@ -1783,7 +1787,17 @@ def _clear_action_query_params() -> None:
 
 
 def lang_bar() -> None:
-    """Compact SV · EN — session-safe pills in keyed fixed top-right container."""
+    """Compact SV · EN — session-safe pills in keyed fixed top-right container.
+
+    When SHOW_LANG_TOGGLE is False the control is not rendered (Swedish-first),
+    but the helper stays so we can re-enable without ripping out i18n.
+    """
+    if not SHOW_LANG_TOGGLE:
+        # Lock product language while the toggle is hidden.
+        if st.session_state.get("language") != "sv":
+            st.session_state.language = "sv"
+        return
+
     lang = st.session_state.language
     if lang not in ("sv", "en"):
         lang = "sv"
@@ -2099,10 +2113,12 @@ def _start_fridge_flow() -> None:
 
 def render_home_hero(inferred: dict[str, Any]) -> None:
     headline = html.escape(str(inferred.get("headline") or ""))
+    sub = html.escape(t("home_hero_sub"))
     st.markdown(
         '<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<div class="oc-hero">'
         f'<div class="oc-hero-title" role="heading" aria-level="1">{headline}</div>'
+        f'<p class="oc-hero-sub">{sub}</p>'
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -4365,8 +4381,10 @@ def _format_nutrition_fallback(
     return f"Ca {k_i} kcal per portion · {p_i} g protein"
 
 
-def render_top_chrome(*, extra_class: str = "", show_lang: bool = True) -> None:
-    """Fixed frosted header: OneChoice wordmark + SV/EN (lang pills overlay right)."""
+def render_top_chrome(*, extra_class: str = "", show_lang: bool | None = None) -> None:
+    """Fixed frosted header: OneChoice wordmark (+ optional SV/EN overlay)."""
+    if show_lang is None:
+        show_lang = SHOW_LANG_TOGGLE
     extra = f" {extra_class}" if extra_class else ""
     st.markdown(
         f'<header class="oc-header{extra}" aria-label="OneChoice">'
@@ -4376,6 +4394,8 @@ def render_top_chrome(*, extra_class: str = "", show_lang: bool = True) -> None:
     )
     if show_lang:
         lang_bar()
+    elif not SHOW_LANG_TOGGLE and st.session_state.get("language") != "sv":
+        st.session_state.language = "sv"
 
 
 def render_share_landing_chrome() -> None:
@@ -6768,18 +6788,21 @@ def handle_query_params() -> None:
         pass
     lang = _qp_one(qp.get("lang"))
     if lang in ("sv", "en"):
-        st.session_state.language = lang
-        if st.session_state.user_id:
-            require_auth_context()
-            try:
-                db.update_user(st.session_state.user_id, language=lang)
-            except Exception as exc:
-                log.warning("%s failed: %s", "handle_query_params", exc)
+        # Language query is a hidden escape hatch — ignore while Swedish-first.
+        if SHOW_LANG_TOGGLE:
+            st.session_state.language = lang
+            if st.session_state.user_id:
+                require_auth_context()
+                try:
+                    db.update_user(st.session_state.user_id, language=lang)
+                except Exception as exc:
+                    log.warning("%s failed: %s", "handle_query_params", exc)
         try:
             del st.query_params["lang"]
         except Exception as exc:
             log.warning("%s failed: %s", "handle_query_params", exc)
-        st.rerun()
+        if SHOW_LANG_TOGGLE:
+            st.rerun()
 
     if st.session_state.page == "auth" and not _is_authenticated() and not st.session_state.get("guest_mode"):
         return

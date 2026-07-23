@@ -95,6 +95,7 @@ class HomeHeroTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("oc-hero", body)
         self.assertIn("oc-hero-orb", body)
+        self.assertIn("oc-hero-sub", body)
         self.assertIn('<divclass="oc-hero-title"', body.replace(" ", "").lower())
         self.assertNotIn("<h1", body.lower())
         self.assertIn("oc-section-label", body)
@@ -283,6 +284,7 @@ class HomeHeroTests(unittest.TestCase):
             "translateX(-50%)",
             "text-align: center",
             "oc-hero-title",
+            "oc-hero-sub",
             "oc-cta",
             "st-key-home_hero div.stButton",
             "margin: 0 0 28px",
@@ -294,6 +296,7 @@ class HomeHeroTests(unittest.TestCase):
             "oc-section-label",
             "oc-header-wordmark",
             "st-key-home_free_disclose",
+            "linear-gradient(180deg, #F6F5F1",
         ):
             self.assertIn(needle, css, needle)
         # Stacked free-text CTA — no side-by-side column layout
