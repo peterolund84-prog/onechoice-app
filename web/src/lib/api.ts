@@ -1,27 +1,134 @@
+import { getUserId } from "./user";
+import type { Decision, ShoppingItem, UserProfile } from "./types";
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
+  const uid = getUserId();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-User-Id": uid,
+    ...(init?.headers as Record<string, string> | undefined),
+  };
+  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
   }
-  return res.json() as Promise<T>;
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    return res.json() as Promise<T>;
+  }
+  return (await res.text()) as T;
+}
+
+function withUid(path: string): string {
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}user_id=${encodeURIComponent(getUserId())}`;
 }
 
 export const api = {
   home: () => request<Record<string, unknown>>("/v1/home?language=sv"),
+
   decide: (body: {
     question?: string;
     domain_hint?: string | null;
     meal_type?: string | null;
     language?: string;
+    reroll?: boolean;
+    reroll_index?: number;
+    previous_decision_id?: number | null;
   }) =>
-    request<Record<string, unknown>>("/v1/decide", {
+    request<Decision>("/v1/decide", {
       method: "POST",
-      body: JSON.stringify({ language: "sv", ...body }),
+      body: JSON.stringify({ language: "sv", user_id: getUserId(), ...body }),
     }),
+
+  acceptDecision: (decisionId: number, routeLogId?: number | null) =>
+    request<{ ok: boolean; accepted: boolean; decision?: Decision }>(
+      `/v1/decisions/${decisionId}/accept`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          user_id: getUserId(),
+          route_log_id: routeLogId ?? null,
+        }),
+      },
+    ),
+
+  setFavorite: (decisionId: number, favorite: boolean) =>
+    request<{ ok: boolean; decision: Decision }>(
+      `/v1/decisions/${decisionId}/favorite`,
+      {
+        method: "POST",
+        body: JSON.stringify({ user_id: getUserId(), favorite }),
+      },
+    ),
+
+  listDecisions: (opts?: { favorite?: boolean; limit?: number }) => {
+    const q = new URLSearchParams({ user_id: getUserId() });
+    if (opts?.favorite != null) q.set("favorite", String(opts.favorite));
+    if (opts?.limit) q.set("limit", String(opts.limit));
+    return request<{ items: Decision[]; user_id: string }>(
+      `/v1/decisions?${q}`,
+    );
+  },
+
+  getDecision: (id: number) =>
+    request<{ decision: Decision }>(withUid(`/v1/decisions/${id}`)),
+
+  listShopping: () =>
+    request<{ items: ShoppingItem[] }>(withUid("/v1/shopping")),
+
+  addShopping: (name: string) =>
+    request<{ item: ShoppingItem }>("/v1/shopping", {
+      method: "POST",
+      body: JSON.stringify({ name, user_id: getUserId() }),
+    }),
+
+  toggleShopping: (itemId: number, checked: boolean) =>
+    request<{ item: ShoppingItem }>(`/v1/shopping/${itemId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ checked, user_id: getUserId() }),
+    }),
+
+  clearCheckedShopping: (itemIds?: number[]) =>
+    request<{ deleted: number }>("/v1/shopping/checked", {
+      method: "DELETE",
+      body: JSON.stringify({
+        user_id: getUserId(),
+        item_ids: itemIds ?? null,
+      }),
+    }),
+
+  mergeShopping: (decisionId: number | null, toBuy: Record<string, unknown>) =>
+    request<{ added: ShoppingItem[]; count: number }>("/v1/shopping/merge", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: getUserId(),
+        decision_id: decisionId,
+        to_buy: toBuy,
+      }),
+    }),
+
+  shoppingShareText: () =>
+    request<string>(withUid("/v1/shopping/share-text?language=sv")),
+
+  me: () => request<{ user: UserProfile; user_id: string }>(withUid("/v1/me")),
+
+  patchMe: (body: {
+    language?: string;
+    is_pro?: number;
+    profile_json?: Record<string, unknown>;
+  }) =>
+    request<{ user: UserProfile }>("/v1/me", {
+      method: "PATCH",
+      body: JSON.stringify({ user_id: getUserId(), ...body }),
+    }),
+
+  exportMe: () =>
+    request<Record<string, unknown>>(withUid("/v1/me/export")),
+
+  deleteMe: () =>
+    request<{ ok: boolean }>(withUid("/v1/me"), { method: "DELETE" }),
 };

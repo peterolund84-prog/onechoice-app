@@ -108,7 +108,13 @@ export function HomePage() {
         domain_hint: opts.domain_hint ?? null,
         meal_type: opts.meal_type ?? home.meal_type ?? null,
       });
-      sessionStorage.setItem("oc_last_decision", JSON.stringify(result));
+      sessionStorage.setItem(
+        "oc_last_decision",
+        JSON.stringify({
+          ...result,
+          decision_id: (result as { id?: number }).id ?? null,
+        }),
+      );
       navigate("/resultat");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte bestämma just nu.");

@@ -387,3 +387,242 @@ input {
     animation: none;
   }
 }
+
+/* Functional pages — visual polish later */
+.oc-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.oc-page-title {
+  margin: 0;
+  font-family: Sora, Inter, sans-serif;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.oc-page-sub {
+  margin: 0;
+  color: var(--oc-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.oc-mono {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: #8a8a84;
+  word-break: break-all;
+}
+
+.oc-row-form {
+  display: flex;
+  gap: 8px;
+}
+
+.oc-row-form input {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #e5e5e0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.oc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--oc-accent);
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.oc-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.oc-btn-ghost {
+  background: transparent;
+  color: var(--oc-ink);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.oc-btn-danger {
+  background: #b42318;
+}
+
+.oc-text-btn {
+  border: 0;
+  background: transparent;
+  color: var(--oc-accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.oc-empty {
+  margin: 18px 0;
+  color: var(--oc-muted);
+  font-size: 14px;
+}
+
+.oc-group {
+  margin-top: 8px;
+}
+
+.oc-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.oc-group-title {
+  margin: 10px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8a8a84;
+}
+
+.oc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.oc-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 15px;
+}
+
+.oc-check-row.is-done span {
+  text-decoration: line-through;
+  color: var(--oc-muted);
+}
+
+.oc-check-row.oc-inline {
+  margin: 4px 0 8px;
+}
+
+.oc-share-hint {
+  white-space: pre-wrap;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.55);
+  border-radius: 12px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.oc-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.oc-seg button {
+  border: 0;
+  border-radius: 10px;
+  min-height: 36px;
+  background: transparent;
+  color: var(--oc-muted);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.oc-seg button.is-active {
+  background: #fff;
+  color: var(--oc-ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.oc-hist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.oc-hist li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.oc-hist-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+}
+
+.oc-hist-main span {
+  font-size: 12px;
+  color: var(--oc-muted);
+}
+
+.oc-icon-btn {
+  border: 0;
+  background: transparent;
+  color: var(--oc-ink);
+  padding: 6px;
+  cursor: pointer;
+}
+
+.oc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.oc-ok {
+  color: #067647;
+  font-size: 14px;
+}
+
+.oc-reroll-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin: 4px 0 12px;
+}
+
+.oc-reroll-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.oc-reroll-dots span.is-used {
+  background: var(--oc-accent);
+}
