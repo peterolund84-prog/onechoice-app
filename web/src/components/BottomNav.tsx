@@ -29,8 +29,8 @@ export function BottomNav() {
             <>
               <Icon
                 className="oc-nav-icon"
-                strokeWidth={isActive ? 0 : 1.5}
-                fill={isActive ? "currentColor" : "none"}
+                strokeWidth={isActive ? 2 : 1.5}
+                fill="none"
                 aria-hidden
               />
               <span>{label}</span>
