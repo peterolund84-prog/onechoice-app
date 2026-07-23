@@ -40,5 +40,6 @@ export type UserProfile = {
   is_pro?: number | boolean;
   profile_json?: Record<string, unknown> | string;
   guest?: boolean;
+  email?: string;
   created_at?: string;
 };
