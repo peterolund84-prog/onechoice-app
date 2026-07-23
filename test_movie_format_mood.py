@@ -266,6 +266,9 @@ class MovieUiChipTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Format", body)
         self.assertIn("Läge", body)
+        # Never paint "Sök Title · Netflix" under the card — CTA is enough
+        self.assertNotRegex(body, r"Sök\s+.+\s*[·•-]\s*Netflix")
+        self.assertNotIn("Sök ", body)
         # Card is painted via st.html (not markdown) — assert the renderer + session ctx.
         cur = at.session_state["current"] or {}
         ctx = cur.get("context") if isinstance(cur, dict) else {}
@@ -283,6 +286,28 @@ class MovieUiChipTests(unittest.TestCase):
         self.assertIn("AVSNITT", card)
         self.assertNotIn(">FILM<", card)
         self.assertNotIn('class="label oc-movie-kind">FILM', card)
+
+    def test_movie_result_skips_execution_detail_meta(self) -> None:
+        """page_result must not render movie execution_detail (Sök …)."""
+        import inspect
+
+        import app as app_mod
+
+        src = inspect.getsource(app_mod.page_result)
+        self.assertIn('domain not in ("food", "movie")', src)
+        chip_src = inspect.getsource(app_mod.render_movie_format_mood_chips)
+        self.assertIn('key="movie_chips"', chip_src)
+
+    def test_movie_chips_css_prevents_label_overlap(self) -> None:
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
+        self.assertIn(".st-key-movie_chips", css)
+        self.assertIn(".st-key-movie_chips .oc-sec-label", css)
+        self.assertIn(
+            '.st-key-movie_chips [data-testid="stWidgetLabel"]',
+            css,
+        )
 
 
 if __name__ == "__main__":

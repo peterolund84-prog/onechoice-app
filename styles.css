@@ -1908,6 +1908,52 @@ div[data-testid="stCheckbox"] label {
     font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
     color: var(--oc-muted); font-weight: 600; margin: 0.85rem 0 0.35rem;
 }
+/* Movie Format / Läge — clear stack so section labels never overlay chip text */
+.st-key-movie_chips {
+    margin: 0 0 16px !important;
+    padding: 0 !important;
+    width: 100% !important;
+}
+.st-key-movie_chips .oc-sec-label {
+    display: block !important;
+    position: relative !important;
+    z-index: 2 !important;
+    margin: 14px 0 8px !important;
+    line-height: 1.2 !important;
+    pointer-events: none !important;
+}
+.st-key-movie_chips .oc-sec-label:first-child {
+    margin-top: 0 !important;
+}
+.st-key-movie_chips [data-testid="stWidgetLabel"],
+.st-key-movie_format_pills [data-testid="stWidgetLabel"],
+.st-key-movie_mood_pills [data-testid="stWidgetLabel"],
+.st-key-movie_chips label[data-testid="stWidgetLabel"] {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    width: 0 !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+}
+.st-key-movie_chips [data-testid="stButtonGroup"],
+.st-key-movie_format_pills [data-testid="stButtonGroup"],
+.st-key-movie_mood_pills [data-testid="stButtonGroup"],
+.st-key-movie_chips [data-testid="stPills"],
+.st-key-movie_format_pills [data-testid="stPills"],
+.st-key-movie_mood_pills [data-testid="stPills"] {
+    margin: 0 0 4px !important;
+    padding: 0 !important;
+    gap: 8px !important;
+}
+.st-key-movie_chips [data-testid="stElementContainer"],
+.st-key-movie_chips [data-testid="stVerticalBlock"] {
+    margin: 0 !important;
+    gap: 0 !important;
+}
 .oc-pro {
     padding: 2rem 1.5rem; text-align: center; margin-top: 1.5rem;
 }
