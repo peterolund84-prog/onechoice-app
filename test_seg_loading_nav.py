@@ -243,7 +243,6 @@ class NavBleedTests(unittest.TestCase):
         self.assertIn("gap: 2px !important", bar)
         # Marker must collapse — it was eating height and clipping labels
         self.assertIn(".oc-nav-chrome", css)
-        self.assertIn('data-oc-nav="glass"', css)
         # Content clears nav + ~16px
         self.assertIn("calc(72px + env(safe-area-inset-bottom", css)
         self.assertNotIn("calc(88px + env(safe-area-inset-bottom))", css)

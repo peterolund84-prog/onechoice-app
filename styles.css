@@ -732,8 +732,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     pointer-events: auto !important;
 }
 /* Marker must not steal vertical space — it was pushing labels into the clip */
-.st-key-oc_nav_bar .oc-nav-chrome,
-.st-key-oc_nav_bar [data-oc-nav="glass"] {
+.st-key-oc_nav_bar .oc-nav-chrome {
     display: none !important;
     height: 0 !important;
     max-height: 0 !important;
@@ -742,9 +741,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     overflow: hidden !important;
 }
 .st-key-oc_nav_bar [data-testid="stElementContainer"]:has(.oc-nav-chrome),
-.st-key-oc_nav_bar [data-testid="element-container"]:has(.oc-nav-chrome),
-.st-key-oc_nav_bar [data-testid="stElementContainer"]:has([data-oc-nav="glass"]),
-.st-key-oc_nav_bar [data-testid="element-container"]:has([data-oc-nav="glass"]) {
+.st-key-oc_nav_bar [data-testid="element-container"]:has(.oc-nav-chrome) {
     height: 0 !important;
     min-height: 0 !important;
     max-height: 0 !important;
