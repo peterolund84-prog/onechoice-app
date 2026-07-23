@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "css-diet-buttons-v83-20260723"
+BUILD_ID = "home-disclose-freetext-v84-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -142,6 +142,7 @@ I18N = {
         "ask": "Vad behöver du bestämma?",
         "decide": "Bestäm åt mig",
         "home_or_choose": "Eller välj själv",
+        "home_free_disclose": "Något annat?",
         "home_free_placeholder": "Skriv ditt beslut…",
         "home_free_submit": "Bestäm",
         "home_fridge_card": "Fota kylen",
@@ -333,6 +334,7 @@ I18N = {
         "ask": "What do you need decided?",
         "decide": "Decide for me",
         "home_or_choose": "Or choose yourself",
+        "home_free_disclose": "Something else?",
         "home_free_placeholder": "Type your decision…",
         "home_free_submit": "Decide",
         "home_fridge_card": "Snap the fridge",
@@ -1806,6 +1808,8 @@ def _go_home_chooser() -> None:
     """Explicit start-over — show Mat/Kläder chooser, don't resume the last lock."""
     _clear_fridge_session()
     st.session_state["_force_home_chooser"] = True
+    st.session_state.home_free_open = False
+    st.session_state.pop("home_free_input", None)
     st.session_state.page = "home"
     st.rerun()
 
@@ -4513,22 +4517,50 @@ def page_home() -> None:
 
     render_home_domain_grid()
 
-    with st.container(key="home_free_form"):
-        with st.form("home_free_form", clear_on_submit=False, border=False):
-            col_in, col_go = st.columns([5, 1.6], gap="small", vertical_alignment="bottom")
-            with col_in:
-                q = st.text_input(
-                    " ",
-                    label_visibility="collapsed",
-                    key="home_free_input",
-                    placeholder=t("home_free_placeholder"),
-                    max_chars=rt.MAX_INPUT_CHARS,
+    free_open = bool(st.session_state.get("home_free_open"))
+    with st.container(key="home_free_disclose"):
+        if st.button(
+            t("home_free_disclose"),
+            key="home_free_disclose_btn",
+            type="secondary",
+        ):
+            st.session_state.home_free_open = not free_open
+            if not st.session_state.home_free_open:
+                st.session_state.pop("home_free_input", None)
+            st.rerun()
+
+    submitted = False
+    q = ""
+    if free_open:
+        with st.container(key="home_free_form"):
+            with st.form("home_free_form", clear_on_submit=False, border=False):
+                col_in, col_go = st.columns(
+                    [5, 1.6], gap="small", vertical_alignment="bottom"
                 )
-            with col_go:
-                submitted = st.form_submit_button(
-                    t("home_free_submit"),
-                    use_container_width=True,
-                )
+                with col_in:
+                    q = st.text_input(
+                        " ",
+                        label_visibility="collapsed",
+                        key="home_free_input",
+                        placeholder=t("home_free_placeholder"),
+                        max_chars=rt.MAX_INPUT_CHARS,
+                    )
+                with col_go:
+                    submitted = st.form_submit_button(
+                        t("home_free_submit"),
+                        use_container_width=True,
+                    )
+        # Focus the disclosed field after expand (session-safe; no anchors).
+        try:
+            st.html(
+                "<script>try{setTimeout(function(){var i=document.querySelector("
+                "'.st-key-home_free_form input');if(i){i.focus();}},40)}"
+                "catch(e){}</script>",
+                unsafe_allow_javascript=True,
+            )
+        except Exception as exc:
+            log.warning("%s failed: %s", "home_free_focus", exc)
+
     if submitted:
         question = (q or "").strip()
         if not question:
@@ -4536,6 +4568,7 @@ def page_home() -> None:
         elif len(question) > rt.MAX_INPUT_CHARS:
             st.warning(t("too_long"))
         else:
+            st.session_state.home_free_open = False
             run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
     nav()
 

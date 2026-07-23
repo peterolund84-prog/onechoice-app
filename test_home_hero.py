@@ -164,11 +164,30 @@ class HomeHeroTests(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "fridge")
 
+    def test_home_free_text_disclosed_by_default(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        labels = [b.label or "" for b in at.button]
+        disclose = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        self.assertEqual(disclose.label, "Något annat?")
+        self.assertIn("Något annat?", labels)
+        # Collapsed: no free-text input in the tree
+        self.assertEqual(len(list(getattr(at, "text_input", []) or [])), 0)
+        self.assertFalse(any(lab == "Bestäm" for lab in labels), labels)
+
     def test_home_has_free_text_placeholder_not_label(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
+        disclose = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        disclose.click().run()
         placeholders = [
             str(getattr(inp, "placeholder", "") or "")
             for inp in getattr(at, "text_input", [])
@@ -184,12 +203,18 @@ class HomeHeroTests(unittest.TestCase):
         self.assertFalse(any("home_free_input" in lab.lower() for lab in labels), labels)
         self.assertFalse(any("Vad behöver du bestämma?" in lab for lab in labels), labels)
 
-    def test_free_text_form_submits_question(self) -> None:
+    def test_free_text_disclose_toggles_and_submits(self) -> None:
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        self.assertTrue(at.text_input, "home free-text input missing")
+        self.assertEqual(len(list(at.text_input)), 0)
+        disclose = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        disclose.click().run()
+        self.assertTrue(bool(at.session_state["home_free_open"]))
+        self.assertTrue(at.text_input, "expanded free-text input missing")
         submit_btns = [b for b in at.button if b.label == "Bestäm"]
         self.assertTrue(submit_btns, [b.label for b in at.button])
         at.text_input[0].set_value("Vad ska jag laga till middag?").run()
@@ -201,16 +226,40 @@ class HomeHeroTests(unittest.TestCase):
         )
 
     def test_free_text_form_submit_button_click(self) -> None:
-        """Button path (not only Enter) routes the question."""
+        """Button path (not only Enter) routes the question after disclose."""
         from streamlit.testing.v1 import AppTest
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
+        next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        ).click().run()
         at.text_input[0].set_value("Film ikväll").run()
         submit = next(b for b in at.button if b.label == "Bestäm")
         submit.click().run()
         self.assertFalse(at.exception)
         self.assertIn(at.session_state["page"], ("result", "ambiguous", "clothes_occasion"))
+
+    def test_free_text_disclose_collapses_on_second_tap(self) -> None:
+        from streamlit.testing.v1 import AppTest
+
+        at = AppTest.from_file("app.py", default_timeout=60)
+        at.run()
+        disclose = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        disclose.click().run()
+        self.assertGreater(len(list(at.text_input)), 0)
+        disclose = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        disclose.click().run()
+        try:
+            open_flag = bool(at.session_state["home_free_open"])
+        except Exception:
+            open_flag = False
+        self.assertFalse(open_flag)
+        self.assertEqual(len(list(at.text_input)), 0)
 
 
     def test_home_centerline_css_rules(self) -> None:
@@ -232,11 +281,12 @@ class HomeHeroTests(unittest.TestCase):
             "margin: 0 0 28px",
             "margin: 0 0 48px",
             "st-key-home_domain_",
-            "margin: 24px 0 20px",
+            "margin: 4px 0 20px",
             "min-width: 72%",
             "white-space: nowrap",
             "oc-section-label",
             "oc-header-wordmark",
+            "st-key-home_free_disclose",
         ):
             self.assertIn(needle, css, needle)
         self.assertIn('role="heading"', body)

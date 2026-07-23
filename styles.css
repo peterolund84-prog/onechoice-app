@@ -494,8 +494,43 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     color: var(--oc-ink) !important;
     text-decoration: none !important;
 }
+.st-key-home_free_disclose {
+    margin: 8px 0 12px !important;
+    padding: 0 !important;
+    width: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+}
+.st-key-home_free_disclose div.stButton {
+    display: flex !important;
+    justify-content: center !important;
+    width: 100% !important;
+    margin: 0 !important;
+}
+.st-key-home_free_disclose div.stButton > button,
+.st-key-home_free_disclose div.stButton > button[data-testid="baseButton-secondary"],
+.st-key-home_free_disclose div.stButton > button[kind="secondary"] {
+    background: transparent !important;
+    background-color: transparent !important;
+    color: var(--oc-muted) !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    font-family: "Inter", sans-serif !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    text-decoration: underline !important;
+    text-underline-offset: 3px !important;
+    min-height: 2rem !important;
+    height: auto !important;
+    width: auto !important;
+    padding: 0.35rem 0.5rem !important;
+}
+.st-key-home_free_disclose div.stButton > button:hover {
+    color: var(--oc-ink) !important;
+}
 .st-key-home_free_form {
-    margin: 24px 0 20px !important;
+    margin: 4px 0 20px !important;
     padding: 0 !important;
     width: 100% !important;
 }

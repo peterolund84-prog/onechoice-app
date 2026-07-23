@@ -38,6 +38,7 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("translateX(-50%)", css)
         self.assertIn("translateY(-42%)", css)
         self.assertIn("st-key-home_domains", css)
+        self.assertIn("st-key-home_free_disclose", css)
         self.assertIn("st-key-home_free_form", css)
         self.assertIn("var(--oc-accent)", css)
         self.assertNotIn("5A8BFF", css)
@@ -72,6 +73,8 @@ class HomeDesignTests(unittest.TestCase):
         for need in ("Mat", "Kläder", "Film", "Träning", "Helg"):
             self.assertIn(need, labels, labels)
         self.assertIn("Eller välj själv", body)
+        self.assertIn("Något annat?", " ".join(labels))
+        self.assertEqual(len(list(getattr(at, "text_input", []) or [])), 0)
         self.assertIn("SV", body)
         self.assertIn("EN", body)
         self.assertNotIn("build ", body.lower())
