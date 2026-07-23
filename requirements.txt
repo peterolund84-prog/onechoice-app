@@ -3,3 +3,4 @@ supabase>=2.4.0
 requests>=2.31.0
 stripe>=7.0.0
 extra-streamlit-components>=0.1.60
+pytest>=8.0.0

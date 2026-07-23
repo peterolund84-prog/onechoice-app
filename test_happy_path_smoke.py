@@ -34,6 +34,22 @@ class HappyPathSmokeTest(unittest.TestCase):
         self.assertEqual(at.session_state["user_id"], "uid-smoke")
         self.assertFalse(bool(at.session_state["guest_mode"]))
 
+    def _prime_stale_checkbox_state(self, at: AppTest) -> None:
+        """AppTest retains execute checklist widgets across page flips.
+
+        When those widgets are no longer rendered, their keys may be missing
+        from session_state; click().run() then KeyErrors while serializing
+        widget state. Prime any missing checkbox keys before the next run.
+        """
+        for cb in list(at.checkbox):
+            ck = getattr(cb, "key", None)
+            if not isinstance(ck, str) or not ck:
+                continue
+            try:
+                at.session_state[ck]
+            except Exception:
+                at.session_state[ck] = False
+
     def _click_nav(self, at: AppTest, target: str) -> None:
         key = f"nav_{target}"
         matches = [b for b in at.button if getattr(b, "key", None) == key]
@@ -41,6 +57,7 @@ class HappyPathSmokeTest(unittest.TestCase):
             self.fail(
                 f"nav button {key!r} not in {[getattr(b, 'key', None) for b in at.button]}"
             )
+        self._prime_stale_checkbox_state(at)
         matches[-1].click().run()
 
     def test_full_happy_path(self) -> None:

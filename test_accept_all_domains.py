@@ -106,7 +106,7 @@ class ClothesOccasionTests(unittest.TestCase):
         path = str(Path(tmp.name) / "t.db")
         db.init_db(path)
         user = db.ensure_user(language="sv", path=path)
-        with mock.patch("pipeline.random.random", return_value=0.0):
+        with mock.patch.object(pipeline._rng, "random", return_value=0.0):
             r = pipeline.decide(
                 user["id"],
                 "Vad ska jag ha på mig?",
