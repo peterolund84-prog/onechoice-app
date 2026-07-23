@@ -701,8 +701,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     font-weight: 600 !important;
 }
 /* Bottom nav — frosted glass bar (must fully obscure page content below) */
-.st-key-oc_nav_bar,
-.st-key-oc_nav_pills {
+.st-key-oc_nav_bar {
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
@@ -798,91 +797,6 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 }
 .st-key-nav_profile div.stButton > button[kind="primary"]::before,
 .st-key-nav_profile div.stButton > button[data-testid="baseButton-primary"]::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stPills"],
-.st-key-oc_nav_pills [data-testid="stPills"],
-.st-key-oc_nav_bar [data-testid="stButtonGroup"],
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] {
-    display: flex !important;
-    justify-content: space-around !important;
-    width: 100% !important;
-    gap: 0.15rem !important;
-    background: transparent !important;
-}
-.st-key-oc_nav_bar button,
-.st-key-oc_nav_pills button,
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button {
-    flex: 1 1 0 !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 999px !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    font-family: "Inter", sans-serif !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
-    min-height: 3rem !important;
-    padding: 0.3rem 0.35rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 0.15rem !important;
-    line-height: 1.1 !important;
-    transition: background 150ms ease, color 150ms ease !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button::before {
-    content: "" !important;
-    display: block !important;
-    width: 22px !important;
-    height: 22px !important;
-    background: center / contain no-repeat !important;
-    opacity: 0.72 !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(1)::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(1)::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(2)::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(2)::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(3)::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(3)::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5l3 2'/%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(4)::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(4)::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar button[aria-checked="true"],
-.st-key-oc_nav_pills button[aria-checked="true"] {
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-    background: rgba(59, 59, 196, 0.12) !important;
-    border: none !important;
-}
-.st-key-oc_nav_bar button[aria-checked="true"]::before,
-.st-key-oc_nav_pills button[aria-checked="true"]::before {
-    opacity: 1 !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(1)[aria-checked="true"]::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(1)[aria-checked="true"]::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 11.5 12 5l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(2)[aria-checked="true"]::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(2)[aria-checked="true"]::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(3)[aria-checked="true"]::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(3)[aria-checked="true"]::before {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 8v5l3 2'/%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3C/svg%3E") !important;
-}
-.st-key-oc_nav_bar [data-testid="stButtonGroup"] button:nth-child(4)[aria-checked="true"]::before,
-.st-key-oc_nav_pills [data-testid="stButtonGroup"] button:nth-child(4)[aria-checked="true"]::before {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233B3BC4' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
 }
 .oc-decision {
@@ -1950,78 +1864,6 @@ div[data-testid="stCheckbox"] label {
     font-size: 1.6rem; font-weight: 700; color: var(--oc-ink); margin: 1.1rem 0;
     font-family: "Sora", "Inter", sans-serif !important;
 }
-/* Bottom nav — white bar, top border, accent only on active */
-.oc-nav {
-    position: fixed !important; left: 0 !important; right: 0 !important;
-    transform: none !important;
-    bottom: 0 !important;
-    width: 100% !important; max-width: none !important;
-    z-index: 1100 !important;
-    display: grid !important; grid-template-columns: repeat(4, 1fr) !important;
-    gap: 0 !important;
-    background: #fff !important;
-    border-radius: 0 !important;
-    padding: 0.55rem 0.5rem max(0.55rem, env(safe-area-inset-bottom)) !important;
-    box-shadow: none !important;
-    border: none !important;
-    border-top: 1px solid var(--oc-border) !important;
-}
-.oc-nav a, .oc-nav .oc-nav-item {
-    display: flex !important; flex-direction: column; align-items: center; justify-content: center;
-    gap: 0.2rem; text-decoration: none; color: var(--oc-muted) !important;
-    font-size: 0.68rem; font-weight: 500;
-    padding: 0.35rem 0.15rem; border-radius: 0; line-height: 1.2;
-    background: transparent !important;
-    font-family: "Inter", sans-serif !important;
-}
-.oc-nav a.active, .oc-nav .oc-nav-item.active {
-    background: transparent !important;
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-}
-.oc-nav .oc-ico { width: 1.15rem; height: 1.15rem; display: block; }
-/* Bottom nav buttons — fixed bar, icon+label, no pill chrome */
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] {
-    position: fixed !important;
-    left: 0 !important; right: 0 !important; bottom: 0 !important;
-    z-index: 1100 !important;
-    background: #fff !important;
-    border-top: 1px solid var(--oc-border) !important;
-    padding: 0.45rem 0.35rem max(0.45rem, env(safe-area-inset-bottom)) !important;
-    margin: 0 !important;
-}
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] div[data-testid="stHorizontalBlock"] {
-    gap: 0 !important;
-}
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] div.stButton > button,
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] button[data-testid="baseButton-secondary"],
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"] {
-    background: transparent !important;
-    color: var(--oc-muted) !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    outline: none !important;
-    font-family: "Inter", sans-serif !important;
-    font-size: 0.68rem !important;
-    font-weight: 500 !important;
-    min-height: 2.85rem !important;
-    padding: 0.25rem 0.1rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 0.15rem !important;
-    white-space: normal !important;
-    line-height: 1.15 !important;
-}
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] button[data-testid="baseButton-primary"],
-div[data-testid="element-container"]:has(.oc-nav-btns-marker) + div[data-testid="element-container"] div.stButton > button[kind="primary"] {
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-}
-/* Fallback if :has() unavailable — still kill borders on bottom-looking buttons */
-.oc-nav-btns-marker { display: none !important; }
 /* Domain / meal pills — ghost chip look (scoped; never style nav/lang) */
 div[data-testid="element-container"]:has(.oc-chip-row) + div[data-testid="element-container"],
 div[data-testid="element-container"]:has(.oc-sec-label) + div[data-testid="element-container"] {
@@ -2199,44 +2041,6 @@ div[data-testid="stHorizontalBlock"] div.stButton {
     border-color: var(--oc-ink) !important;
     color: var(--oc-ink) !important;
     background: transparent !important;
-}
-/* Legacy oc-nav-pills / oc-lang-pills marker CSS removed — use .st-key-oc_nav_bar / .st-key-oc_lang_bar above */
-/* Bottom nav — fixed bar, text only, accent on active (no pill borders) */
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] {
-    position: fixed !important;
-    left: 0 !important; right: 0 !important; bottom: 0 !important;
-    width: 100% !important;
-    z-index: 1100 !important;
-    background: #fff !important;
-    border-top: 1px solid var(--oc-border) !important;
-    padding: 0.55rem 0.5rem max(0.55rem, env(safe-area-inset-bottom)) !important;
-    margin: 0 !important;
-    gap: 0 !important;
-}
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
-    padding: 0 !important;
-}
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"],
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {
-    background: transparent !important;
-    color: var(--oc-muted) !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    outline: none !important;
-    font-family: "Inter", sans-serif !important;
-    font-size: 0.68rem !important;
-    font-weight: 500 !important;
-    min-height: 2.6rem !important;
-    padding: 0.35rem 0.15rem !important;
-}
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"],
-.oc-nav-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
 }
 .oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
 .oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {
