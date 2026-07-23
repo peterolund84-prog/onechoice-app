@@ -1,13 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  Clapperboard,
-  Dumbbell,
-  Refrigerator,
-  Shirt,
-  Soup,
-  TreePalm,
-} from "lucide-react";
+import { Clapperboard, Dumbbell, Soup, TreePalm } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
 
@@ -23,16 +16,13 @@ type HomePayload = {
   domains: { id: DomainId; label: string }[];
 };
 
-const ICONS: Record<DomainId, LucideIcon> = {
+const ICONS: Partial<Record<DomainId, LucideIcon>> = {
   food: Soup,
-  clothes: Shirt, // coat-hanger not in main lucide; Shirt until lab lands
   movie: Clapperboard,
   workout: Dumbbell,
   weekend: TreePalm,
-  fridge: Refrigerator,
 };
 
-// Prefer hanger if available via custom SVG
 function DomainIcon({ id }: { id: DomainId }) {
   if (id === "clothes") {
     return (
@@ -51,7 +41,27 @@ function DomainIcon({ id }: { id: DomainId }) {
       </svg>
     );
   }
+  if (id === "fridge") {
+    return (
+      <svg
+        className="oc-domain-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <rect x="6" y="3" width="12" height="18" rx="2" />
+        <path d="M6 10h12" />
+        <path d="M9 6.5v1" />
+        <path d="M9 13.5v2" />
+      </svg>
+    );
+  }
   const Icon = ICONS[id];
+  if (!Icon) return null;
   return <Icon className="oc-domain-icon" strokeWidth={1.5} aria-hidden />;
 }
 
