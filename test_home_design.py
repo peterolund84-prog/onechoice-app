@@ -54,8 +54,8 @@ class HomeDesignTests(unittest.TestCase):
         # Lang bar CSS kept (toggle can re-enable); atmosphere gradient present
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
-        self.assertIn("linear-gradient(180deg, #F6F5F1", css)
-        self.assertIn("rgba(255, 255, 255, 0.42)", css)
+        self.assertIn("linear-gradient(180deg, #F7F4EC", css)
+        self.assertIn("rgba(255, 255, 255, 0.78)", css)
         self.assertFalse(app_mod.SHOW_LANG_TOGGLE)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:

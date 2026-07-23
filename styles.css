@@ -73,15 +73,15 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     color: var(--oc-ink) !important;
     -webkit-font-smoothing: antialiased;
 }
-/* Soft atmosphere — warm mist gradient + faint grain (not flat white) */
+/* Soft atmosphere — warm mist + faint grain (matches premium mockup) */
 .stApp,
 [data-testid="stAppViewContainer"],
 .stApp > header,
 section.main,
 [data-testid="stAppViewContainer"] > .main {
     background:
-        radial-gradient(90% 55% at 50% -8%, rgba(59, 59, 196, 0.07) 0%, rgba(59, 59, 196, 0) 62%),
-        linear-gradient(180deg, #F6F5F1 0%, #FAFAF7 42%, #F2F1EC 100%) !important;
+        radial-gradient(88% 52% at 50% -6%, rgba(232, 196, 120, 0.28) 0%, rgba(232, 196, 120, 0) 58%),
+        linear-gradient(180deg, #F7F4EC 0%, #FAFAF7 44%, #F3F1EA 100%) !important;
     background-color: #FAFAF7 !important;
 }
 .stApp::before {
@@ -368,15 +368,15 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     max-width: 320px;
     max-height: 320px;
     margin: 0;
-    /* Soft indigo bloom — presence without purple glow cliché */
+    /* Warm gold bloom — matches premium mockup (not indigo wash) */
     background: radial-gradient(
         circle,
-        rgba(59, 59, 196, 0.22) 0%,
-        rgba(59, 59, 196, 0.06) 42%,
-        rgba(59, 59, 196, 0) 72%
+        rgba(236, 196, 110, 0.55) 0%,
+        rgba(236, 196, 110, 0.18) 38%,
+        rgba(236, 196, 110, 0) 72%
     );
-    filter: blur(48px);
-    opacity: 0.9;
+    filter: blur(52px);
+    opacity: 0.95;
     pointer-events: none;
     z-index: 0;
     transform: translateX(-50%) translateY(-42%);
@@ -520,7 +520,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     padding: 0 !important;
     width: 100% !important;
 }
-/* Quiet domain rows — light wash, not heavy white cards */
+/* Quiet domain rows — soft white wash like mockup cards */
 [class*="st-key-home_domain_"] div.stButton > button,
 [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"],
 [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"],
@@ -534,11 +534,11 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     min-height: 52px !important;
     height: 52px !important;
     max-height: 52px !important;
-    background: rgba(255, 255, 255, 0.42) !important;
-    background-color: rgba(255, 255, 255, 0.42) !important;
+    background: rgba(255, 255, 255, 0.78) !important;
+    background-color: rgba(255, 255, 255, 0.78) !important;
     border-radius: 14px !important;
-    border: 1px solid rgba(0, 0, 0, 0.045) !important;
-    box-shadow: none !important;
+    border: 1px solid rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03) !important;
     box-sizing: border-box !important;
     color: var(--oc-ink) !important;
     font-family: "Inter", sans-serif !important;
@@ -552,7 +552,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     text-overflow: ellipsis !important;
     text-decoration: none !important;
     text-underline-offset: unset !important;
-    transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease !important;
+    transition: transform 150ms ease, background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease !important;
     -webkit-tap-highlight-color: transparent !important;
 }
 [class*="st-key-home_domain_"] div.stButton > button:hover,
@@ -560,10 +560,10 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"]:hover,
 [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"]:hover {
     transform: translateY(-1px) !important;
-    box-shadow: none !important;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05) !important;
     border-color: rgba(0, 0, 0, 0.08) !important;
-    background: rgba(255, 255, 255, 0.72) !important;
-    background-color: rgba(255, 255, 255, 0.72) !important;
+    background: rgba(255, 255, 255, 0.92) !important;
+    background-color: rgba(255, 255, 255, 0.92) !important;
     color: var(--oc-ink) !important;
     text-decoration: none !important;
 }

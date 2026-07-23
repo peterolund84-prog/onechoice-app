@@ -296,7 +296,7 @@ class HomeHeroTests(unittest.TestCase):
             "oc-section-label",
             "oc-header-wordmark",
             "st-key-home_free_disclose",
-            "linear-gradient(180deg, #F6F5F1",
+            "linear-gradient(180deg, #F7F4EC",
         ):
             self.assertIn(needle, css, needle)
         # Stacked free-text CTA — no side-by-side column layout
