@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Shared FastAPI helpers (guest SQLite path)."""
+"""Shared FastAPI helpers (guest SQLite + optional Supabase session)."""
 
 from __future__ import annotations
 
@@ -28,6 +28,32 @@ def require_user_id(
     return uid
 
 
+def apply_auth_tokens(
+    access_token: str | None = None,
+    refresh_token: str | None = None,
+) -> bool:
+    """Apply Supabase tokens for RLS, or clear to force local SQLite guest path."""
+    import db
+
+    at = (access_token or "").strip()
+    rt = (refresh_token or "").strip()
+    if at and rt:
+        try:
+            db.set_auth(at, rt)
+            return True
+        except Exception:
+            try:
+                db.clear_auth()
+            except Exception:
+                pass
+            return False
+    try:
+        db.clear_auth()
+    except Exception:
+        pass
+    return False
+
+
 def boot_db_guest() -> None:
     """Init SQLite and clear cloud auth so guest writes stay local."""
     import db
@@ -43,7 +69,11 @@ def boot_db_guest() -> None:
 
 
 def ensure_guest_user(user_id: str, *, language: str = "sv") -> dict[str, Any]:
+    """Ensure user row. Auth tokens (if any) already applied by middleware."""
     import db
 
-    boot_db_guest()
+    try:
+        db.init_db()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"db init failed: {exc}") from exc
     return db.ensure_user(user_id, language=language)

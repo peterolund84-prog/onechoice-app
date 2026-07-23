@@ -851,3 +851,141 @@ input {
 .oc-exec-cta {
   margin-top: 8px;
 }
+
+.oc-nut-stats {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 14px 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.oc-nut-stat {
+  flex: 1 1 0;
+  text-align: center;
+  min-width: 0;
+}
+
+.oc-nut-val {
+  display: block;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.oc-nut-lab {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+}
+
+.oc-assumed {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--oc-muted);
+}
+
+.oc-sec-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+  font-weight: 600;
+  margin: 0.85rem 0 0.35rem;
+}
+
+.oc-chip-block {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 0 12px;
+  text-align: left;
+}
+
+.oc-chip-row,
+.oc-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.oc-chip-grid {
+  margin-top: 12px;
+}
+
+.oc-chip {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--oc-ink);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.oc-chip.is-active,
+.oc-chip.is-suggested {
+  border-color: var(--oc-accent, #1a5cff);
+  color: var(--oc-accent, #1a5cff);
+  background: rgba(26, 92, 255, 0.08);
+}
+
+.oc-link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--oc-accent, #1a5cff);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.oc-input,
+.oc-textarea {
+  width: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font: inherit;
+  background: rgba(255, 255, 255, 0.7);
+  box-sizing: border-box;
+}
+
+.oc-textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.oc-muted-line {
+  font-size: 13px;
+  color: var(--oc-muted);
+  margin-top: 2px;
+}
+
+.oc-nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.oc-nav-badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--oc-accent, #1a5cff);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}

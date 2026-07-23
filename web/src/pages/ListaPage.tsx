@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { isLoggedIn } from "../lib/auth";
 import type { ShoppingItem } from "../lib/types";
 
 const CATEGORY_ORDER = [
@@ -12,6 +14,7 @@ const CATEGORY_ORDER = [
 ];
 
 export function ListaPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -92,7 +95,10 @@ export function ListaPage() {
   async function onShare() {
     try {
       const text = await api.shoppingShareText();
-      if (navigator.clipboard?.writeText) {
+      if (navigator.share) {
+        await navigator.share({ title: "Inköpslista", text });
+        setShareHint("Delad");
+      } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
         setShareHint("Kopierad till urklipp");
       } else {
@@ -106,7 +112,21 @@ export function ListaPage() {
   return (
     <section className="oc-page">
       <h1 className="oc-page-title">Lista</h1>
-      <p className="oc-page-sub">Inköpslista — gästläge sparar lokalt på API:t.</p>
+      <p className="oc-page-sub">
+        {isLoggedIn()
+          ? "Din inköpslista."
+          : "Gästläge — logga in för att spara listan i molnet."}
+      </p>
+      {!isLoggedIn() ? (
+        <button
+          type="button"
+          className="oc-btn oc-btn-ghost"
+          style={{ marginBottom: 12 }}
+          onClick={() => navigate("/login")}
+        >
+          Logga in
+        </button>
+      ) : null}
 
       <form className="oc-row-form" onSubmit={onAdd}>
         <input

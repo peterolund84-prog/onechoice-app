@@ -1,3 +1,4 @@
+import { authHeaders } from "./auth";
 import { getUserId } from "./user";
 import type { Decision, ShoppingItem, UserProfile } from "./types";
 
@@ -9,7 +10,6 @@ function resolveApiBase(): string {
     const host = window.location.hostname;
     const onLan =
       Boolean(host) && host !== "localhost" && host !== "127.0.0.1";
-    // Phone on Wi‑Fi must not call 127.0.0.1 (that is the phone itself).
     if (onLan && (!env || /127\.0\.0\.1|localhost/i.test(env))) {
       return `http://${host}:${apiPort}`;
     }
@@ -24,6 +24,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-User-Id": uid,
+    ...authHeaders(),
     ...(init?.headers as Record<string, string> | undefined),
   };
   const ctrl = new AbortController();
@@ -66,24 +67,90 @@ function withUid(path: string): string {
   return `${path}${sep}user_id=${encodeURIComponent(getUserId())}`;
 }
 
+export type DecideBody = {
+  question?: string;
+  domain_hint?: string | null;
+  meal_type?: string | null;
+  format?: string | null;
+  mood?: string | null;
+  in_progress_series?: string | null;
+  occasion?: string | null;
+  intent?: string | null;
+  source?: string | null;
+  available_ingredients?: string[] | null;
+  language?: string;
+  reroll?: boolean;
+  reroll_index?: number;
+  previous_decision_id?: number | null;
+};
+
 export const api = {
   base: API_BASE,
 
   home: () => request<Record<string, unknown>>("/v1/home?language=sv"),
 
-  decide: (body: {
-    question?: string;
-    domain_hint?: string | null;
-    meal_type?: string | null;
-    language?: string;
-    reroll?: boolean;
-    reroll_index?: number;
-    previous_decision_id?: number | null;
-  }) =>
+  domainMeta: () =>
+    request<{
+      meals: { id: string; label: string }[];
+      formats: { id: string; label: string }[];
+      moods: { id: string; label: string }[];
+      occasions: { id: string; label: string }[];
+      default_occasion: string;
+    }>("/v1/meta/domains?language=sv"),
+
+  decide: (body: DecideBody) =>
     request<Decision>("/v1/decide", {
       method: "POST",
       body: JSON.stringify({ language: "sv", user_id: getUserId(), ...body }),
     }),
+
+  executeFood: (body: {
+    suggestion: string;
+    meal_type?: string | null;
+    context?: Record<string, unknown> | null;
+  }) =>
+    request<{
+      ok: boolean;
+      recipe: Record<string, unknown> | null;
+      shopping: Record<string, unknown> | null;
+    }>("/v1/execute/food", {
+      method: "POST",
+      body: JSON.stringify({ user_id: getUserId(), ...body }),
+    }),
+
+  authStatus: () => request<{ configured: boolean }>("/v1/auth/status"),
+
+  login: (email: string, password: string) =>
+    request<{
+      ok: boolean;
+      user_id: string;
+      email?: string;
+      access_token: string;
+      refresh_token: string;
+    }>("/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password, language: "sv" }),
+    }),
+
+  signup: (email: string, password: string, privacyConsent: boolean) =>
+    request<{
+      ok: boolean;
+      user_id: string;
+      email?: string;
+      access_token?: string | null;
+      refresh_token?: string | null;
+    }>("/v1/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        password,
+        language: "sv",
+        privacy_consent: privacyConsent,
+      }),
+    }),
+
+  logout: () =>
+    request<{ ok: boolean }>("/v1/auth/logout", { method: "POST", body: "{}" }),
 
   acceptDecision: (decisionId: number, routeLogId?: number | null) =>
     request<{ ok: boolean; accepted: boolean; decision?: Decision }>(

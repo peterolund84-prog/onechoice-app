@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
 import { api } from "../lib/api";
+import { readAuth } from "../lib/auth";
 
 function displayNameFromUser(user: Record<string, unknown> | null): string | null {
   if (!user) return null;
@@ -21,7 +22,11 @@ function displayNameFromUser(user: Record<string, unknown> | null): string | nul
 }
 
 export function AppShell() {
-  const [name, setName] = useState<string | null>(null);
+  const [name, setName] = useState<string | null>(() => {
+    const auth = readAuth();
+    if (auth?.email?.includes("@")) return auth.email.split("@")[0] || null;
+    return null;
+  });
 
   useEffect(() => {
     let cancelled = false;

@@ -1,6 +1,9 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./layout/AppShell";
+import { AuthPage } from "./pages/AuthPage";
+import { ClothesPage } from "./pages/ClothesPage";
 import { ExecutePage } from "./pages/ExecutePage";
+import { FridgePage } from "./pages/FridgePage";
 import { HomePage } from "./pages/HomePage";
 import { ListaPage } from "./pages/ListaPage";
 import { HistorikPage } from "./pages/HistorikPage";
@@ -17,6 +20,9 @@ export default function App() {
           <Route path="lista" element={<ListaPage />} />
           <Route path="historik" element={<HistorikPage />} />
           <Route path="profil" element={<ProfilPage />} />
+          <Route path="login" element={<AuthPage />} />
+          <Route path="klader" element={<ClothesPage />} />
+          <Route path="kylen" element={<FridgePage />} />
           <Route path="resultat" element={<ResultPage />} />
           <Route path="utfor" element={<ExecutePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,11 +1,13 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink } from "react-router-dom";
-import type { ReactNode } from "react";
+import { api } from "../lib/api";
 
 type NavItem = {
   to: string;
   label: string;
   end?: boolean;
   icon: (active: boolean) => ReactNode;
+  badge?: number;
 };
 
 function IconHome({ active }: { active: boolean }) {
@@ -92,22 +94,50 @@ function IconUser() {
   );
 }
 
-const items: NavItem[] = [
-  {
-    to: "/",
-    label: "Hem",
-    end: true,
-    icon: (active) => <IconHome active={active} />,
-  },
-  { to: "/lista", label: "Lista", icon: () => <IconList /> },
-  { to: "/historik", label: "Historik", icon: () => <IconClock /> },
-  { to: "/profil", label: "Profil", icon: () => <IconUser /> },
-];
-
 export function BottomNav() {
+  const [unchecked, setUnchecked] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      api
+        .listShopping()
+        .then((data) => {
+          if (cancelled) return;
+          setUnchecked(data.items.filter((i) => !i.checked).length);
+        })
+        .catch(() => {
+          /* ignore */
+        });
+    };
+    load();
+    const t = window.setInterval(load, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, []);
+
+  const items: NavItem[] = [
+    {
+      to: "/",
+      label: "Hem",
+      end: true,
+      icon: (active) => <IconHome active={active} />,
+    },
+    {
+      to: "/lista",
+      label: "Lista",
+      icon: () => <IconList />,
+      badge: unchecked,
+    },
+    { to: "/historik", label: "Historik", icon: () => <IconClock /> },
+    { to: "/profil", label: "Profil", icon: () => <IconUser /> },
+  ];
+
   return (
     <nav className="oc-nav" aria-label="Huvudnavigering">
-      {items.map(({ to, label, icon, end }) => (
+      {items.map(({ to, label, icon, end, badge }) => (
         <NavLink
           key={to}
           to={to}
@@ -118,7 +148,12 @@ export function BottomNav() {
         >
           {({ isActive }) => (
             <>
-              {icon(isActive)}
+              <span className="oc-nav-icon-wrap">
+                {icon(isActive)}
+                {badge && badge > 0 ? (
+                  <span className="oc-nav-badge">{badge > 99 ? "99+" : badge}</span>
+                ) : null}
+              </span>
               <span>{label}</span>
             </>
           )}

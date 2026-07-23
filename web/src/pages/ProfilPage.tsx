@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
+import { clearAuth, isLoggedIn, readAuth } from "../lib/auth";
 import { getUserId, resetUserId } from "../lib/user";
 import type { UserProfile } from "../lib/types";
 
@@ -17,10 +19,12 @@ function parseProfile(user: UserProfile): Record<string, unknown> {
 }
 
 export function ProfilPage() {
+  const navigate = useNavigate();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const auth = readAuth();
 
   const load = useCallback(async () => {
     try {
@@ -38,8 +42,10 @@ export function ProfilPage() {
 
   const profile = user ? parseProfile(user) : {};
   const food = (profile.food as Record<string, unknown> | undefined) || {};
-  const showNutrition = Boolean(food.show_nutrition);
+  // Default ON like Streamlit
+  const showNutrition = food.show_nutrition !== false;
   const isPro = Boolean(user?.is_pro);
+  const loggedIn = isLoggedIn() || Boolean(user && user.guest === false);
 
   async function togglePro() {
     setBusy(true);
@@ -91,12 +97,13 @@ export function ProfilPage() {
   }
 
   async function onDelete() {
-    if (!window.confirm("Radera allt lokalt för den här gästen?")) return;
+    if (!window.confirm("Radera allt för den här användaren?")) return;
     setBusy(true);
     try {
       await api.deleteMe();
+      clearAuth();
       resetUserId();
-      setMsg("Konto raderat — ny gäst-id skapad");
+      setMsg("Konto raderat");
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Radering misslyckades");
@@ -105,15 +112,49 @@ export function ProfilPage() {
     }
   }
 
+  async function onLogout() {
+    setBusy(true);
+    try {
+      await api.logout();
+    } catch {
+      /* ignore */
+    }
+    clearAuth();
+    setMsg("Utloggad");
+    setBusy(false);
+    navigate("/login");
+  }
+
   return (
     <section className="oc-page">
       <h1 className="oc-page-title">Profil</h1>
       <p className="oc-page-sub">
-        {user?.guest !== false ? "Gäst / lokal demo" : "Inloggad"}
+        {loggedIn
+          ? auth?.email || user?.email || "Inloggad"
+          : "Gäst / lokal demo"}
       </p>
-      <p className="oc-mono">{getUserId()}</p>
+      {!loggedIn ? <p className="oc-mono">{getUserId()}</p> : null}
 
       <div className="oc-stack">
+        {!loggedIn ? (
+          <button
+            type="button"
+            className="oc-cta"
+            disabled={busy}
+            onClick={() => navigate("/login")}
+          >
+            Logga in / Skapa konto
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="oc-btn oc-btn-ghost"
+            disabled={busy}
+            onClick={onLogout}
+          >
+            Logga ut
+          </button>
+        )}
         <button type="button" className="oc-btn" disabled={busy} onClick={togglePro}>
           {isPro ? "Pro: på (demo)" : "Aktivera Pro (demo)"}
         </button>
@@ -132,10 +173,6 @@ export function ProfilPage() {
           Radera konto
         </button>
       </div>
-
-      <p className="oc-page-sub" style={{ marginTop: 24 }}>
-        Supabase-login kommer i nästa steg. Tills dess sparas allt lokalt via gäst-id.
-      </p>
 
       {msg ? <p className="oc-ok">{msg}</p> : null}
       {error ? <p className="oc-error">{error}</p> : null}

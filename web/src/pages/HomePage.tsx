@@ -121,12 +121,26 @@ export function HomePage() {
         domain_hint: opts.domain_hint ?? null,
         meal_type: opts.meal_type ?? home.meal_type ?? null,
       });
+      if (result.needs_domain_pick) {
+        setError(
+          result.ui_message ||
+            "Välj vad det handlar om — Mat, Film, Träning, Kläder eller Helg.",
+        );
+        return;
+      }
+      if (result.refused || result.ui_message) {
+        setError(
+          result.refusal_message ||
+            result.ui_message ||
+            "Det där är inget beslut just nu.",
+        );
+        return;
+      }
       const decision: Decision = {
         ...result,
         decision_id:
           (result as Decision).decision_id ?? (result as Decision).id ?? null,
       };
-      // Keep full payload (incl. image) in router state; slim copy in sessionStorage.
       try {
         const { image_data_url: _img, ...slim } = decision;
         sessionStorage.setItem("oc_last_decision", JSON.stringify(slim));
@@ -171,7 +185,11 @@ export function HomePage() {
               disabled={busy}
               onClick={() => {
                 if (d.id === "fridge") {
-                  navigate("/profil");
+                  navigate("/kylen");
+                  return;
+                }
+                if (d.id === "clothes") {
+                  navigate("/klader");
                   return;
                 }
                 runDecide({

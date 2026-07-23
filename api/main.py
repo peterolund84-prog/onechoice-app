@@ -8,22 +8,37 @@ import os
 import uuid
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
-from api.deps import boot_db_guest, ensure_guest_user
+from api.deps import apply_auth_tokens, boot_db_guest, ensure_guest_user
 from api.home import infer_home_hero
 
-app = FastAPI(title="OneChoice API", version="0.2.0")
+app = FastAPI(title="OneChoice API", version="0.3.0")
 
 _DEFAULT_ORIGINS = (
     "http://localhost:5173,"
     "http://127.0.0.1:5173,"
-    "http://192.168.1.114:5173"
+    "http://192.168.1.114:5173,"
+    "http://localhost:5174,"
+    "http://127.0.0.1:5174,"
+    "http://192.168.1.114:5174"
 )
 
+class _SupabaseAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        apply_auth_tokens(
+            request.headers.get("X-Access-Token"),
+            request.headers.get("X-Refresh-Token"),
+        )
+        return await call_next(request)
+
+
+# Auth first (inner), CORS last (outer) so preflight always gets headers.
+app.add_middleware(_SupabaseAuthMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -82,6 +97,13 @@ class DecideBody(BaseModel):
     question: str = ""
     domain_hint: str | None = None
     meal_type: str | None = None
+    format: str | None = None
+    mood: str | None = None
+    in_progress_series: str | None = None
+    occasion: str | None = None
+    intent: str | None = None
+    source: str | None = None
+    available_ingredients: list[str] | None = None
     language: str = "sv"
     user_id: str | None = None
     reroll: bool = False
@@ -104,6 +126,22 @@ def decide(
     context_extra: dict[str, Any] = {}
     if body.meal_type and body.meal_type in getattr(fd, "MEAL_TYPES", ()):
         context_extra["meal_type"] = body.meal_type
+    if body.format:
+        context_extra["format"] = body.format
+    if body.mood:
+        context_extra["mood"] = body.mood
+    if body.in_progress_series:
+        context_extra["in_progress_series"] = body.in_progress_series
+    if body.occasion:
+        context_extra["occasion"] = body.occasion
+    if body.intent:
+        context_extra["intent"] = body.intent
+    if body.source:
+        context_extra["source"] = body.source
+    if body.available_ingredients:
+        context_extra["available_ingredients"] = [
+            str(x).strip() for x in body.available_ingredients if str(x).strip()
+        ]
 
     try:
         result = pipeline.decide(
@@ -377,6 +415,202 @@ def shopping_share_text(
     ensure_guest_user(uid)
     items = db.list_shopping_items(uid)
     return share_domain.format_list_share_text(items, language=language)
+
+
+# ── auth (Supabase) ──────────────────────────────────────────────────────────
+
+
+class AuthBody(BaseModel):
+    email: str = Field(..., min_length=3, max_length=200)
+    password: str = Field(..., min_length=6, max_length=200)
+    language: str = "sv"
+    privacy_consent: bool = False
+
+
+class RefreshBody(BaseModel):
+    refresh_token: str = Field(..., min_length=10)
+
+
+@app.get("/v1/auth/status")
+def auth_status() -> dict[str, Any]:
+    import supabase_client as sb
+
+    return {"configured": bool(sb.is_configured())}
+
+
+@app.post("/v1/auth/login")
+def auth_login(body: AuthBody) -> dict[str, Any]:
+    import supabase_client as sb
+
+    if not sb.is_configured():
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    try:
+        sess = sb.sign_in(body.email.strip(), body.password)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    uid = str(sess.get("user_id") or "")
+    if uid:
+        apply_auth_tokens(sess.get("access_token"), sess.get("refresh_token"))
+        ensure_guest_user(uid, language=body.language)
+    return {"ok": True, **sess}
+
+
+@app.post("/v1/auth/signup")
+def auth_signup(body: AuthBody) -> dict[str, Any]:
+    import supabase_client as sb
+
+    if not sb.is_configured():
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    if not body.privacy_consent:
+        raise HTTPException(status_code=400, detail="privacy consent required")
+    try:
+        sess = sb.sign_up(body.email.strip(), body.password, language=body.language)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    uid = str(sess.get("user_id") or "")
+    if uid and sess.get("access_token") and sess.get("refresh_token"):
+        apply_auth_tokens(sess.get("access_token"), sess.get("refresh_token"))
+        ensure_guest_user(uid, language=body.language)
+    return {"ok": True, **sess}
+
+
+@app.post("/v1/auth/refresh")
+def auth_refresh(body: RefreshBody) -> dict[str, Any]:
+    import supabase_client as sb
+
+    if not sb.is_configured():
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    try:
+        sess = sb.refresh_session(body.refresh_token)
+    except Exception as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    uid = str(sess.get("user_id") or "")
+    if uid:
+        apply_auth_tokens(sess.get("access_token"), sess.get("refresh_token"))
+        ensure_guest_user(uid)
+    return {"ok": True, **sess}
+
+
+@app.post("/v1/auth/logout")
+def auth_logout(
+    x_access_token: str | None = Header(default=None, alias="X-Access-Token"),
+    x_refresh_token: str | None = Header(default=None, alias="X-Refresh-Token"),
+) -> dict[str, Any]:
+    import supabase_client as sb
+
+    try:
+        sb.sign_out(x_access_token, x_refresh_token)
+    except Exception:
+        pass
+    boot_db_guest()
+    return {"ok": True}
+
+
+# ── domain options / execute heal ────────────────────────────────────────────
+
+
+@app.get("/v1/meta/domains")
+def domain_meta(language: str = "sv") -> dict[str, Any]:
+    import clothes_domain as cd
+    import food_domain as fd
+    import movie_domain as md
+
+    if language not in ("sv", "en"):
+        language = "sv"
+    meals = [
+        {"id": m, "label": fd.meal_type_label(m, language) if hasattr(fd, "meal_type_label") else m}
+        for m in getattr(fd, "MEAL_TYPES", ("frukost", "lunch", "middag", "kvallsmal"))
+    ]
+    # Fallback Swedish labels if helper missing
+    meal_labels = {
+        "frukost": "Frukost",
+        "lunch": "Lunch",
+        "middag": "Middag",
+        "kvallsmal": "Kvällsmål",
+    }
+    meals = [{"id": m["id"], "label": meal_labels.get(m["id"], m["label"])} for m in meals]
+    formats = [
+        {"id": k, "label": md.format_label(k, language)} for k in md.FORMAT_ORDER
+    ]
+    moods = [{"id": k, "label": md.mood_label(k, language)} for k in md.MOOD_ORDER]
+    occasions = [
+        {"id": k, "label": cd.occasion_label(k, language)} for k in cd.OCCASION_ORDER
+    ]
+    return {
+        "meals": meals,
+        "formats": formats,
+        "moods": moods,
+        "occasions": occasions,
+        "default_occasion": cd.default_occasion(__import__("datetime").datetime.now().hour),
+    }
+
+
+class ExecuteFoodBody(BaseModel):
+    user_id: str | None = None
+    suggestion: str = ""
+    meal_type: str | None = "middag"
+    context: dict[str, Any] | None = None
+
+
+@app.post("/v1/execute/food")
+def execute_food(
+    body: ExecuteFoodBody,
+    x_user_id: str | None = Header(default=None, alias="X-User-Id"),
+) -> dict[str, Any]:
+    """Heal/materialize recipe + shopping for the execute surface (local catalog)."""
+    import shopping as shopping_mod
+    import shopping_compat as shop_compat
+
+    uid = _uid(body.user_id, x_user_id)
+    ensure_guest_user(uid)
+    ctx = dict(body.context or {})
+    suggestion = str(body.suggestion or ctx.get("title") or "").strip()
+    meal_type = str(body.meal_type or ctx.get("meal_type") or "middag")
+    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
+    shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+    if not recipe and shop and isinstance(shop.get("recipe"), dict):
+        recipe = shop.get("recipe")
+
+    seed_ings: list[str] = []
+    if isinstance(recipe, dict):
+        seed_ings = [
+            str(x)
+            for x in (recipe.get("ingredient_lines") or recipe.get("ingredients") or [])
+        ]
+    try:
+        bundled_recipe, bundled_shop = shop_compat.resolve_meal_bundle(
+            suggestion,
+            meta={"meal_type": meal_type, "ingredients": seed_ings},
+            meal_type=meal_type,
+            language="sv",
+            grok_api_key="",
+            include_shopping=True,
+        )
+        if bundled_recipe and (
+            not isinstance(recipe, dict) or not recipe.get("steps")
+        ):
+            recipe = bundled_recipe
+        if bundled_shop and not shop:
+            shop = bundled_shop
+    except Exception:
+        pass
+
+    if isinstance(recipe, dict):
+        try:
+            recipe = shopping_mod.ensure_recipe_nutrition(
+                recipe, suggestion=suggestion, allow_estimate=True
+            )
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "suggestion": suggestion,
+        "meal_type": meal_type,
+        "recipe": recipe,
+        "shopping": shop,
+        "user_id": uid,
+    }
 
 
 # ── profile ──────────────────────────────────────────────────────────────────

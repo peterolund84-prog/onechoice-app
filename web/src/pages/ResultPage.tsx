@@ -9,6 +9,11 @@ import {
   saveDecision,
 } from "../lib/decisionStorage";
 import { resolveDishPublicPath } from "../lib/dishImage";
+import {
+  FORMAT_OPTIONS,
+  MEAL_OPTIONS,
+  MOOD_OPTIONS,
+} from "../lib/domainMeta";
 import type { Decision } from "../lib/types";
 
 const MAX_REROLLS = 3;
@@ -258,9 +263,23 @@ export function ResultPage() {
     setBusy(true);
     setError(null);
     try {
+      const ctx =
+        current.context && typeof current.context === "object"
+          ? current.context
+          : {};
       const next = await api.decide({
         question: "",
         domain_hint: current.domain ?? null,
+        meal_type:
+          current.domain === "food"
+            ? String(ctx.meal_type || "middag")
+            : null,
+        format: current.domain === "movie" ? String(ctx.format || "") || null : null,
+        mood: current.domain === "movie" ? String(ctx.mood || "") || null : null,
+        occasion:
+          current.domain === "clothes"
+            ? String(ctx.occasion || "") || null
+            : null,
         reroll: true,
         reroll_index: rerolls + 1,
         previous_decision_id: id,
@@ -272,6 +291,48 @@ export function ResultPage() {
       navigate("/resultat", { state: { decision: next }, replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte ge nytt förslag");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function redecideWith(extra: {
+    meal_type?: string;
+    format?: string;
+    mood?: string;
+  }) {
+    const current = decision;
+    if (!current || accepted || locked) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const ctx =
+        current.context && typeof current.context === "object"
+          ? current.context
+          : {};
+      const next = await api.decide({
+        question: "",
+        domain_hint: current.domain ?? null,
+        meal_type:
+          extra.meal_type ??
+          (current.domain === "food"
+            ? String(ctx.meal_type || "middag")
+            : null),
+        format:
+          extra.format ??
+          (current.domain === "movie" ? String(ctx.format || "") || null : null),
+        mood:
+          extra.mood ??
+          (current.domain === "movie" ? String(ctx.mood || "") || null : null),
+        reroll: false,
+        reroll_index: 0,
+      });
+      autoAcceptKey.current = null;
+      saveDecision(next);
+      setDecision(next);
+      navigate("/resultat", { state: { decision: next }, replace: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kunde inte uppdatera");
     } finally {
       setBusy(false);
     }
@@ -365,6 +426,82 @@ export function ResultPage() {
         </div>
       </div>
 
+      {!accepted && !locked && decision.domain === "food" ? (
+        <div className="oc-chip-block">
+          <div className="oc-sec-label">Måltid</div>
+          <div className="oc-chip-row">
+            {MEAL_OPTIONS.map((m) => {
+              const active =
+                String(
+                  (decision.context && typeof decision.context === "object"
+                    ? decision.context.meal_type
+                    : "") || "",
+                ) === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`oc-chip${active ? " is-active" : ""}`}
+                  disabled={busy}
+                  onClick={() => redecideWith({ meal_type: m.id })}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {!accepted && !locked && decision.domain === "movie" ? (
+        <div className="oc-chip-block">
+          <div className="oc-sec-label">Format</div>
+          <div className="oc-chip-row">
+            {FORMAT_OPTIONS.map((m) => {
+              const active =
+                String(
+                  (decision.context && typeof decision.context === "object"
+                    ? decision.context.format
+                    : "") || "",
+                ) === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`oc-chip${active ? " is-active" : ""}`}
+                  disabled={busy}
+                  onClick={() => redecideWith({ format: m.id })}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="oc-sec-label">Läge</div>
+          <div className="oc-chip-row">
+            {MOOD_OPTIONS.map((m) => {
+              const active =
+                String(
+                  (decision.context && typeof decision.context === "object"
+                    ? decision.context.mood
+                    : "") || "",
+                ) === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={`oc-chip${active ? " is-active" : ""}`}
+                  disabled={busy}
+                  onClick={() => redecideWith({ mood: m.id })}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
       <h1 className="oc-result-title">{decision.suggestion || "—"}</h1>
       {locked || accepted ? <div className="oc-lock">Låst</div> : null}
       {locked && !accepted ? (
@@ -382,7 +519,13 @@ export function ResultPage() {
       <div className="oc-stack" style={{ width: "100%", maxWidth: 320 }}>
         {!accepted ? (
           <button type="button" className="oc-cta" disabled={busy} onClick={onAccept}>
-            Välj
+            {decision.domain === "workout"
+              ? "Starta passet"
+              : decision.domain === "clothes"
+                ? "Bygg outfiten"
+                : decision.domain === "movie" || decision.domain === "weekend"
+                  ? decision.execution_label || "Kör"
+                  : "Välj"}
           </button>
         ) : null}
 
