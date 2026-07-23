@@ -111,6 +111,10 @@ class HomeHeroTests(unittest.TestCase):
         css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         self.assertIn("st-key-home_domain_", css)
         self.assertGreaterEqual(css.count("data:image/svg+xml"), 6)
+        # Lucide motifs (muted) — soup / coat-hanger / clapperboard / palm / fridge
+        self.assertIn("%236B6B66", css)  # muted stroke
+        self.assertIn("M12%2021a9%209%200%200%200%209-9H3", css)  # soup bowl
+        self.assertIn("M5%206a4%204%200%200%201%204-4h6", css)  # refrigerator
         self.assertNotIn("▯", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)
