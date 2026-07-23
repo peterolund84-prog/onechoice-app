@@ -32,6 +32,7 @@ export type Decision = {
   user_id?: string;
   accepted?: boolean;
   route_log_id?: number | null;
+  image_data_url?: string | null;
 };
 
 export type UserProfile = {

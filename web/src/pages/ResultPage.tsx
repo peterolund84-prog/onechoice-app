@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Heart, Share2 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Decision } from "../lib/types";
@@ -41,6 +41,9 @@ function moviePoster(d: Decision): string | null {
 }
 
 function mediaSrc(d: Decision): string | null {
+  if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
+    return d.image_data_url;
+  }
   if (d.domain === "food" && d.suggestion) {
     const q = new URLSearchParams({ title: d.suggestion });
     const hint = dishHint(d);
@@ -69,9 +72,9 @@ export function ResultPage() {
       <section className="oc-result">
         <h1 className="oc-result-title">Inget beslut ännu</h1>
         <p className="oc-result-sub">Gå tillbaka till Hem och tryck Bestäm åt mig.</p>
-        <Link className="oc-cta oc-cta-link" to="/">
+        <button type="button" className="oc-cta" onClick={() => navigate("/")}>
           Till Hem
-        </Link>
+        </button>
       </section>
     );
   }
@@ -83,9 +86,9 @@ export function ResultPage() {
         <p className="oc-result-body">
           {decision.refusal_message || decision.ui_message}
         </p>
-        <Link className="oc-cta oc-cta-link" to="/">
+        <button type="button" className="oc-cta" onClick={() => navigate("/")}>
           Tillbaka
-        </Link>
+        </button>
       </section>
     );
   }
@@ -291,13 +294,6 @@ export function ResultPage() {
             Lägg till i listan
           </button>
         ) : null}
-
-        <button type="button" className="oc-text-link" onClick={() => navigate("/")}>
-          Nytt beslut
-        </button>
-        <Link className="oc-text-link" to="/lista">
-          Till listan
-        </Link>
       </div>
 
       {msg ? <p className="oc-ok">{msg}</p> : null}

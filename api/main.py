@@ -121,6 +121,23 @@ def decide(
 
     payload = result.to_dict() if hasattr(result, "to_dict") else dict(result)
     payload["user_id"] = user_id
+
+    # Embed dish image so mobile Resultat never depends on a second media fetch.
+    if payload.get("domain") == "food":
+        try:
+            import dish_images as dimg
+
+            ctx = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+            hint = ctx.get("dish_category") or ctx.get("category")
+            b64 = dimg.resolve_dish_image_b64(
+                str(payload.get("suggestion") or ""),
+                str(hint) if hint else None,
+            )
+            if b64:
+                payload["image_data_url"] = f"data:image/jpeg;base64,{b64}"
+        except Exception:
+            pass
+
     return payload
 
 
