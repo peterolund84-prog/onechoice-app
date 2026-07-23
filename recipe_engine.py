@@ -110,6 +110,94 @@ def _ingredient_line(ing: dict[str, Any]) -> str:
     return name
 
 
+# Alternatives that must never appear as separate lines (double quantity / nutrition).
+_OR_INGREDIENT_GROUPS: tuple[tuple[str, ...], ...] = (
+    ("fil", "yoghurt", "filmjölk", "filmjolk"),
+)
+
+
+def _bare_ing_name(raw: Any) -> str:
+    if isinstance(raw, dict):
+        return _norm_title(str(raw.get("name") or ""))
+    text = _strip_qty_from_name(str(raw or ""))
+    return _norm_title(text)
+
+
+def _coalesce_or_ingredients(items: list[Any]) -> list[Any]:
+    """Merge 'fil' + 'yoghurt' (+ filmjölk) into one 'fil eller yoghurt' row."""
+    if not items:
+        return items
+    names = [_bare_ing_name(x) for x in items]
+    drop: set[int] = set()
+    inserts: list[tuple[int, Any]] = []
+
+    for group in _OR_INGREDIENT_GROUPS:
+        idxs = [i for i, n in enumerate(names) if n in group and i not in drop]
+        # Also treat already-combined names as hits for that group
+        combo_idxs = [
+            i
+            for i, n in enumerate(names)
+            if i not in drop and " eller " in n and any(g in n for g in group)
+        ]
+        if combo_idxs and idxs:
+            # Keep the combined row; drop the split ones
+            drop.update(idxs)
+            continue
+        if len(idxs) < 2:
+            continue
+        # Prefer amount/unit from the first structured dict in the group
+        template: dict[str, Any] | None = None
+        for i in idxs:
+            if isinstance(items[i], dict):
+                template = dict(items[i])
+                break
+        label_parts = []
+        for g in group:
+            if g in ("filmjolk",):
+                continue
+            if any(names[i] == g for i in idxs):
+                label_parts.append("filmjölk" if g == "filmjölk" else g)
+        # Canonical Swedish label for dairy alt
+        if set(label_parts) >= {"fil", "yoghurt"} or (
+            "fil" in label_parts and "yoghurt" in label_parts
+        ):
+            label = "fil eller yoghurt"
+        elif label_parts:
+            label = " eller ".join(label_parts)
+        else:
+            continue
+        drop.update(idxs)
+        if template is not None:
+            merged = dict(template)
+            merged["name"] = label
+            inserts.append((idxs[0], merged))
+        else:
+            # String lines — keep first amount/unit if present
+            first = str(items[idxs[0]] or "")
+            m = re.search(
+                rf"(\d+[.,]?\d*)\s*({_UNIT_TOKEN})\b",
+                first,
+                flags=re.I,
+            )
+            if m:
+                inserts.append((idxs[0], f"{label} {m.group(1)} {m.group(2)}"))
+            else:
+                inserts.append((idxs[0], label))
+
+    if not drop and not inserts:
+        return items
+    out: list[Any] = []
+    insert_map = {i: v for i, v in inserts}
+    for i, item in enumerate(items):
+        if i in insert_map:
+            out.append(insert_map[i])
+        elif i in drop:
+            continue
+        else:
+            out.append(item)
+    return out
+
+
 _UNIT_TOKEN = (
     r"dl|g|kg|msk|tsk|krm|st|burk|skiva|skivor|klyfta|klyftor|förp|ask|blad|kopp"
 )
@@ -213,24 +301,40 @@ def _food_covered_by_ings(food: str, ing_names: list[str]) -> bool:
     return False
 
 
+def _ingredient_mirrors_title(title: str, name: str) -> bool:
+    t = _norm_title(title)
+    n = _norm_title(name)
+    if not t or not n:
+        return False
+    if n == t:
+        return True
+    # Long ingredient names that mirror the dish title (stub pattern)
+    min_len = max(12, int(len(t) * 0.6))
+    return len(n) >= min_len and (n in t or t in n)
+
+
 def _title_in_ingredients(title: str, ingredients: list[Any]) -> bool:
+    """True when the dish title is used as a stub ingredient with nothing else real."""
     t = _norm_title(title)
     if not t:
         return False
+    names: list[str] = []
     for raw in ingredients:
         if isinstance(raw, dict):
             n = _norm_title(str(raw.get("name") or ""))
         else:
-            n = _norm_title(str(raw))
-        if not n:
-            continue
-        if n == t:
-            return True
-        # Long ingredient names that mirror the dish title (stub pattern)
-        min_len = max(12, int(len(t) * 0.6))
-        if len(n) >= min_len and (n in t or t in n):
-            return True
-    return False
+            n = _bare_ing_name(raw)
+        if n:
+            names.append(n)
+    if not names:
+        return False
+    has_title = any(_ingredient_mirrors_title(t, n) for n in names)
+    if not has_title:
+        return False
+    # Dishes like "Fil eller yoghurt" legitimately list that as the main line
+    # plus toppings — only reject title-only stubs.
+    others = [n for n in names if not _ingredient_mirrors_title(t, n)]
+    return len(others) == 0
 
 
 def _step_is_concrete(step: str) -> bool:
@@ -352,12 +456,16 @@ def _round_nutrition_block(nut: dict[str, Any]) -> dict[str, int]:
 def _finalize_recipe(raw: dict[str, Any], *, source: str) -> dict[str, Any]:
     """Normalize to app-facing recipe dict."""
     title = str(raw.get("title") or "")
-    structured = list(raw.get("ingredients") or [])
-    lines = list(raw.get("ingredient_lines") or [])
+    structured = _coalesce_or_ingredients(list(raw.get("ingredients") or []))
+    lines = _coalesce_or_ingredients(list(raw.get("ingredient_lines") or []))
     if not lines and structured and isinstance(structured[0], dict):
         lines = [_ingredient_line(i) for i in structured if isinstance(i, dict)]
     if not lines:
         lines = [str(x) for x in structured if x]
+    # Coalesce again after line materialization (covers mixed shapes)
+    lines = [str(x) for x in _coalesce_or_ingredients(lines)]
+    if structured and isinstance(structured[0], dict):
+        structured = _coalesce_or_ingredients(structured)
     portions = max(1, int(raw.get("portions") or raw.get("portioner") or 1))
     nut_raw = raw.get("nutrition") if isinstance(raw.get("nutrition"), dict) else {}
     rounded = _round_nutrition_block(nut_raw)
@@ -549,8 +657,12 @@ _CATALOG: dict[str, dict[str, Any]] = {
         "portions": 1,
         "total_minutes": 2,
         "ingredients": [
-            {"name": "fil", "amount": "2", "unit": "dl", "category": "assumed_home"},
-            {"name": "yoghurt", "amount": "2", "unit": "dl", "category": "assumed_home"},
+            {
+                "name": "fil eller yoghurt",
+                "amount": "2",
+                "unit": "dl",
+                "category": "assumed_home",
+            },
             {"name": "honung", "amount": "1", "unit": "tsk", "category": "assumed_home"},
         ],
         "steps": [

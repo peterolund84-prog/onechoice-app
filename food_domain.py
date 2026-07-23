@@ -373,7 +373,7 @@ def meal_candidates(
                     "active_minutes": 1,
                     "no_cook": True,
                     "assume_at_home_only": True,
-                    "ingredients": ["fil"],
+                    "ingredients": ["fil eller yoghurt"],
                 },
             },
         ]

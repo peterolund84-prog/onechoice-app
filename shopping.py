@@ -758,8 +758,21 @@ def ensure_recipe_nutrition(
     payloads without nutrition stay safe (no raise).
     """
     out = dict(recipe or {})
+    # Merge "fil"+"yoghurt" style alternatives before estimating nutrition
+    try:
+        import recipe_engine as reng
+
+        for key in ("ingredients", "ingredient_lines", "ingredients_structured"):
+            raw = out.get(key)
+            if isinstance(raw, list) and raw:
+                out[key] = reng._coalesce_or_ingredients(raw)
+    except Exception:
+        pass
     title = str(out.get("title") or suggestion or "")
-    ings = [str(x) for x in (out.get("ingredients") or [])]
+    ings = [
+        str(x)
+        for x in (out.get("ingredient_lines") or out.get("ingredients") or [])
+    ]
     kcal, protein, portions = read_recipe_nutrition(out)
 
     if not nutrition_fields_valid(kcal, protein, portions) and allow_estimate:
@@ -1332,14 +1345,17 @@ def _infer_full_ingredients(suggestion: str) -> list[str]:
             ings.insert(1, "ost")
         return ings
     if "müsli" in s or "musli" in s:
-        if "fil" in s or "filmjölk" in s:
+        if "fil" in s or "filmjölk" in s or "yoghurt" in s:
             return ["fil", "müsli"]
     if "yoghurt" in s or "fil eller" in s or s.startswith("fil ") or "filmjölk" in s:
         if "müsli" in s or "musli" in s:
             return ["fil", "müsli"]
+        # Never list fil + yoghurt as two rows (that doubles quantity/nutrition)
         if "fil" in s and "yoghurt" in s:
-            return ["fil", "yoghurt", "honung"]
-        return ["fil", "honung"]
+            return ["fil eller yoghurt", "honung"]
+        if "yoghurt" in s and "fil" not in s and "filmjölk" not in s:
+            return ["yoghurt", "honung"]
+        return ["fil eller yoghurt", "honung"]
     if "poke" in s or "poké" in s or ("lax" in s and "bowl" in s):
         return [
             "lax",
