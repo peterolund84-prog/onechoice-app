@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-movie-skel-copy-v89-20260723"
+BUILD_ID = "fix-nav-clip-height-v91-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -871,12 +871,19 @@ def inject_css() -> None:
         f'<style id="oc-app-css">{css}</style>',
         unsafe_allow_html=True,
     )
-    # Remove leftover parent-head stylesheet from the short-lived first-paint
-    # experiment (perf pass) — stale rules there can hide result cards forever.
+    # viewport-fit=cover so env(safe-area-inset-*) is non-zero on iOS Safari;
+    # without it the fixed footer sits under the browser chrome and clips labels.
     try:
         st.html(
-            "<script>try{var n=document.getElementById('oc-app-css-head');"
-            "if(n)n.remove()}catch(e){}</script>",
+            "<script>try{"
+            "var m=document.querySelector('meta[name=viewport]');"
+            "if(m){var c=m.getAttribute('content')||'';"
+            "if(c.indexOf('viewport-fit')<0){"
+            "m.setAttribute('content',c+(c?',':'')+'viewport-fit=cover');"
+            "}}"
+            "var n=document.getElementById('oc-app-css-head');"
+            "if(n)n.remove()"
+            "}catch(e){}</script>",
             unsafe_allow_javascript=True,
         )
     except Exception as exc:
@@ -5173,34 +5180,35 @@ def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
     if st.session_state.get("movie_mood_pills") not in md.MOODS:
         st.session_state.movie_mood_pills = current_mood
 
-    st.markdown(
-        f'<p class="oc-sec-label">{html.escape("Format" if language == "sv" else "Format")}</p>',
-        unsafe_allow_html=True,
-    )
-    fmt_choice = st.pills(
-        " ",
-        options=list(md.FORMAT_ORDER),
-        format_func=lambda k: md.format_label(
-            k, language, in_progress_series=in_prog if k == "avsnitt" else None
-        ),
-        selection_mode="single",
-        key="movie_format_pills",
-        label_visibility="collapsed",
-        width="stretch",
-    )
-    st.markdown(
-        f'<p class="oc-sec-label">{html.escape("Läge" if language == "sv" else "Mood")}</p>',
-        unsafe_allow_html=True,
-    )
-    mood_choice = st.pills(
-        " ",
-        options=list(md.MOOD_ORDER),
-        format_func=lambda k: md.mood_label(k, language),
-        selection_mode="single",
-        key="movie_mood_pills",
-        label_visibility="collapsed",
-        width="stretch",
-    )
+    with st.container(key="movie_chips"):
+        st.markdown(
+            f'<p class="oc-sec-label">{html.escape("Format" if language == "sv" else "Format")}</p>',
+            unsafe_allow_html=True,
+        )
+        fmt_choice = st.pills(
+            " ",
+            options=list(md.FORMAT_ORDER),
+            format_func=lambda k: md.format_label(
+                k, language, in_progress_series=in_prog if k == "avsnitt" else None
+            ),
+            selection_mode="single",
+            key="movie_format_pills",
+            label_visibility="collapsed",
+            width="stretch",
+        )
+        st.markdown(
+            f'<p class="oc-sec-label">{html.escape("Läge" if language == "sv" else "Mood")}</p>',
+            unsafe_allow_html=True,
+        )
+        mood_choice = st.pills(
+            " ",
+            options=list(md.MOOD_ORDER),
+            format_func=lambda k: md.mood_label(k, language),
+            selection_mode="single",
+            key="movie_mood_pills",
+            label_visibility="collapsed",
+            width="stretch",
+        )
 
     fmt_choice = current_fmt if fmt_choice is None else fmt_choice
     mood_choice = current_mood if mood_choice is None else mood_choice
@@ -5473,8 +5481,9 @@ def page_result() -> None:
             )
     render_reroll_dots(reroll_index)
 
-    # Shopping list + recipe live on execute only — never on pre-lock food card
-    if domain != "food":
+    # Shopping list + recipe live on execute only — never on pre-lock food card.
+    # Movie: primary CTA already says "Öppna på Netflix" — never show "Sök X · …".
+    if domain not in ("food", "movie"):
         exec_detail = ctx.get("execution_detail")
         if exec_detail:
             st.markdown(
@@ -7077,12 +7086,14 @@ def page_shared() -> None:
                 unsafe_allow_html=True,
             )
     else:
-        detail = ctx.get("execution_detail")
-        if detail:
-            st.markdown(
-                f'<p class="oc-meta">{html.escape(str(detail))}</p>',
-                unsafe_allow_html=True,
-            )
+        # Movie: skip "Sök X · Netflix" meta — CTA/link is enough
+        if domain != "movie":
+            detail = ctx.get("execution_detail")
+            if detail:
+                st.markdown(
+                    f'<p class="oc-meta">{html.escape(str(detail))}</p>',
+                    unsafe_allow_html=True,
+                )
         exec_url = payload.get("execution_url")
         if exec_url:
             label = payload.get("execution_label") or t("do_it")
