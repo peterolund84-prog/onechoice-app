@@ -32,9 +32,10 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-orb-breathe", css)
         self.assertIn("st-key-home_domain_", css)
         self.assertIn("flex-direction: row", css)
-        self.assertIn("min-height: 52px", css)
+        self.assertIn("min-height: 48px", css)
         self.assertIn("width: 100%", css)
-        self.assertIn("clamp(40px, 11vw, 56px)", css)
+        self.assertIn("clamp(42px, 11.5vw, 58px)", css)
+        self.assertIn("Instrument+Serif", css)
         self.assertIn("oc-hero-sub", css)
         self.assertIn("translateX(-50%)", css)
         self.assertIn("translateY(-42%)", css)
@@ -55,7 +56,8 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
         self.assertIn("linear-gradient(180deg, #F7F4EC", css)
-        self.assertIn("rgba(255, 255, 255, 0.78)", css)
+        self.assertIn("%239A9A94", css)  # soft domain icon stroke
+        self.assertIn("border-radius: 28px", css)  # floating nav pill
         self.assertFalse(app_mod.SHOW_LANG_TOGGLE)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
