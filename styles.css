@@ -169,32 +169,6 @@ div[data-testid="stCameraInput"] button {
     letter-spacing: -0.01em;
 }
 .oc-tag-dot { color: var(--oc-accent) !important; }
-/* Language: text link SV · EN */
-.oc-lang {
-    position: fixed !important;
-    top: max(0.85rem, env(safe-area-inset-top)) !important;
-    right: 1rem !important;
-    z-index: 1100 !important;
-    display: flex !important;
-    align-items: center !important;
-    gap: 0.35rem !important;
-    font-family: "Inter", sans-serif !important;
-    font-size: 14px !important;
-    line-height: 1 !important;
-}
-.oc-lang a {
-    color: var(--oc-muted) !important;
-    text-decoration: none !important;
-    font-weight: 500 !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    border: none !important;
-    width: auto !important; height: auto !important;
-    border-radius: 0 !important;
-    padding: 0 !important;
-}
-.oc-lang a.active { color: var(--oc-ink) !important; font-weight: 600 !important; }
-.oc-lang .oc-lang-sep { color: var(--oc-muted) !important; user-select: none; }
 /* Textarea */
 div[data-testid="stTextArea"] > div, .stTextArea > div, .stTextArea [data-baseweb="textarea"] {
     background: transparent !important; border: none !important; box-shadow: none !important;
@@ -235,7 +209,7 @@ button[data-testid="baseButton-primary"] {
     box-shadow: none !important;
     font-family: "Inter", sans-serif !important;
 }
-/* Secondary buttons — quiet by default (NO underline). Link-style only via .oc-link-wrap. */
+/* Secondary buttons — quiet by default (NO underline). */
 div.stButton > button[data-testid="baseButton-secondary"],
 div.stButton > button[kind="secondary"],
 div.stButton > button[data-testid="stBaseButton-secondary"] {
@@ -245,12 +219,6 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     min-height: 36px !important; width: auto !important;
     font-size: 0.95rem !important; text-decoration: none !important;
     font-family: "Inter", sans-serif !important;
-}
-/* Intentional text-link secondaries (Nytt förslag / mode switch) */
-.oc-link-wrap + div[data-testid="element-container"] div.stButton > button,
-div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="element-container"] div.stButton > button {
-    text-decoration: underline !important;
-    text-underline-offset: 3px !important;
 }
 /* Occasion / meal chip rows ONLY — never nav, never lista, never domain cards */
 .st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button,
@@ -661,6 +629,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     height: auto !important;
     padding: 0.35rem 0.55rem !important;
     width: auto !important;
+    text-decoration: none !important;
     transition: color 150ms ease, background 150ms ease !important;
 }
 .st-key-oc_lang_bar button[aria-checked="true"],
@@ -686,9 +655,23 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     /* Never let a parent overlay / hide-belt steal taps from the footer */
     pointer-events: auto !important;
 }
-.st-key-oc_nav_bar [data-testid="stHorizontalBlock"] {
+.st-key-oc_nav_bar [data-testid="stHorizontalBlock"],
+.st-key-oc_nav_bar [data-testid="stVerticalBlock"],
+.st-key-oc_nav_bar [data-testid="stVerticalBlockBorderWrapper"] {
     gap: 0.15rem !important;
     align-items: stretch !important;
+    pointer-events: auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+.st-key-oc_nav_bar [class*="st-key-nav_"],
+.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    background: transparent !important;
+    border: none !important;
     pointer-events: auto !important;
 }
 [class*="st-key-nav_"] div.stButton {
@@ -701,6 +684,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     /* iOS Safari ignores taps on fully transparent controls — keep a
        near-invisible fill so secondary tabs (execute/result) still work. */
     background: rgba(250, 250, 247, 0.01) !important;
+    background-color: rgba(250, 250, 247, 0.01) !important;
     border: none !important;
     border-radius: 999px !important;
     box-shadow: none !important;
@@ -709,6 +693,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     font-size: 11px !important;
     font-weight: 500 !important;
     min-height: 3rem !important;
+    height: auto !important;
     padding: 0.3rem 0.35rem !important;
     display: flex !important;
     flex-direction: column !important;
@@ -716,6 +701,8 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     justify-content: center !important;
     gap: 0.15rem !important;
     line-height: 1.1 !important;
+    text-decoration: none !important;
+    text-underline-offset: unset !important;
     cursor: pointer !important;
     pointer-events: auto !important;
     touch-action: manipulation !important;
@@ -742,10 +729,12 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B6B66' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M5 20a7 7 0 0 1 14 0'/%3E%3C/svg%3E") !important;
 }
 [class*="st-key-nav_"] div.stButton > button[kind="primary"],
-[class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"] {
+[class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"],
+[class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-primary"] {
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
     background: rgba(59, 59, 196, 0.12) !important;
+    background-color: rgba(59, 59, 196, 0.12) !important;
 }
 [class*="st-key-nav_"] div.stButton > button[kind="primary"]::before,
 [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"]::before {
@@ -1778,7 +1767,6 @@ div[data-testid="stCheckbox"] label p {
     padding: 1.8rem 1.4rem; text-align: center; margin: 2rem 0 1rem;
 }
 .oc-error p { color: var(--oc-muted); font-size: 1.1rem; margin: 0 0 0.4rem; }
-.oc-link-wrap { text-align: center; margin: 0.35rem 0 0.9rem; }
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {
     display: flex !important;
 }
@@ -2341,87 +2329,6 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
 .block-container:has(.oc-shop-pick-marker),
 .block-container:has(.st-key-exec_sticky_cta) {
     padding-bottom: calc(160px + env(safe-area-inset-bottom)) !important;
-}
-/* Final win: keyed lang/nav over any leftover chip chrome */
-.st-key-oc_lang_bar button,
-.st-key-oc_lang_pills button {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    text-decoration: none !important;
-}
-.st-key-oc_lang_bar button[aria-checked="true"],
-.st-key-oc_lang_pills button[aria-checked="true"] {
-    color: var(--oc-ink) !important;
-    font-weight: 600 !important;
-}
-/* Glass nav MUST win over global secondary/underline + any column pill chrome.
-   Keep the frosted bar opaque — only nested layout nodes stay transparent. */
-.st-key-oc_nav_bar {
-    background: rgba(250, 250, 247, 0.92) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    z-index: 10000 !important;
-}
-.st-key-oc_nav_bar [data-testid="stHorizontalBlock"],
-.st-key-oc_nav_bar [data-testid="stVerticalBlock"],
-.st-key-oc_nav_bar [data-testid="stVerticalBlockBorderWrapper"] {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    gap: 0.15rem !important;
-}
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton,
-.st-key-oc_nav_bar [class*="st-key-nav_"] {
-    margin: 0 !important;
-    padding: 0 !important;
-    width: 100% !important;
-    background: transparent !important;
-    border: none !important;
-}
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button,
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-secondary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-secondary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-primary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="secondary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"] {
-    width: 100% !important;
-    /* Keep a non-transparent fill — iOS drops taps on background:transparent */
-    background: rgba(250, 250, 247, 0.01) !important;
-    background-color: rgba(250, 250, 247, 0.01) !important;
-    border: none !important;
-    border-radius: 999px !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    font-family: "Inter", sans-serif !important;
-    font-size: 11px !important;
-    font-weight: 500 !important;
-    min-height: 3rem !important;
-    height: auto !important;
-    padding: 0.3rem 0.35rem !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 0.15rem !important;
-    line-height: 1.1 !important;
-    text-decoration: none !important;
-    text-underline-offset: unset !important;
-    cursor: pointer !important;
-    pointer-events: auto !important;
-    touch-action: manipulation !important;
-    -webkit-tap-highlight-color: rgba(59, 59, 196, 0.12) !important;
-}
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"],
-.st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="stBaseButton-primary"] {
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-    background: rgba(59, 59, 196, 0.12) !important;
-    background-color: rgba(59, 59, 196, 0.12) !important;
 }
 /* Lista unchecked-count badge (trailing · N in label) */
 .st-key-nav_lista div.stButton > button {
