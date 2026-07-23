@@ -104,6 +104,7 @@ class DecideBody(BaseModel):
     intent: str | None = None
     source: str | None = None
     available_ingredients: list[str] | None = None
+    previous_suggestion: str | None = None
     language: str = "sv"
     user_id: str | None = None
     reroll: bool = False
@@ -142,6 +143,8 @@ def decide(
         context_extra["available_ingredients"] = [
             str(x).strip() for x in body.available_ingredients if str(x).strip()
         ]
+    if body.reroll and body.previous_suggestion:
+        context_extra["previous_suggestion"] = str(body.previous_suggestion).strip()
 
     try:
         result = pipeline.decide(

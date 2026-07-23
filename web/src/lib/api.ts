@@ -78,6 +78,7 @@ export type DecideBody = {
   intent?: string | null;
   source?: string | null;
   available_ingredients?: string[] | null;
+  previous_suggestion?: string | null;
   language?: string;
   reroll?: boolean;
   reroll_index?: number;

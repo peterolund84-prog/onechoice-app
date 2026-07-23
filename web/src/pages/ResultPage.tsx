@@ -280,6 +280,7 @@ export function ResultPage() {
           current.domain === "clothes"
             ? String(ctx.occasion || "") || null
             : null,
+        previous_suggestion: current.suggestion || null,
         reroll: true,
         reroll_index: rerolls + 1,
         previous_decision_id: id,
@@ -386,70 +387,34 @@ export function ResultPage() {
     }
   }
 
+  const mealType = String(
+    (decision.context && typeof decision.context === "object"
+      ? decision.context.meal_type
+      : "") || "middag",
+  );
+
   return (
     <section className="oc-result">
-      <div className="oc-media-card">
-        {showImage ? (
-          <img
-            className="oc-media-img"
-            src={src!}
-            alt=""
-            onError={() => setImgFailed(true)}
-          />
-        ) : (
-          <div className="oc-media-img oc-media-ph" aria-hidden="true">
-            <div className="oc-media-ph-circle" />
-          </div>
-        )}
-        <div className="oc-media-actions">
-          <button
-            type="button"
-            className="oc-media-action"
-            aria-label="Dela"
-            onClick={onShare}
-          >
-            <Share2 size={18} strokeWidth={1.75} />
-          </button>
-          <button
-            type="button"
-            className={`oc-media-action${decision.favorite ? " is-on" : ""}`}
-            aria-label="Favorit"
-            disabled={busy || id == null}
-            onClick={onFavorite}
-          >
-            <Heart
-              size={18}
-              strokeWidth={1.75}
-              fill={decision.favorite ? "currentColor" : "none"}
-            />
-          </button>
-        </div>
-      </div>
-
       {!accepted && !locked && decision.domain === "food" ? (
-        <div className="oc-chip-block">
-          <div className="oc-sec-label">Måltid</div>
-          <div className="oc-chip-row">
-            {MEAL_OPTIONS.map((m) => {
-              const active =
-                String(
-                  (decision.context && typeof decision.context === "object"
-                    ? decision.context.meal_type
-                    : "") || "",
-                ) === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`oc-chip${active ? " is-active" : ""}`}
-                  disabled={busy}
-                  onClick={() => redecideWith({ meal_type: m.id })}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
+        <div className="oc-meal-seg" role="tablist" aria-label="Måltid">
+          {MEAL_OPTIONS.map((m) => {
+            const active = mealType === m.id;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={active ? "is-active" : undefined}
+                disabled={busy}
+                onClick={() => {
+                  if (!active) void redecideWith({ meal_type: m.id });
+                }}
+              >
+                {m.label}
+              </button>
+            );
+          })}
         </div>
       ) : null}
 
@@ -501,6 +466,44 @@ export function ResultPage() {
           </div>
         </div>
       ) : null}
+
+      <div className="oc-media-card">
+        {showImage ? (
+          <img
+            className="oc-media-img"
+            src={src!}
+            alt=""
+            onError={() => setImgFailed(true)}
+          />
+        ) : (
+          <div className="oc-media-img oc-media-ph" aria-hidden="true">
+            <div className="oc-media-ph-circle" />
+          </div>
+        )}
+        <div className="oc-media-actions">
+          <button
+            type="button"
+            className="oc-media-action"
+            aria-label="Dela"
+            onClick={onShare}
+          >
+            <Share2 size={18} strokeWidth={1.75} />
+          </button>
+          <button
+            type="button"
+            className={`oc-media-action${decision.favorite ? " is-on" : ""}`}
+            aria-label="Favorit"
+            disabled={busy || id == null}
+            onClick={onFavorite}
+          >
+            <Heart
+              size={18}
+              strokeWidth={1.75}
+              fill={decision.favorite ? "currentColor" : "none"}
+            />
+          </button>
+        </div>
+      </div>
 
       <h1 className="oc-result-title">{decision.suggestion || "—"}</h1>
       {locked || accepted ? <div className="oc-lock">Låst</div> : null}
