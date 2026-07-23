@@ -32,12 +32,14 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-orb-breathe", css)
         self.assertIn("st-key-home_domain_", css)
         self.assertIn("flex-direction: row", css)
-        self.assertIn("min-height: 52px", css)
+        self.assertIn("min-height: 40px", css)
         self.assertIn("width: 100%", css)
-        self.assertIn("clamp(40px, 11vw, 56px)", css)
+        self.assertIn("font-size: 34px", css)
+        self.assertIn("Playfair+Display", css)
+        self.assertIn("font-weight: 700", css)
         self.assertIn("oc-hero-sub", css)
         self.assertIn("translateX(-50%)", css)
-        self.assertIn("translateY(-42%)", css)
+        self.assertIn("translateY(-28%)", css)
         self.assertIn("st-key-home_domains", css)
         self.assertIn("st-key-home_free_disclose", css)
         self.assertIn("st-key-home_free_form", css)
@@ -48,14 +50,15 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-shop-tog-marker", css)
         self.assertIn("oc-header", css)
         self.assertIn("position: fixed", css)
-        self.assertIn("52px + env(safe-area-inset-top) + 40px", css)
+        self.assertIn("52px + env(safe-area-inset-top) + 28px", css)
         self.assertIn("backdrop-filter", css)
         self.assertIn("st-key-home_hero", css)
         # Lang bar CSS kept (toggle can re-enable); atmosphere gradient present
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
-        self.assertIn("linear-gradient(180deg, #F7F4EC", css)
-        self.assertIn("rgba(255, 255, 255, 0.78)", css)
+        self.assertIn("linear-gradient(180deg, #F8F4EB", css)
+        self.assertIn("%232C2C2A", css)  # soft domain icon stroke
+        self.assertIn("border-radius: 24px", css)  # floating nav pill
         self.assertFalse(app_mod.SHOW_LANG_TOGGLE)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:

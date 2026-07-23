@@ -206,15 +206,16 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 class NavBleedTests(unittest.TestCase):
     def test_nav_glass_is_opaque_enough(self) -> None:
         css = _styles()
-        self.assertIn("rgba(250, 250, 247, 0.92)", css)
-        self.assertIn("blur(20px)", css)
+        self.assertIn("rgba(246, 243, 234, 0.88)", css)
+        self.assertIn("blur(18px)", css)
         self.assertIn("z-index: 10000", css)
         # Must not wipe nav bar background back to transparent
         # (children may be transparent; the bar itself must keep glass)
-        nav_block = css.split("/* Bottom nav — frosted glass bar")[1].split(
+        nav_block = css.split("/* Bottom nav — floating frosted pill")[1].split(
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
-        self.assertIn("rgba(250, 250, 247, 0.92)", nav_block)
+        self.assertIn("rgba(246, 243, 234, 0.88)", nav_block)
+        self.assertIn("border-radius: 24px", nav_block)
         # The bar rule itself is NOT background: transparent
         bar_only = nav_block.split(".st-key-oc_nav_bar [data-testid")[0]
         self.assertNotIn("background: transparent", bar_only)
@@ -225,7 +226,7 @@ class NavBleedTests(unittest.TestCase):
         self.assertIn("cursor: pointer !important", css)
         self.assertIn("touch-action: manipulation !important", css)
         # Must not force fully transparent fills on nav secondaries
-        self.assertIn("rgba(250, 250, 247, 0.01)", css)
+        self.assertIn("rgba(246, 243, 234, 0.01)", css)
         self.assertIn(
             ".st-key-oc_nav_bar {",
             css,
@@ -235,17 +236,19 @@ class NavBleedTests(unittest.TestCase):
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
-        # Compact footer: ~56px content + safe-area, 44px pills; no overflow clip
-        self.assertIn("min-height: calc(56px + env(safe-area-inset-bottom", bar)
-        self.assertIn("padding: 6px 0.4rem calc(6px + env(safe-area-inset-bottom", bar)
+        # Floating pill: inset sides/bottom, ~56px content, 44px tabs
+        self.assertIn("left: 28px !important", bar)
+        self.assertIn("right: 28px !important", bar)
+        self.assertIn("min-height: 52px !important", bar)
+        self.assertIn("padding: 4px 0.35rem !important", bar)
         self.assertIn("overflow: visible !important", bar)
         self.assertIn("min-height: 44px !important", bar)
-        self.assertIn("gap: 2px !important", bar)
+        self.assertIn("gap: 1px !important", bar)
         # Marker must collapse — it was eating height and clipping labels
         self.assertIn(".oc-nav-chrome", css)
-        # Content clears nav + ~16px
-        self.assertIn("calc(72px + env(safe-area-inset-bottom", css)
-        self.assertNotIn("calc(88px + env(safe-area-inset-bottom))", css)
+        # Content clears floating pill + safe-area
+        self.assertIn("calc(88px + env(safe-area-inset-bottom", css)
+        self.assertNotIn("calc(72px + env(safe-area-inset-bottom, 0px))", css)
         self.assertNotIn("calc(80px + env(safe-area-inset-bottom))", css)
         # In-flow host of fixed nav must collapse (no dead band above footer)
         self.assertIn(
