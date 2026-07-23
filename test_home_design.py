@@ -34,7 +34,8 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("flex-direction: row", css)
         self.assertIn("min-height: 52px", css)
         self.assertIn("width: 100%", css)
-        self.assertIn("clamp(38px, 10vw, 52px)", css)
+        self.assertIn("clamp(40px, 11vw, 56px)", css)
+        self.assertIn("oc-hero-sub", css)
         self.assertIn("translateX(-50%)", css)
         self.assertIn("translateY(-42%)", css)
         self.assertIn("st-key-home_domains", css)
@@ -50,8 +51,12 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("52px + env(safe-area-inset-top) + 40px", css)
         self.assertIn("backdrop-filter", css)
         self.assertIn("st-key-home_hero", css)
+        # Lang bar CSS kept (toggle can re-enable); atmosphere gradient present
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
+        self.assertIn("linear-gradient(180deg, #F7F4EC", css)
+        self.assertIn("rgba(255, 255, 255, 0.78)", css)
+        self.assertFalse(app_mod.SHOW_LANG_TOGGLE)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -86,8 +91,13 @@ class HomeDesignTests(unittest.TestCase):
             app_mod.I18N["en"]["home_free_placeholder"],
             "What do you need to decide?",
         )
-        self.assertIn("SV", body)
-        self.assertIn("EN", body)
+        # Swedish-first: SV/EN control hidden (i18n kept, toggle off)
+        self.assertNotIn(">SV<", body)
+        self.assertNotIn(">EN<", body)
+        self.assertNotIn('key="oc_lang_bar"', body)
+        self.assertEqual(at.session_state["language"], "sv")
+        self.assertIn("oc-hero-sub", body)
+        self.assertIn("Ett tryck — jag tar beslutet.", body)
         self.assertNotIn("build ", body.lower())
         self.assertNotIn("home_free_input", body.lower())
         self.assertNotIn("Vad behöver du bestämma?", body)

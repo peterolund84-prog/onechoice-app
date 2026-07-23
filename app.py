@@ -132,7 +132,9 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-nav-clip-height-v91-20260723"
+BUILD_ID = "premium-home-lucide-icons-v94-20260723"
+# Keep i18n + lang_bar() for later; hide the SV/EN control while we ship Swedish-first.
+SHOW_LANG_TOGGLE = False
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -142,6 +144,7 @@ I18N = {
         "ask": "Vad behöver du bestämma?",
         "decide": "Bestäm åt mig",
         "home_or_choose": "Eller välj själv",
+        "home_hero_sub": "Ett tryck — jag tar beslutet.",
         "home_free_disclose": "Något annat?",
         "home_free_placeholder": "Vad ska du bestämma?",
         "home_free_submit": "Bestäm",
@@ -354,6 +357,7 @@ I18N = {
         "ask": "What do you need decided?",
         "decide": "Decide for me",
         "home_or_choose": "Or choose yourself",
+        "home_hero_sub": "One tap — I’ll decide.",
         "home_free_disclose": "Something else?",
         "home_free_placeholder": "What do you need to decide?",
         "home_free_submit": "Decide",
@@ -1783,7 +1787,17 @@ def _clear_action_query_params() -> None:
 
 
 def lang_bar() -> None:
-    """Compact SV · EN — session-safe pills in keyed fixed top-right container."""
+    """Compact SV · EN — session-safe pills in keyed fixed top-right container.
+
+    When SHOW_LANG_TOGGLE is False the control is not rendered (Swedish-first),
+    but the helper stays so we can re-enable without ripping out i18n.
+    """
+    if not SHOW_LANG_TOGGLE:
+        # Lock product language while the toggle is hidden.
+        if st.session_state.get("language") != "sv":
+            st.session_state.language = "sv"
+        return
+
     lang = st.session_state.language
     if lang not in ("sv", "en"):
         lang = "sv"
@@ -1986,62 +2000,27 @@ def render_domain_chips(*, key_prefix: str = "home") -> None:
         _start_domain_decision(str(choice))
 
 
+# Lucide (+ lab coat-hanger) — kept for _domain_card_button_css; live UI reads styles.css
 _DOMAIN_CARD_ICONS: dict[str, str] = {
     "food": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<path d="M4 11h16"/>'
-        '<path d="M7 11V9a5 5 0 0 1 10 0v2"/>'
-        '<path d="M6 15c0 2.5 2.7 4 6 4s6-1.5 6-4"/>'
-        '<path d="M3 3v5"/><path d="M3 5.5h2"/>'
-        '<path d="M21 3v5"/><path d="M19 5.5h2"/>'
-        "</svg>"
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M12 21a9 9 0 0 0 9-9H3a9 9 0 0 0 9 9Z" /> <path d="M7 21h10" /> <path d="M19.5 12 22 6" /> <path d="M16.25 3c.27.1.8.53.75 1.36-.06.83-.93 1.2-1 2.02-.05.78.34 1.24.73 1.62" /> <path d="M11.25 3c.27.1.8.53.74 1.36-.05.83-.93 1.2-.98 2.02-.06.78.33 1.24.72 1.62" /> <path d="M6.25 3c.27.1.8.53.75 1.36-.06.83-.93 1.2-1 2.02-.05.78.34 1.24.74 1.62" /> </svg>'
     ),
     "clothes": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<path d="M12 6a2 2 0 1 0-2 2"/>'
-        '<path d="M4 9l8-4 8 4"/>'
-        '<path d="M6 9v10h12V9"/>'
-        "</svg>"
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M9 5a3 3 0 1 1 5.1 2.1l-1.5 1.5A2 2 0 0 0 12 10v1" /> <path d="M4 21a2 2 0 0 1-1.1-3.7L12 11l9.2 6.4A2 2 0 0 1 20 21Z" /> </svg>'
     ),
     "movie": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<circle cx="12" cy="12" r="9"/>'
-        '<path d="m10 8 6 4-6 4V8z"/>'
-        "</svg>"
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="m12.296 3.464 3.02 3.956" /> <path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z" /> <path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /> <path d="m6.18 5.276 3.1 3.899" /> </svg>'
     ),
     "workout": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<path d="M4 10h3v4H4z"/>'
-        '<path d="M17 10h3v4h-3z"/>'
-        '<path d="M7 12h10"/>'
-        "</svg>"
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" /> <path d="m2.5 21.5 1.4-1.4" /> <path d="m20.1 3.9 1.4-1.4" /> <path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" /> <path d="m9.6 14.4 4.8-4.8" /> </svg>'
     ),
     "weekend": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<circle cx="12" cy="12" r="9"/>'
-        '<path d="m16 8-4 8-4-8 8 4 8-4z"/>'
-        "</svg>"
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2l1-1 1 1h4" /> <path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-3l-1-1-1 1h-3" /> <path d="M5.89 9.71c-2.15 2.15-2.3 5.47-.35 7.43l4.24-4.25.7-.7.71-.71 2.12-2.12c-1.95-1.96-5.27-1.8-7.42.35" /> <path d="M11 15.5c.5 2.5-.17 4.5-1 6.5h4c2-5.5-.5-12-1-14" /> </svg>'
     ),
     "fridge": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
-        'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        'stroke-linejoin="round" aria-hidden="true">'
-        '<path d="M4 8h3l2-2h6l2 2h3v10H4z"/>'
-        '<circle cx="12" cy="13" r="3"/>'
-        "</svg>"
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z" /> <path d="M5 10h14" /> <path d="M15 7v6" /> </svg>'
     ),
 }
-
 
 def _stockholm_now() -> datetime:
     """Sweden-local clock for home hero (avoid hard dependency on food_domain.local_now)."""
@@ -2099,10 +2078,12 @@ def _start_fridge_flow() -> None:
 
 def render_home_hero(inferred: dict[str, Any]) -> None:
     headline = html.escape(str(inferred.get("headline") or ""))
+    sub = html.escape(t("home_hero_sub"))
     st.markdown(
         '<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<div class="oc-hero">'
         f'<div class="oc-hero-title" role="heading" aria-level="1">{headline}</div>'
+        f'<p class="oc-hero-sub">{sub}</p>'
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -4365,8 +4346,10 @@ def _format_nutrition_fallback(
     return f"Ca {k_i} kcal per portion · {p_i} g protein"
 
 
-def render_top_chrome(*, extra_class: str = "", show_lang: bool = True) -> None:
-    """Fixed frosted header: OneChoice wordmark + SV/EN (lang pills overlay right)."""
+def render_top_chrome(*, extra_class: str = "", show_lang: bool | None = None) -> None:
+    """Fixed frosted header: OneChoice wordmark (+ optional SV/EN overlay)."""
+    if show_lang is None:
+        show_lang = SHOW_LANG_TOGGLE
     extra = f" {extra_class}" if extra_class else ""
     st.markdown(
         f'<header class="oc-header{extra}" aria-label="OneChoice">'
@@ -4376,6 +4359,8 @@ def render_top_chrome(*, extra_class: str = "", show_lang: bool = True) -> None:
     )
     if show_lang:
         lang_bar()
+    elif not SHOW_LANG_TOGGLE and st.session_state.get("language") != "sv":
+        st.session_state.language = "sv"
 
 
 def render_share_landing_chrome() -> None:
@@ -6768,18 +6753,21 @@ def handle_query_params() -> None:
         pass
     lang = _qp_one(qp.get("lang"))
     if lang in ("sv", "en"):
-        st.session_state.language = lang
-        if st.session_state.user_id:
-            require_auth_context()
-            try:
-                db.update_user(st.session_state.user_id, language=lang)
-            except Exception as exc:
-                log.warning("%s failed: %s", "handle_query_params", exc)
+        # Language query is a hidden escape hatch — ignore while Swedish-first.
+        if SHOW_LANG_TOGGLE:
+            st.session_state.language = lang
+            if st.session_state.user_id:
+                require_auth_context()
+                try:
+                    db.update_user(st.session_state.user_id, language=lang)
+                except Exception as exc:
+                    log.warning("%s failed: %s", "handle_query_params", exc)
         try:
             del st.query_params["lang"]
         except Exception as exc:
             log.warning("%s failed: %s", "handle_query_params", exc)
-        st.rerun()
+        if SHOW_LANG_TOGGLE:
+            st.rerun()
 
     if st.session_state.page == "auth" and not _is_authenticated() and not st.session_state.get("guest_mode"):
         return

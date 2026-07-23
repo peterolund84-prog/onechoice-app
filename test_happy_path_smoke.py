@@ -179,7 +179,7 @@ class HappyPathSmokeTest(unittest.TestCase):
             from pathlib import Path
 
             css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
-            self.assertIn("backdrop-filter: blur(14px)", css)
+            self.assertIn("backdrop-filter: blur(16px)", css)
 
     def test_home_redirects_to_execute_when_food_accepted(self) -> None:
         at = self._boot_authenticated()
