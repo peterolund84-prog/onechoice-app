@@ -59,15 +59,21 @@ export function HistorikPage() {
   }
 
   function openDecision(d: Decision) {
-    sessionStorage.setItem(
-      "oc_last_decision",
-      JSON.stringify({
-        ...d,
-        ok: true,
-        decision_id: decisionKey(d),
-      }),
-    );
-    navigate("/resultat");
+    const payload = {
+      ...d,
+      ok: true,
+      decision_id: decisionKey(d),
+      accepted: ["accepted", "locked"].includes(String(d.status || "")) || Boolean(d.accepted),
+    };
+    sessionStorage.setItem("oc_last_decision", JSON.stringify(payload));
+    const domain = String(d.domain || "");
+    const exec = String(d.execution_type || "");
+    const toExecute =
+      payload.accepted &&
+      (domain === "food" || exec === "recipe" || exec === "workout");
+    navigate(toExecute ? "/utfor" : "/resultat", {
+      state: { decision: payload },
+    });
   }
 
   return (

@@ -776,3 +776,78 @@ input {
 .oc-reroll-dots span.is-used {
   background: var(--oc-accent);
 }
+
+.oc-execute {
+  padding-bottom: 28px;
+}
+
+.oc-exec-meta {
+  margin: 0 0 14px;
+  font-size: 14px;
+  color: var(--oc-muted);
+}
+
+.oc-shop-card,
+.oc-recipe {
+  width: 100%;
+  max-width: 420px;
+  text-align: left;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.oc-shop-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.oc-shop-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.oc-nut-per {
+  font-size: 12px;
+  color: var(--oc-muted);
+  text-align: right;
+}
+
+.oc-shop-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.oc-shop-list li {
+  margin: 0;
+}
+
+.oc-sec {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--oc-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.oc-recipe ul,
+.oc-recipe ol {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.oc-recipe li {
+  margin: 0 0 8px;
+  line-height: 1.45;
+}
+
+.oc-exec-cta {
+  margin-top: 8px;
+}

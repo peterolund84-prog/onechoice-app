@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Heart, Share2 } from "lucide-react";
 import { api } from "../lib/api";
+import {
+  decisionId,
+  goesToExecute,
+  readDecision,
+  saveDecision,
+} from "../lib/decisionStorage";
 import { resolveDishPublicPath } from "../lib/dishImage";
 import type { Decision } from "../lib/types";
 
@@ -11,29 +17,17 @@ function isRerollLocked(d: Decision): boolean {
   return Boolean(d.locked) || Number(d.reroll_index || 0) >= MAX_REROLLS;
 }
 
-function readDecision(): Decision | null {
-  try {
-    const raw = sessionStorage.getItem("oc_last_decision");
-    if (!raw) return null;
-    return JSON.parse(raw) as Decision;
-  } catch {
-    return null;
+function openAfterAccept(
+  navigate: ReturnType<typeof useNavigate>,
+  next: Decision,
+) {
+  if (goesToExecute(next)) {
+    navigate("/utfor", { state: { decision: next }, replace: true });
+    return;
   }
-}
-
-function saveDecision(d: Decision) {
-  try {
-    const { image_data_url: _img, ...slim } = d;
-    sessionStorage.setItem("oc_last_decision", JSON.stringify(slim));
-  } catch {
-    /* ignore quota */
+  if (next.execution_url) {
+    window.open(next.execution_url, "_blank", "noopener,noreferrer");
   }
-}
-
-function decisionId(d: Decision | null): number | null {
-  if (!d) return null;
-  const id = d.id ?? d.decision_id;
-  return id == null ? null : Number(id);
 }
 
 function dishHint(d: Decision): string | null {
@@ -161,6 +155,10 @@ export function ResultPage() {
         };
         saveDecision(next);
         setDecision(next);
+        if (goesToExecute(next)) {
+          navigate("/utfor", { state: { decision: next }, replace: true });
+          return;
+        }
         setMsg("Valt automatiskt — inga omval kvar.");
       } catch (e) {
         if (cancelled) return;
@@ -236,7 +234,7 @@ export function ResultPage() {
       const next = { ...current, accepted: true, locked: true };
       saveDecision(next);
       setDecision(next);
-      setMsg("Sparat — bra val.");
+      openAfterAccept(navigate, next);
       return;
     }
     setBusy(true);
@@ -246,7 +244,7 @@ export function ResultPage() {
       const next = { ...current, accepted: true, locked: true, status: "accepted" };
       saveDecision(next);
       setDecision(next);
-      setMsg("Sparat — bra val.");
+      openAfterAccept(navigate, next);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte acceptera");
     } finally {
@@ -399,20 +397,33 @@ export function ResultPage() {
           </button>
         ) : null}
 
-        {accepted && toBuy ? (
-          <button type="button" className="oc-cta" disabled={busy} onClick={onMergeList}>
-            Lägg till i listan
+        {accepted && goesToExecute(decision) ? (
+          <button
+            type="button"
+            className="oc-cta"
+            disabled={busy}
+            onClick={() =>
+              navigate("/utfor", { state: { decision }, replace: true })
+            }
+          >
+            Recept & lista
           </button>
         ) : null}
 
-        {accepted ? (
+        {accepted && !goesToExecute(decision) ? (
           <button
             type="button"
-            className={toBuy ? "oc-btn oc-btn-ghost" : "oc-cta"}
+            className="oc-cta"
             disabled={busy}
-            onClick={() => navigate(toBuy ? "/lista" : "/")}
+            onClick={() => navigate("/")}
           >
-            {toBuy ? "Till listan" : "Klar"}
+            Klar
+          </button>
+        ) : null}
+
+        {accepted && toBuy && !goesToExecute(decision) ? (
+          <button type="button" className="oc-btn" disabled={busy} onClick={onMergeList}>
+            Lägg till i listan
           </button>
         ) : null}
 
