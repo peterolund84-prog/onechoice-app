@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-dish-img-force-v75-20260722"
+BUILD_ID = "recipe-grounding-nutrition-v77-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -218,7 +218,9 @@ I18N = {
         "steps_title": "Gör så här",
         "nutrition_section": "Näringsvärden",
         "nutrition_title": "Visa näringsvärden",
+        "nutrition_per_portion": "Per portion",
         "nutrition_hint": "Ca-värden (kcal / protein) under receptet på alla matsidor — aldrig på beslutskortet. På som standard.",
+        "recipe_unavailable": "Kunde inte bygga ett trovärdigt recept för den här rätten — prova Nytt förslag.",
         "nutrition_recipe_toggle": "Visa ca-värden (kcal / protein)",
         "nutrition_missing": "Näringsvärden saknas",
         "nutrition_saved": "Sparat.",
@@ -406,10 +408,12 @@ I18N = {
         "steps_title": "Steps",
         "nutrition_section": "Nutrition",
         "nutrition_title": "Show nutrition estimates",
+        "nutrition_per_portion": "Per serving",
         "nutrition_hint": "Approx. kcal / protein under the recipe on all food pages — never on the decision card. On by default.",
         "nutrition_recipe_toggle": "Show approx. nutrition (kcal / protein)",
         "nutrition_missing": "Nutrition unavailable",
         "nutrition_saved": "Saved.",
+        "recipe_unavailable": "Could not build a trustworthy recipe for this dish — try a new suggestion.",
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
         "retry": "Try again",
@@ -4121,8 +4125,75 @@ def _mark_execution_opened_for_current(cur: dict[str, Any]) -> None:
         log.warning("mark_execution_opened failed: %s", exc)
 
 
+def _nutrition_stats_from_recipe(recipe: dict[str, Any] | None) -> dict[str, int] | None:
+    """Return {kcal, protein_g, fat_g, carbs_g} ints or None if incomplete."""
+    if not isinstance(recipe, dict):
+        return None
+    import shopping as shopping_mod
+
+    try:
+        ensure = getattr(shopping_mod, "ensure_recipe_nutrition", None)
+        if callable(ensure):
+            recipe = ensure(
+                recipe,
+                suggestion=str(recipe.get("title") or ""),
+                allow_estimate=True,
+            )
+    except Exception:
+        pass
+    nut = recipe.get("nutrition") if isinstance(recipe.get("nutrition"), dict) else {}
+    def _i(*keys: str) -> int | None:
+        for k in keys:
+            raw = recipe.get(k) if k in recipe else nut.get(k)
+            if raw is None and k.endswith("_per_portion"):
+                continue
+            try:
+                return int(raw)
+            except (TypeError, ValueError):
+                continue
+        return None
+
+    kcal = _i("kcal_per_portion", "kcal")
+    protein = _i("protein_g_per_portion", "protein_g")
+    fat = _i("fat_g_per_portion", "fat_g")
+    carbs = _i("carbs_g_per_portion", "carbs_g")
+    if kcal is None or protein is None:
+        return None
+    if fat is None:
+        fat = 0
+    if carbs is None:
+        carbs = 0
+    return {"kcal": kcal, "protein_g": protein, "fat_g": fat, "carbs_g": carbs}
+
+
+def _nutrition_stat_row_html(recipe: dict[str, Any] | None) -> str:
+    """Borderless four-stat nutrition row (NYT/HelloFresh style)."""
+    stats = _nutrition_stats_from_recipe(recipe)
+    if not stats:
+        return ""
+    cells = [
+        (str(stats["kcal"]), "KCAL"),
+        (f'{stats["protein_g"]} g', "PROTEIN"),
+        (f'{stats["fat_g"]} g', "FETT"),
+        (f'{stats["carbs_g"]} g', "KOLH"),
+    ]
+    parts = []
+    for val, lab in cells:
+        parts.append(
+            f'<div class="oc-nut-stat">'
+            f'<span class="oc-nut-val">{html.escape(val)}</span>'
+            f'<span class="oc-nut-lab">{html.escape(lab)}</span>'
+            f"</div>"
+        )
+    return (
+        '<div class="oc-nut-stats" role="group" '
+        'aria-label="Näringsvärden per portion">'
+        f'{"".join(parts)}</div>'
+    )
+
+
 def _nutrition_display_line(recipe: dict[str, Any] | None) -> tuple[str, bool]:
-    """Return (label, has_values) for the nutrition control — never None/null text."""
+    """Legacy string line — kept for callers; prefer `_nutrition_stat_row_html`."""
     import shopping as shopping_mod
 
     lang = st.session_state.get("language", "sv")
@@ -4261,23 +4332,36 @@ def render_recipe_block(
     ings = recipe.get("ingredient_lines") or recipe.get("ingredients") or fallback_ings or []
     steps = recipe.get("steps") or []
     nutrition_html = ""
+    per_caption = ""
     if show_nutrition is None:
         show_nutrition = True
     if show_nutrition:
-        line, has_vals = _nutrition_display_line(recipe)
-        if has_vals:
-            nutrition_html = f'<p class="oc-nutrition">{html.escape(line)}</p>'
+        nutrition_html = _nutrition_stat_row_html(recipe)
+        if nutrition_html:
+            per_caption = (
+                f'<span class="oc-nut-per">{html.escape(t("nutrition_per_portion"))}</span>'
+            )
     ings_html = ""
     if include_ingredients:
         ings_html = (
             f'<div class="oc-sec">{html.escape(t("ingredients_title"))}</div>'
             f'<ul>{"".join(f"<li>{html.escape(str(i))}</li>" for i in ings)}</ul>'
         )
-        title = f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
+        title = (
+            f'<div class="oc-shop-title-row">'
+            f'<div class="oc-shop-title">{html.escape(t("recipe_title"))}</div>'
+            f"{per_caption}"
+            f"</div>"
+        )
         steps_sec = f'<div class="oc-sec">{html.escape(t("steps_title"))}</div>'
         card_cls = "oc-recipe"
     else:
-        title = f'<div class="oc-shop-title">{html.escape(t("steps_title"))}</div>'
+        title = (
+            f'<div class="oc-shop-title-row">'
+            f'<div class="oc-shop-title">{html.escape(t("steps_title"))}</div>'
+            f"{per_caption}"
+            f"</div>"
+        )
         steps_sec = ""
         card_cls = "oc-recipe oc-recipe-steps-only"
     st.markdown(
@@ -5973,11 +6057,40 @@ def page_execute() -> None:
                 language=st.session_state.get("language", "sv"),
                 grok_api_key="",
             )
+    else:
+        # Reject contradictory templates already attached to the decision
+        try:
+            import recipe_engine as reng
+
+            if not reng.recipe_is_valid(recipe, suggestion):
+                recipe = reng.ensure_valid_recipe(
+                    recipe,
+                    suggestion,
+                    meal_type=meal_type,
+                    ingredient_hints=seed_ings,
+                    active_minutes=active_mins,
+                    language=st.session_state.get("language", "sv"),
+                    grok_api_key="",
+                )
+        except Exception as exc_g:
+            log.error("recipe grounding rematerialize failed: %s", exc_g)
+            recipe = None
+
+    recipe_ok = isinstance(recipe, dict) and bool(recipe.get("steps"))
+    if recipe_ok:
+        try:
+            import recipe_engine as reng
+
+            recipe_ok = reng.recipe_is_valid(recipe, suggestion)
+            if not recipe_ok:
+                recipe = None
+        except Exception:
+            pass
 
     # Card already shows time · portions — no duplicate visible meta.
     # Keep a zero-height markdown slot here: removing this node entirely
     # leaves Streamlit AppTest with ghost shop_chk widgets after nav.
-    if isinstance(recipe, dict):
+    if isinstance(recipe, dict) and recipe_ok:
         try:
             import shopping as shopping_mod
 
@@ -5998,31 +6111,39 @@ def page_execute() -> None:
         render_decision_shopping_added(
             shop,
             language,
-            recipe=recipe if isinstance(recipe, dict) else None,
+            recipe=recipe if isinstance(recipe, dict) and recipe_ok else None,
         )
     except Exception as exc:
         log.warning("shopping list render failed: %s", exc)
 
-    ings_fallback = (
-        list(recipe.get("ingredient_lines") or recipe.get("ingredients") or [])
-        if isinstance(recipe, dict)
-        else []
-    )
-    try:
-        # Checklist IS the ingredient list — recipe card shows steps only
-        render_food_recipe(
-            recipe if isinstance(recipe, dict) else None,
-            ings_fallback,
-            include_ingredients=False,
-            show_nutrition=_profile_show_nutrition(),
+    if not recipe_ok:
+        st.markdown(
+            f'<div class="oc-recipe oc-recipe-unavailable">'
+            f'<p class="oc-muted">{html.escape(t("recipe_unavailable"))}</p>'
+            f"</div>",
+            unsafe_allow_html=True,
         )
-    except Exception as exc:
-        log.warning("recipe render failed: %s", exc)
-        steps = list((recipe or {}).get("steps") or []) if isinstance(recipe, dict) else []
-        if steps:
-            st.markdown("**" + t("steps_title") + "**")
-            for i, step in enumerate(steps, 1):
-                st.markdown(f"{i}. {step}")
+    else:
+        ings_fallback = (
+            list(recipe.get("ingredient_lines") or recipe.get("ingredients") or [])
+            if isinstance(recipe, dict)
+            else []
+        )
+        try:
+            # Checklist IS the ingredient list — recipe card shows steps only
+            render_food_recipe(
+                recipe if isinstance(recipe, dict) else None,
+                ings_fallback,
+                include_ingredients=False,
+                show_nutrition=_profile_show_nutrition(),
+            )
+        except Exception as exc:
+            log.warning("recipe render failed: %s", exc)
+            steps = list((recipe or {}).get("steps") or []) if isinstance(recipe, dict) else []
+            if steps:
+                st.markdown("**" + t("steps_title") + "**")
+                for i, step in enumerate(steps, 1):
+                    st.markdown(f"{i}. {step}")
 
     try:
         render_execute_sticky_cta(shop if isinstance(shop, dict) else None)

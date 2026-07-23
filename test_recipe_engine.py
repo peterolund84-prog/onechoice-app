@@ -39,6 +39,66 @@ class RecipeEngineValidationTests(unittest.TestCase):
         ok, _ = reng.validate_recipe(stub, title="Test")
         self.assertFalse(ok)
 
+    def test_rejects_ungrounded_step_food(self) -> None:
+        """'2 dl ris' in steps with no ris ingredient must fail."""
+        bad = {
+            "title": "Wrap med kyckling",
+            "ingredients": [
+                {"name": "tortilla", "amount": "2", "unit": "st"},
+                {"name": "kycklingfilé", "amount": "200", "unit": "g"},
+                {"name": "yoghurt", "amount": "2", "unit": "msk"},
+            ],
+            "steps": [
+                "Skölj 2 dl ris och koka enligt förpackningen.",
+                "Skär 400 g kycklingfilé i bitar. Hacka grönsakerna.",
+                "Servera kycklingen med tillbehöret. Klart.",
+            ],
+            "nutrition": {"kcal": 500, "protein_g": 40, "fat_g": 15, "carbs_g": 30},
+        }
+        ok, reason = reng.validate_recipe(bad, title="Wrap med kyckling")
+        self.assertFalse(ok)
+        self.assertTrue(
+            reason.startswith("uncovered_ingredient:")
+            or reason.startswith("ungrounded_step_food:"),
+            msg=reason,
+        )
+        self.assertTrue("ris" in reason or "tortilla" in reason or "yoghurt" in reason)
+
+    def test_rejects_uncovered_ingredient(self) -> None:
+        bad = {
+            "title": "Wrap med kyckling",
+            "ingredients": [
+                {"name": "tortilla", "amount": "2", "unit": "st"},
+                {"name": "kycklingfilé", "amount": "200", "unit": "g"},
+                {"name": "yoghurt", "amount": "2", "unit": "msk"},
+            ],
+            "steps": [
+                "Värm 2 tortilla i torr panna 20 sek per sida.",
+                "Skär 200 g kycklingfilé i strimlor. Stek 5 min.",
+                "Rulla ihop wrapen. Servera direkt.",
+            ],
+            "nutrition": {"kcal": 480, "protein_g": 38, "fat_g": 14, "carbs_g": 42},
+        }
+        ok, reason = reng.validate_recipe(bad, title="Wrap med kyckling")
+        self.assertFalse(ok)
+        self.assertEqual(reason, "uncovered_ingredient:yoghurt")
+
+    def test_generic_protein_template_rejected_for_wrap_hints(self) -> None:
+        """Fail-closed: protein+ris prose must not pass as a wrap recipe."""
+        tmpl = reng._template_from_hints(
+            "Något med kyckling",
+            meal_type="middag",
+            hints=["tortilla", "kycklingfilé", "yoghurt", "sallad"],
+            active_minutes=15,
+        )
+        # Either dish-aware wrap steps (ok) or None — never ris-without-ingredient
+        if tmpl is not None:
+            blob = " ".join(tmpl["steps"]).lower()
+            self.assertNotIn("2 dl ris", blob)
+            self.assertTrue(
+                reng.recipe_is_valid(reng._finalize_recipe(tmpl, source="template"))
+            )
+
 
 class RecipeEngineMaterializeTests(unittest.TestCase):
     def test_havregrynsgröt_has_real_ingredients_and_steps(self) -> None:
@@ -80,6 +140,31 @@ class RecipeEngineMaterializeTests(unittest.TestCase):
         self.assertNotIn("torsk", blob)
         steps = " ".join(str(s).lower() for s in recipe.get("steps") or [])
         self.assertIn("tonfisk", steps)
+
+    def test_wrap_catalog_names_tortilla_and_yoghurt(self) -> None:
+        recipe = reng.materialize_recipe(
+            "Wrap med kyckling",
+            meal_type="lunch",
+            allow_llm=False,
+        )
+        self.assertEqual(recipe.get("recipe_source"), "catalog")
+        self.assertTrue(reng.recipe_is_valid(recipe, "Wrap med kyckling"))
+        steps = " ".join(recipe["steps"]).lower()
+        self.assertIn("tortilla", steps)
+        self.assertIn("yoghurt", steps)
+        self.assertNotIn("2 dl ris", steps)
+        ings = " ".join(str(x).lower() for x in recipe["ingredients"])
+        self.assertIn("tortilla", ings)
+        self.assertIn("yoghurt", ings)
+
+    def test_catalog_entries_all_grounded(self) -> None:
+        fails: list[tuple[str, str]] = []
+        for key, raw in reng._CATALOG.items():
+            finalized = reng._finalize_recipe(dict(raw), source="catalog")
+            ok, reason = reng.validate_recipe(finalized, title=raw.get("title", key))
+            if not ok:
+                fails.append((key, reason))
+        self.assertEqual(fails, [])
 
     def test_ensure_valid_recipe_regenerates_stub(self) -> None:
         stub = {

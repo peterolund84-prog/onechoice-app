@@ -29,6 +29,57 @@ _GENERIC_PREP = re.compile(
     r"(?i)^förbered ingredienserna:"
 )
 
+# Seasonings / water may appear in steps without being listed as bought ingredients.
+_PANTRY_STEP_ALLOW = frozenset(
+    {
+        "salt",
+        "peppar",
+        "vatten",
+        "smör",
+        "olja",
+        "oljaolja",  # typo guard
+        "svartpeppar",
+        "vitlökssalt",
+    }
+)
+
+# Tokens that look like "qty + unit + word" but are not foods.
+_NON_FOOD_QTY_WORDS = frozenset(
+    {
+        "min",
+        "minuter",
+        "minut",
+        "sek",
+        "sekunder",
+        "timme",
+        "timmar",
+        "grader",
+        "gång",
+        "gånger",
+        "person",
+        "personer",
+        "portion",
+        "portioner",
+        "medelvärme",
+        "hög",
+        "låg",
+        "sida",
+        "sidor",
+        "cm",
+        "mm",
+        "per",
+        "pastavatten",
+        "vatten",
+    }
+)
+
+# qty + metric unit + food noun (e.g. "2 dl ris", "400 g kycklingfilé")
+_QTY_FOOD = re.compile(
+    r"(?i)(\d+[.,]?\d*)\s*"
+    r"(dl|g|kg|msk|tsk|krm|st|burk|skiva|skivor|klyfta|klyftor|förp|ask)\s+"
+    r"([a-zåäöé\-]+)"
+)
+
 RECIPE_JSON_SCHEMA = """
 {
   "title": "string — dish name",
@@ -59,6 +110,109 @@ def _ingredient_line(ing: dict[str, Any]) -> str:
     return name
 
 
+_UNIT_TOKEN = (
+    r"dl|g|kg|msk|tsk|krm|st|burk|skiva|skivor|klyfta|klyftor|förp|ask|blad|kopp"
+)
+
+
+def _strip_qty_from_name(text: str) -> str:
+    """Normalize 'fil 2 dl' / '2 dl fil' / 'paprika (färsk) 1 st' → bare food name."""
+    text = str(text or "").strip()
+    if not text:
+        return ""
+    # Drop parenthetical notes first: "paprika (färsk)" -> "paprika"
+    text = re.sub(r"\s*\([^)]*\)\s*", " ", text).strip()
+    # Leading qty+unit: "400 g kycklingfilé"
+    text = re.sub(
+        rf"(?i)^\d+[.,]?\d*\s*(?:{_UNIT_TOKEN})\s+",
+        "",
+        text,
+    )
+    # Trailing qty+unit (finalize lines): "fil 2 dl", "vitlök 2 klyftor"
+    text = re.sub(
+        rf"(?i)\s+\d+[.,]?\d*\s*(?:{_UNIT_TOKEN})\s*$",
+        "",
+        text,
+    )
+    return _norm_title(text)
+
+
+def _ingredient_names(ingredients: list[Any]) -> list[str]:
+    """Canonical lowercase ingredient names (no qty/unit)."""
+    names: list[str] = []
+    for raw in ingredients:
+        if isinstance(raw, dict):
+            text = _strip_qty_from_name(str(raw.get("name") or ""))
+        else:
+            text = _strip_qty_from_name(str(raw or ""))
+        if text and text not in names:
+            names.append(text)
+    return names
+
+
+def _name_variants(name: str) -> list[str]:
+    """Match stems so kycklingfilé ↔ kyckling, tortillabröd ↔ tortilla."""
+    n = _norm_title(name)
+    out = [n]
+    for stem in (
+        "kyckling",
+        "tortilla",
+        "yoghurt",
+        "sallad",
+        "tomat",
+        "pasta",
+        "ris",
+        "ägg",
+        "ost",
+        "lök",
+        "morot",
+        "broccoli",
+        "paprika",
+        "tonfisk",
+        "gurka",
+        "havregryn",
+        "banan",
+        "bröd",
+        "smör",
+        "färs",
+        "nudlar",
+        "quinoa",
+        "feta",
+        "avokado",
+        "kikärtor",
+        "pesto",
+        "parmesan",
+        "fil",
+        "müsli",
+        "musli",
+    ):
+        if stem in n and stem not in out:
+            out.append(stem)
+    # First token (≥3 chars) as soft stem — covers fil, ost, ägg
+    first = re.split(r"[\s\-_/]+", n)[0]
+    if len(first) >= 3 and first not in out:
+        out.append(first)
+    return out
+
+
+def _name_in_text(name: str, blob: str) -> bool:
+    return any(v in blob for v in _name_variants(name) if len(v) >= 3)
+
+
+def _food_covered_by_ings(food: str, ing_names: list[str]) -> bool:
+    food_n = _norm_title(food)
+    if food_n in _PANTRY_STEP_ALLOW or food_n in _NON_FOOD_QTY_WORDS:
+        return True
+    for ing in ing_names:
+        if _name_in_text(food_n, ing) or _name_in_text(ing, food_n):
+            return True
+        # shared stem
+        for v in _name_variants(ing):
+            if len(v) >= 4 and v in food_n:
+                return True
+    return False
+
+
 def _title_in_ingredients(title: str, ingredients: list[Any]) -> bool:
     t = _norm_title(title)
     if not t:
@@ -85,6 +239,8 @@ def _step_is_concrete(step: str) -> bool:
         return False
     if _PLACEHOLDER_STEP.search(s):
         return False
+    if _GENERIC_PREP.search(s):
+        return False
     if s.lower() in ("ät.", "servera.", "klart."):
         return False
     # Need a concrete cue: number, time unit, or strong cooking verb
@@ -96,26 +252,68 @@ def _step_is_concrete(step: str) -> bool:
         "gratinera", "bryn", "krossa", "tillsätt", "häll", "bred", "lägg",
         "ta fram", "servera", "häll upp", "strö", "ät", "rosta", "stapla",
         "forma", "grilla", "krydda", "smaka", "värm", "skär", "strimla",
-        "skölj", "riv", "fräs", "blögg", "toppa", "ringla", "vik",
+        "skölj", "riv", "fräs", "blögg", "toppa", "ringla", "vik", "rulla",
+        "fördela", "varva", "gratinera", "vila", "spara", "späd",
         "boil", "fry", "mix", "slice", "simmer", "whisk",
     )
     low = s.lower()
     return any(v in low for v in verbs)
 
 
+def _check_ingredient_step_grounding(
+    ingredients: list[Any], steps: list[Any]
+) -> tuple[bool, str]:
+    """Coverage + grounding: list ↔ steps must agree on foods."""
+    ing_names = _ingredient_names(list(ingredients or []))
+    if not ing_names:
+        return False, "no_ingredient_names"
+    steps_blob = " ".join(str(s) for s in (steps or [])).lower()
+
+    # Coverage: every listed ingredient appears in at least one step
+    for name in ing_names:
+        if name in _PANTRY_STEP_ALLOW:
+            continue
+        if not _name_in_text(name, steps_blob):
+            return False, f"uncovered_ingredient:{name}"
+
+    # Grounding: qty+unit+food in steps must exist in the ingredient list
+    for m in _QTY_FOOD.finditer(steps_blob):
+        food = _norm_title(m.group(3))
+        if len(food) < 3:
+            continue
+        if food in _NON_FOOD_QTY_WORDS or food in _PANTRY_STEP_ALLOW:
+            continue
+        if not _food_covered_by_ings(food, ing_names):
+            return False, f"ungrounded_step_food:{food}"
+    return True, "ok"
+
+
+def _ingredients_for_grounding(recipe: dict[str, Any]) -> list[Any]:
+    """Prefer structured dicts (bare names) over finalize display lines."""
+    structured = recipe.get("ingredients_structured")
+    if (
+        isinstance(structured, list)
+        and structured
+        and isinstance(structured[0], dict)
+    ):
+        return list(structured)
+    ings = recipe.get("ingredients") or recipe.get("ingredient_lines") or []
+    return list(ings or [])
+
+
 def validate_recipe(recipe: dict[str, Any] | None, *, title: str = "") -> tuple[bool, str]:
-    """Reject stubs before display."""
+    """Reject stubs and ingredient↔step contradictions before display."""
     if not isinstance(recipe, dict):
         return False, "not_a_dict"
     dish = str(recipe.get("title") or title or "")
-    ings = recipe.get("ingredients") or recipe.get("ingredient_lines") or []
+    ings = _ingredients_for_grounding(recipe)
     if isinstance(ings, list) and ings and isinstance(ings[0], dict):
         ing_count = len(ings)
     else:
         ing_count = len(list(ings or []))
     if ing_count < 2:
         return False, "too_few_ingredients"
-    if _title_in_ingredients(dish, list(recipe.get("ingredients") or ings)):
+    if _title_in_ingredients(dish, ings):
         return False, "title_as_ingredient"
     steps = list(recipe.get("steps") or [])
     if len(steps) < 3:
@@ -123,6 +321,9 @@ def validate_recipe(recipe: dict[str, Any] | None, *, title: str = "") -> tuple[
     for step in steps:
         if not _step_is_concrete(str(step)):
             return False, f"non_concrete_step:{step[:40]}"
+    grounded, g_reason = _check_ingredient_step_grounding(ings, steps)
+    if not grounded:
+        return False, g_reason
     nut = recipe.get("nutrition")
     if not isinstance(nut, dict):
         return False, "missing_nutrition"
@@ -471,6 +672,30 @@ _CATALOG: dict[str, dict[str, Any]] = {
         ],
         "nutrition": {"kcal": 650, "protein_g": 35, "fat_g": 35, "carbs_g": 45},
     },
+    "wrap med kyckling": {
+        "title": "Wrap med kyckling",
+        "meal_type": "lunch",
+        "portions": 1,
+        "total_minutes": 12,
+        "ingredients": [
+            {"name": "tortilla", "amount": "2", "unit": "st", "category": "to_buy"},
+            {"name": "kycklingfilé", "amount": "200", "unit": "g", "category": "to_buy"},
+            {"name": "sallad", "amount": "4", "unit": "blad", "category": "to_buy"},
+            {"name": "tomat", "amount": "1", "unit": "st", "category": "to_buy"},
+            {"name": "yoghurt", "amount": "2", "unit": "msk", "category": "to_buy"},
+            {"name": "olja", "amount": "1", "unit": "msk", "category": "assumed_home"},
+            {"name": "salt", "amount": "1", "unit": "krm", "category": "assumed_home"},
+            {"name": "peppar", "amount": "1", "unit": "krm", "category": "assumed_home"},
+        ],
+        "steps": [
+            "Värm 2 tortilla i torr panna 20 sek per sida (eller 15 sek i mikro).",
+            "Skär 200 g kycklingfilé i strimlor. Stek i 1 msk olja 5–6 min tills genomstekt. Krydda med salt och peppar.",
+            "Strimla sallad och skär tomat i klyftor.",
+            "Fördela kyckling, sallad och tomat på tortillan. Ringla 2 msk yoghurt ovanpå.",
+            "Rulla ihop wrapen tätt. Servera direkt.",
+        ],
+        "nutrition": {"kcal": 480, "protein_g": 38, "fat_g": 14, "carbs_g": 42},
+    },
 }
 
 
@@ -496,8 +721,12 @@ _EN_ALIASES: dict[str, str] = {
     "tuna salad": "sallad med tonfisk",
     "omelette with pepper and cheese": "proteinomelett med grönt",
     "chicken stir-fry from what you have": "kycklingwok med ris",
+    "chicken wok with rice": "kycklingwok med ris",
     "creamy tomato pasta": "krämig tomatsås-pasta",
     "tomato pasta with garlic": "krämig tomatsås-pasta",
+    "chicken wrap": "wrap med kyckling",
+    "wrap with chicken": "wrap med kyckling",
+    "ethiopian-inspired lentil stew": "etiopisk-inspirerad linsgryta",
 }
 
 
@@ -562,6 +791,9 @@ Return JSON matching exactly:
 Rules:
 - ingredients.length >= 3 with real amounts (dl, g, st, msk, krm)
 - steps.length >= 3; each step names amounts/times and a concrete action
+- EVERY ingredient name MUST appear in at least one step (coverage)
+- EVERY quantified food in steps (e.g. "2 dl ris") MUST be in the ingredient list (grounding)
+- NEVER invent sides (ris, pasta) that are not in the ingredient list
 - NEVER use placeholder steps like "Ta fram det du behöver" or "Gör i ordning och ät"
 - The dish title must NOT appear as an ingredient name
 - nutrition: per ONE portion, reasonable estimates from ingredient amounts
@@ -609,18 +841,23 @@ def _template_from_hints(
     hints: list[str],
     active_minutes: int | None,
 ) -> dict[str, Any] | None:
-    """Build best-effort structured recipe from name-only hints + shopping steps."""
+    """Dish-aware structured recipe from hints + shopping._recipe_steps.
+
+    Kept (not retired): offline / allow_llm=False still needs a path when the
+    catalog misses a title. Steps come from per-dish branches in
+    shopping._recipe_steps — the generic protein+ris prose is rejected by
+    validate_recipe grounding if it contradicts the hint list.
+    """
     if len(hints) < 2:
         return None
     steps = shopping._recipe_steps(title, hints)  # noqa: SLF001 — reuse dish-specific steps
     if len(steps) < 3:
         return None
-    if any(_PLACEHOLDER_STEP.search(s) for s in steps):
+    if any(_PLACEHOLDER_STEP.search(s) or _GENERIC_PREP.search(s) for s in steps):
         return None
     structured = _hints_to_structured(hints)
-    # Rough nutrition from shopping estimator
     est = shopping.estimate_nutrition(hints, suggestion=title, servings=1)
-    return {
+    raw = {
         "title": title,
         "meal_type": meal_type,
         "portions": 1 if meal_type in ("frukost", "kvallsmal") else 2,
@@ -635,6 +872,12 @@ def _template_from_hints(
             "carbs_g": est.get("carbs_g", 40),
         },
     }
+    # Fail closed — never hand a contradictory template to the UI
+    finalized = _finalize_recipe(raw, source="template")
+    ok, _ = validate_recipe(finalized, title=title)
+    if not ok:
+        return None
+    return raw
 
 
 def materialize_recipe(
