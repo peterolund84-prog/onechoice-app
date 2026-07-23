@@ -505,13 +505,15 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     font-family: "Inter", sans-serif !important;
 }
 .st-key-home_domains {
-    margin: 0 0 4px !important;
-    padding: 0 8px !important;
+    margin: 0 auto 4px !important;
+    padding: 0 28px !important;
     width: 100% !important;
+    max-width: 340px !important;
 }
 .st-key-home_domains [data-testid="stHorizontalBlock"] {
-    gap: 8px !important;
+    gap: 28px !important;
     margin-bottom: 0 !important;
+    align-items: stretch !important;
 }
 .st-key-home_domains [data-testid="stMarkdownContainer"],
 .st-key-home_domains [data-testid="stMarkdownContainer"] p {
@@ -536,22 +538,33 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     border: none !important;
     box-shadow: none !important;
 }
+/* Keep icon+label packs left-aligned so labels share one vertical line per column */
+.st-key-home_domains [class*="st-key-home_domain_"] div.stButton,
 [class*="st-key-home_domain_"] div.stButton {
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
+    display: flex !important;
+    justify-content: flex-start !important;
+    align-items: center !important;
 }
-/* Quiet domain rows — larger icons, tight icon→label, compact rows */
+/* Fixed icon column + 3px gap — mockup-tight; labels align across rows */
+.st-key-home_domains [class*="st-key-home_domain_"] div.stButton > button,
+.st-key-home_domains [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"],
+.st-key-home_domains [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"],
+.st-key-home_domains [class*="st-key-home_domain_"] button[data-testid="stBaseButton-secondary"],
 [class*="st-key-home_domain_"] div.stButton > button,
 [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"],
 [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"],
 [class*="st-key-home_domain_"] button[data-testid="stBaseButton-secondary"] {
-    display: flex !important;
-    flex-direction: row !important;
+    display: grid !important;
+    grid-template-columns: 28px max-content !important;
+    column-gap: 3px !important;
     align-items: center !important;
-    justify-content: flex-start !important;
-    gap: 0 !important;
-    width: 100% !important;
+    justify-content: start !important;
+    justify-items: start !important;
+    width: max-content !important;
+    max-width: 100% !important;
     min-height: 40px !important;
     height: 40px !important;
     max-height: 40px !important;
@@ -567,14 +580,28 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     font-weight: 500 !important;
     line-height: 1.15 !important;
     text-align: left !important;
-    padding: 0 4px !important;
+    padding: 0 !important;
     white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
     text-decoration: none !important;
     text-underline-offset: unset !important;
     transition: background-color 150ms ease, color 150ms ease !important;
     -webkit-tap-highlight-color: transparent !important;
+}
+.st-key-home_domains [class*="st-key-home_domain_"] div.stButton > button::before,
+[class*="st-key-home_domain_"] div.stButton > button::before {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    justify-self: center !important;
+}
+.st-key-home_domains [class*="st-key-home_domain_"] div.stButton > button > *,
+[class*="st-key-home_domain_"] div.stButton > button > * {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    text-align: left !important;
 }
 [class*="st-key-home_domain_"] div.stButton > button:hover,
 [class*="st-key-home_domain_"] div.stButton > button:focus,
