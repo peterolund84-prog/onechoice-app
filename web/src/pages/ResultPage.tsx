@@ -13,6 +13,7 @@ import {
   FORMAT_OPTIONS,
   MEAL_OPTIONS,
   MOOD_OPTIONS,
+  SERVICE_LABELS,
 } from "../lib/domainMeta";
 import type { Decision } from "../lib/types";
 
@@ -42,11 +43,53 @@ function dishHint(d: Decision): string | null {
   return typeof hint === "string" ? hint : null;
 }
 
-function moviePoster(d: Decision): string | null {
+function ctxString(d: Decision, key: string): string | null {
   const ctx = d.context;
   if (!ctx || typeof ctx !== "object") return null;
-  const url = ctx.movie_poster_url;
-  return typeof url === "string" && url ? url : null;
+  const v = ctx[key];
+  return typeof v === "string" && v.trim() ? v : null;
+}
+
+function ctxNumber(d: Decision, key: string): number | null {
+  const ctx = d.context;
+  if (!ctx || typeof ctx !== "object") return null;
+  const v = ctx[key];
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function moviePoster(d: Decision): string | null {
+  return ctxString(d, "movie_poster_url");
+}
+
+function movieKindLabel(d: Decision): string {
+  const fmt = ctxString(d, "format") || "";
+  const kind = ctxString(d, "kind") || "";
+  if (fmt === "ny_serie") return "Ny serie";
+  if (fmt === "avsnitt" || kind === "series") return "Avsnitt";
+  if (fmt === "film" || kind === "film") return "Film";
+  return "Film & serie";
+}
+
+function movieRatingLine(d: Decision): string | null {
+  const vote = ctxNumber(d, "movie_tmdb_vote_average");
+  const runtime = ctxNumber(d, "movie_runtime_min");
+  const service = ctxString(d, "movie_service");
+  const parts: string[] = [];
+  if (vote != null) {
+    parts.push(`★ ${vote.toFixed(1).replace(".", ",")}`);
+  }
+  if (runtime != null) {
+    parts.push(`${Math.round(runtime)} min`);
+  }
+  if (service) {
+    parts.push(SERVICE_LABELS[service] || service);
+  }
+  return parts.length ? parts.join(" · ") : null;
 }
 
 function mediaSrc(d: Decision): string | null {
@@ -67,6 +110,50 @@ function mediaSrc(d: Decision): string | null {
   }
   if (d.domain === "movie") return moviePoster(d);
   return null;
+}
+
+function SegControl({
+  label,
+  options,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  options: readonly { id: string; label: string }[];
+  value: string;
+  disabled?: boolean;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="oc-seg-block">
+      {label ? <div className="oc-sec-label">{label}</div> : null}
+      <div
+        className={`oc-meal-seg${options.length >= 5 ? " oc-meal-seg--dense" : ""}`}
+        role="tablist"
+        aria-label={label || "Val"}
+      >
+        {options.map((m) => {
+          const active = value === m.id;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              className={active ? "is-active" : undefined}
+              disabled={disabled}
+              onClick={() => {
+                if (!active) onChange(m.id);
+              }}
+            >
+              {m.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function ResultPage() {
@@ -224,6 +311,9 @@ export function ResultPage() {
   const accepted = Boolean(decision.accepted);
   const src = mediaSrc(decision);
   const showImage = Boolean(src) && !imgFailed;
+  const isMovie = decision.domain === "movie";
+  const movieYear = isMovie ? ctxNumber(decision, "movie_tmdb_year") : null;
+  const movieMeta = isMovie ? movieRatingLine(decision) : null;
   const toBuy =
     decision.context &&
     typeof decision.context === "object" &&
@@ -392,82 +482,49 @@ export function ResultPage() {
       ? decision.context.meal_type
       : "") || "middag",
   );
+  const movieFormat = String(ctxString(decision, "format") || "avsnitt");
+  const movieMood = String(ctxString(decision, "mood") || "avkopplat");
+  const primaryLabel =
+    decision.domain === "workout"
+      ? "Starta passet"
+      : decision.domain === "clothes"
+        ? "Bygg outfiten"
+        : decision.domain === "movie" || decision.domain === "weekend"
+          ? decision.execution_label || "Kör"
+          : "Välj";
 
   return (
     <section className="oc-result">
       {!accepted && !locked && decision.domain === "food" ? (
-        <div className="oc-meal-seg" role="tablist" aria-label="Måltid">
-          {MEAL_OPTIONS.map((m) => {
-            const active = mealType === m.id;
-            return (
-              <button
-                key={m.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                className={active ? "is-active" : undefined}
-                disabled={busy}
-                onClick={() => {
-                  if (!active) void redecideWith({ meal_type: m.id });
-                }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
+        <SegControl
+          label=""
+          options={MEAL_OPTIONS}
+          value={mealType}
+          disabled={busy}
+          onChange={(id) => void redecideWith({ meal_type: id })}
+        />
       ) : null}
 
-      {!accepted && !locked && decision.domain === "movie" ? (
-        <div className="oc-chip-block">
-          <div className="oc-sec-label">Format</div>
-          <div className="oc-chip-row">
-            {FORMAT_OPTIONS.map((m) => {
-              const active =
-                String(
-                  (decision.context && typeof decision.context === "object"
-                    ? decision.context.format
-                    : "") || "",
-                ) === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`oc-chip${active ? " is-active" : ""}`}
-                  disabled={busy}
-                  onClick={() => redecideWith({ format: m.id })}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-          <div className="oc-sec-label">Läge</div>
-          <div className="oc-chip-row">
-            {MOOD_OPTIONS.map((m) => {
-              const active =
-                String(
-                  (decision.context && typeof decision.context === "object"
-                    ? decision.context.mood
-                    : "") || "",
-                ) === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  className={`oc-chip${active ? " is-active" : ""}`}
-                  disabled={busy}
-                  onClick={() => redecideWith({ mood: m.id })}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {!accepted && !locked && isMovie ? (
+        <>
+          <SegControl
+            label="Format"
+            options={FORMAT_OPTIONS}
+            value={movieFormat}
+            disabled={busy}
+            onChange={(id) => void redecideWith({ format: id })}
+          />
+          <SegControl
+            label="Läge"
+            options={MOOD_OPTIONS}
+            value={movieMood}
+            disabled={busy}
+            onChange={(id) => void redecideWith({ mood: id })}
+          />
+        </>
       ) : null}
 
-      <div className="oc-media-card">
+      <div className={`oc-media-card${isMovie ? " oc-media-card--poster" : ""}`}>
         {showImage ? (
           <img
             className="oc-media-img"
@@ -505,12 +562,22 @@ export function ResultPage() {
         </div>
       </div>
 
+      {isMovie ? (
+        <p className="oc-result-kicker">{movieKindLabel(decision)}</p>
+      ) : null}
+
       <h1 className="oc-result-title">{decision.suggestion || "—"}</h1>
+      {isMovie && movieYear != null ? (
+        <p className="oc-result-year">{Math.round(movieYear)}</p>
+      ) : null}
       {locked || accepted ? <div className="oc-lock">Låst</div> : null}
       {locked && !accepted ? (
         <p className="oc-result-body">Det är {decision.suggestion}. Kör.</p>
       ) : decision.justification ? (
         <p className="oc-result-body">{decision.justification}</p>
+      ) : null}
+      {isMovie && movieMeta ? (
+        <p className="oc-result-meta">{movieMeta}</p>
       ) : null}
 
       <div className="oc-reroll-dots" aria-label="Omrullningar">
@@ -522,13 +589,7 @@ export function ResultPage() {
       <div className="oc-stack" style={{ width: "100%", maxWidth: 320 }}>
         {!accepted ? (
           <button type="button" className="oc-cta" disabled={busy} onClick={onAccept}>
-            {decision.domain === "workout"
-              ? "Starta passet"
-              : decision.domain === "clothes"
-                ? "Bygg outfiten"
-                : decision.domain === "movie" || decision.domain === "weekend"
-                  ? decision.execution_label || "Kör"
-                  : "Välj"}
+            {primaryLabel}
           </button>
         ) : null}
 
@@ -556,10 +617,24 @@ export function ResultPage() {
           </button>
         ) : null}
 
+        {accepted &&
+        decision.execution_url &&
+        decision.execution_label &&
+        !goesToExecute(decision) ? (
+          <a
+            className="oc-cta oc-cta-link"
+            href={decision.execution_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {decision.execution_label}
+          </a>
+        ) : null}
+
         {accepted && !goesToExecute(decision) ? (
           <button
             type="button"
-            className="oc-cta"
+            className="oc-btn oc-btn-ghost"
             disabled={busy}
             onClick={() => navigate("/")}
           >
@@ -571,17 +646,6 @@ export function ResultPage() {
           <button type="button" className="oc-btn" disabled={busy} onClick={onMergeList}>
             Lägg till i listan
           </button>
-        ) : null}
-
-        {decision.execution_url && decision.execution_label ? (
-          <a
-            className="oc-btn oc-btn-ghost"
-            href={decision.execution_url}
-            target="_blank"
-            rel="noreferrer"
-          >
-            {decision.execution_label}
-          </a>
         ) : null}
 
         {!accepted && toBuy ? (

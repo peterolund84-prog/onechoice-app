@@ -45,14 +45,14 @@ export function ClothesPage() {
     <section className="oc-page">
       <h1 className="oc-page-title">Vart ska du?</h1>
       <p className="oc-page-sub">Ett tryck — jag bygger outfiten.</p>
-      <div className="oc-chip-grid">
+      <div className="oc-meal-seg oc-meal-seg--dense" role="list" aria-label="Tillfälle">
         {OCCASION_OPTIONS.map((o) => (
           <button
             key={o.id}
             type="button"
-            className={`oc-chip${o.id === defaultId ? " is-suggested" : ""}`}
+            className={o.id === defaultId ? "is-active" : undefined}
             disabled={busy}
-            onClick={() => pick(o.id)}
+            onClick={() => void pick(o.id)}
           >
             {o.label}
           </button>

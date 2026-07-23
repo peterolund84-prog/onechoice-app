@@ -129,10 +129,20 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
     if ctx.get("sizes") and isinstance(ctx.get("sizes"), dict):
         clothes["sizes"] = {**(clothes.get("sizes") or {}), **ctx["sizes"]}
 
+    # Default: common SE apps so catalog titles on SVT/HBO/Disney/Prime can surface
+    # (not only Netflix). Users can narrow this in Profil → Streamingtjänster.
     movie.setdefault(
         "services",
         ctx.get("streaming_services")
-        or ["netflix", "svt_play"],
+        or [
+            "netflix",
+            "svt_play",
+            "hbo_max",
+            "disney_plus",
+            "prime",
+            "tv4_play",
+            "viaplay",
+        ],
     )
     movie.setdefault("allow_rentals", bool(ctx.get("allow_rentals", False)))
     movie.setdefault(

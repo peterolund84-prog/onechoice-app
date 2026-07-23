@@ -406,11 +406,19 @@ input {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
 }
 
+.oc-media-card--poster {
+  max-width: 220px;
+}
+
 .oc-media-img {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
   object-fit: cover;
+}
+
+.oc-media-card--poster .oc-media-img {
+  aspect-ratio: 2 / 3;
 }
 
 .oc-media-ph {
@@ -483,6 +491,21 @@ input {
   color: var(--oc-muted);
   font-size: 15px;
   line-height: 1.5;
+}
+
+.oc-result-year {
+  margin: -4px 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--oc-muted);
+}
+
+.oc-result-meta {
+  margin: -8px 0 18px;
+  max-width: 320px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--oc-muted);
 }
 
 .oc-cta-link {
@@ -708,6 +731,21 @@ input {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
+.oc-seg-block {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 0 12px;
+}
+
+.oc-seg-block .oc-sec-label {
+  margin: 0 0 6px;
+  text-align: center;
+}
+
+.oc-seg-block .oc-meal-seg {
+  margin-bottom: 0;
+}
+
 /* Food meal segmented control — matches Streamlit meal_seg */
 .oc-meal-seg {
   display: flex;
@@ -751,6 +789,21 @@ input {
 .oc-meal-seg button:disabled {
   opacity: 0.7;
   cursor: default;
+}
+
+.oc-meal-seg--dense {
+  height: auto;
+  min-height: 40px;
+  flex-wrap: wrap;
+  border-radius: 18px;
+  gap: 2px;
+}
+
+.oc-meal-seg--dense button {
+  flex: 1 1 calc(33.33% - 2px);
+  height: 30px;
+  font-size: 12px;
+  padding: 0 2px;
 }
 
 .oc-hist {

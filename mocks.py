@@ -140,10 +140,10 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "kind": "series",
         "links": {"svt_play": "https://www.svtplay.se/sok?q=det%20sista%20kapitlet"},
     },
-    "beck": {
+    "bonusfamiljen": {
         "services": {"svt_play"},
-        "runtime_min": 90,
-        "kind": "film",
+        "runtime_min": 45,
+        "kind": "series",
         "links": {"svt_play": "https://www.svtplay.se/sok?q=bonusfamiljen"},
     },
     "top gun maverick": {

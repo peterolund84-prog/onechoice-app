@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { clearAuth, isLoggedIn, readAuth } from "../lib/auth";
+import { STREAMING_SERVICE_OPTIONS } from "../lib/domainMeta";
 import { getUserId, resetUserId } from "../lib/user";
 import type { UserProfile } from "../lib/types";
+
+const DEFAULT_SERVICES = STREAMING_SERVICE_OPTIONS.map((s) => s.id);
 
 function parseProfile(user: UserProfile): Record<string, unknown> {
   const raw = user.profile_json;
@@ -42,8 +45,12 @@ export function ProfilPage() {
 
   const profile = user ? parseProfile(user) : {};
   const food = (profile.food as Record<string, unknown> | undefined) || {};
+  const movie = (profile.movie as Record<string, unknown> | undefined) || {};
   // Default ON like Streamlit
   const showNutrition = food.show_nutrition !== false;
+  const services = Array.isArray(movie.services)
+    ? (movie.services as unknown[]).map(String)
+    : [...DEFAULT_SERVICES];
   const isPro = Boolean(user?.is_pro);
   const loggedIn = isLoggedIn() || Boolean(user && user.guest === false);
 
@@ -65,6 +72,29 @@ export function ProfilPage() {
       const next = {
         ...profile,
         food: { ...food, show_nutrition: !showNutrition },
+      };
+      await api.patchMe({ profile_json: next });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Kunde inte uppdatera");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleService(serviceId: string) {
+    setBusy(true);
+    try {
+      const has = services.includes(serviceId);
+      let nextServices = has
+        ? services.filter((s) => s !== serviceId)
+        : [...services, serviceId];
+      if (nextServices.length === 0) {
+        nextServices = ["netflix"];
+      }
+      const next = {
+        ...profile,
+        movie: { ...movie, services: nextServices },
       };
       await api.patchMe({ profile_json: next });
       await load();
@@ -166,6 +196,30 @@ export function ProfilPage() {
         >
           Näringsinfo: {showNutrition ? "på" : "av"}
         </button>
+
+        <div className="oc-chip-block">
+          <div className="oc-sec-label">Streamingtjänster</div>
+          <p className="oc-page-sub" style={{ marginTop: 0 }}>
+            Appar du har — filmer och serier väljs bland dem.
+          </p>
+          <div className="oc-chip-grid">
+            {STREAMING_SERVICE_OPTIONS.map((s) => {
+              const on = services.includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`oc-chip${on ? " is-active" : ""}`}
+                  disabled={busy}
+                  onClick={() => void toggleService(s.id)}
+                >
+                  {s.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <button type="button" className="oc-btn oc-btn-ghost" disabled={busy} onClick={onExport}>
           Exportera mina data (GDPR)
         </button>

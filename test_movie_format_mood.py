@@ -134,7 +134,7 @@ class MovieDecideLoggingTests(unittest.TestCase):
         self.assertTrue(r.ok)
         self.assertEqual((r.context or {}).get("format"), "film")
         # Local pack for spanning+film includes Dune when services allow
-        # (default profile has netflix+svt — Dune needs hbo/prime; may be vague)
+        # (default profile includes hbo/prime — Dune should be feasible).
         self.assertTrue(r.suggestion)
 
     def test_med_barnen_rejects_adult_titles(self) -> None:

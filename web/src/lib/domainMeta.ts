@@ -19,6 +19,20 @@ export const MOOD_OPTIONS = [
   { id: "med_barnen", label: "Med barnen" },
 ] as const;
 
+export const STREAMING_SERVICE_OPTIONS = [
+  { id: "netflix", label: "Netflix" },
+  { id: "svt_play", label: "SVT Play" },
+  { id: "hbo_max", label: "HBO Max" },
+  { id: "disney_plus", label: "Disney+" },
+  { id: "prime", label: "Prime Video" },
+  { id: "tv4_play", label: "TV4 Play" },
+  { id: "viaplay", label: "Viaplay" },
+] as const;
+
+export const SERVICE_LABELS: Record<string, string> = Object.fromEntries(
+  STREAMING_SERVICE_OPTIONS.map((s) => [s.id, s.label]),
+);
+
 export const OCCASION_OPTIONS = [
   { id: "jobb", label: "Jobb" },
   { id: "vardag", label: "Vardag hemma" },
