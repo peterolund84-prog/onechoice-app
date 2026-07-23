@@ -47,7 +47,7 @@ class FoodVariationTests(unittest.TestCase):
     def test_seven_middag_accepts_are_distinct(self) -> None:
         seen: list[str] = []
         with mock.patch.object(pipeline, "_grok_candidates", side_effect=self._fake_grok):
-            with mock.patch.object(pipeline.random, "random", return_value=0.5):
+            with mock.patch.object(pipeline._rng, "random", return_value=0.5):
                 # force safe (non-explore) path — random > SAFE_RATIO would explore
                 for _ in range(7):
                     r = pipeline.decide(
@@ -70,7 +70,7 @@ class FoodVariationTests(unittest.TestCase):
     def test_dish_returns_after_repeat_window(self) -> None:
         """After window expires (mock recent empty), a prior dish may return."""
         with mock.patch.object(pipeline, "_grok_candidates", side_effect=self._fake_grok):
-            with mock.patch.object(pipeline.random, "random", return_value=0.5):
+            with mock.patch.object(pipeline._rng, "random", return_value=0.5):
                 r1 = pipeline.decide(
                     self.uid,
                     "Vad ska jag äta?",

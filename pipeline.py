@@ -33,6 +33,17 @@ import shopping
 
 log = logging.getLogger("onechoice.pipeline")
 
+# Module-level RNG — all engine randomness goes through here so tests can
+# seed deterministically (see conftest.py / seed_rng).
+_rng = random.Random()
+
+
+def seed_rng(seed: int = 1337) -> None:
+    """Reseed the pipeline RNG (and stdlib random for any stragglers)."""
+    _rng.seed(seed)
+    random.seed(seed)
+
+
 MAX_REROLLS = 3
 REPEAT_DAYS = 7
 SAFE_RATIO = 0.80  # bandit: 80% safe / 20% explore (wildcard)
@@ -329,7 +340,7 @@ def decide(
         path=db_path,
     )
 
-    explore = (not locked) and (random.random() > SAFE_RATIO)
+    explore = (not locked) and (_rng.random() > SAFE_RATIO)
     # Fast path ONLY for habit meals (frukost/kvällsmål) — lunch & middag
     # always consult the LLM so variety is not starved by the tiny local pack.
     food_local_first = (
@@ -1648,7 +1659,7 @@ def _local_candidates(
     recent_l = {str(r).strip().lower() for r in recent if r}
     filtered = [c for c in items if c["suggestion"].strip().lower() not in recent_l]
     pool = filtered or items
-    random.shuffle(pool)
+    _rng.shuffle(pool)
     if domain == "food" and context.get("time_of_day") == "morning":
         if language == "sv":
             pool.insert(0, {
@@ -1865,7 +1876,7 @@ def _rank_candidates(
     if explore and len(scored) > 1:
         wild = [pair for pair in scored if pair[1].get("wildcard")]
         explore_pool = wild or scored[len(scored) // 2 :]
-        pick = random.choice(explore_pool)
+        pick = _rng.choice(explore_pool)
         rest = [c for s, c in scored if c is not pick[1]]
         return [pick[1]] + rest
     return [c for _, c in scored]
