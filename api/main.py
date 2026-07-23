@@ -51,7 +51,7 @@ def _uid(
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "build": "dish-embed-v2"}
 
 
 @app.get("/v1/media/dish")

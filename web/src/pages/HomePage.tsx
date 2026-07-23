@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Clapperboard, Dumbbell, Soup, TreePalm } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { api } from "../lib/api";
+import type { Decision } from "../lib/types";
 
 type DomainId = "food" | "clothes" | "movie" | "workout" | "weekend" | "fridge";
 
@@ -120,16 +121,19 @@ export function HomePage() {
         domain_hint: opts.domain_hint ?? null,
         meal_type: opts.meal_type ?? home.meal_type ?? null,
       });
-      sessionStorage.setItem(
-        "oc_last_decision",
-        JSON.stringify({
-          ...result,
-          decision_id: (result as { id?: number; decision_id?: number }).decision_id
-            ?? (result as { id?: number }).id
-            ?? null,
-        }),
-      );
-      navigate("/resultat");
+      const decision: Decision = {
+        ...result,
+        decision_id:
+          (result as Decision).decision_id ?? (result as Decision).id ?? null,
+      };
+      // Keep full payload (incl. image) in router state; slim copy in sessionStorage.
+      try {
+        const { image_data_url: _img, ...slim } = decision;
+        sessionStorage.setItem("oc_last_decision", JSON.stringify(slim));
+      } catch {
+        /* iOS quota — router state still carries the image */
+      }
+      navigate("/resultat", { state: { decision } });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte bestämma just nu.");
     } finally {

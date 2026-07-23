@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Heart, Share2 } from "lucide-react";
 import { api } from "../lib/api";
 import type { Decision } from "../lib/types";
@@ -17,7 +17,12 @@ function readDecision(): Decision | null {
 }
 
 function saveDecision(d: Decision) {
-  sessionStorage.setItem("oc_last_decision", JSON.stringify(d));
+  try {
+    const { image_data_url: _img, ...slim } = d;
+    sessionStorage.setItem("oc_last_decision", JSON.stringify(slim));
+  } catch {
+    /* ignore quota */
+  }
 }
 
 function decisionId(d: Decision | null): number | null {
@@ -56,7 +61,11 @@ function mediaSrc(d: Decision): string | null {
 
 export function ResultPage() {
   const navigate = useNavigate();
-  const initial = useMemo(() => readDecision(), []);
+  const location = useLocation();
+  const initial = useMemo(() => {
+    const fromNav = (location.state as { decision?: Decision } | null)?.decision;
+    return fromNav ?? readDecision();
+  }, [location.state]);
   const [decision, setDecision] = useState<Decision | null>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +199,7 @@ export function ResultPage() {
       saveDecision(next);
       setDecision(next);
       setMsg(null);
+      navigate("/resultat", { state: { decision: next }, replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Kunde inte ge nytt förslag");
     } finally {
