@@ -220,6 +220,7 @@ class ResultCrashCacheFixTests(unittest.TestCase):
         self.assertNotIn("@st.cache", b64_src)
         self.assertNotIn("def _cached(", b64_src)
         self.assertTrue(hasattr(dimg, "_encode_dish_image_b64"))
+        self.assertTrue(hasattr(dimg, "_B64_MEMO"))
 
         resolve_src = inspect.getsource(lc.resolve_text_model)
         self.assertNotIn("@st.cache", resolve_src)

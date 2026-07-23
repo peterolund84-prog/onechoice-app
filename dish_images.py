@@ -312,8 +312,13 @@ def resolve_dish_image_bytes(
         return None
 
 
+# Process-local memo (str keys only). Avoid @st.cache_data here — module-level
+# Streamlit caches have been flaky across Cloud reruns for large base64 payloads.
+_B64_MEMO: dict[tuple[str, str, str], str | None] = {}
+
+
 def _encode_dish_image_b64(title: str, category_hint: str, root_s: str) -> str | None:
-    """Encode dish bytes → base64. Module-level; str args only (cache-friendly)."""
+    """Encode dish bytes → base64. Module-level; str args only."""
     import base64
 
     r = Path(root_s) if root_s else None
@@ -324,30 +329,21 @@ def _encode_dish_image_b64(title: str, category_hint: str, root_s: str) -> str |
     return base64.b64encode(raw).decode("ascii")
 
 
-try:
-    import streamlit as st
-
-    _cached_dish_image_b64 = st.cache_data(show_spinner=False)(_encode_dish_image_b64)
-except Exception:
-    _cached_dish_image_b64 = None  # type: ignore[assignment]
-
-
 def resolve_dish_image_b64(
     title: str,
     category_hint: str | None = None,
     *,
     root: Path | None = None,
 ) -> str | None:
-    """Return base64-encoded JPEG for a dish, or None. Cached per process via Streamlit."""
+    """Return base64-encoded JPEG for a dish, or None. Memoized per process."""
     root_s = str(root) if root is not None else ""
     hint_s = str(category_hint) if category_hint is not None else ""
-    cached = _cached_dish_image_b64
-    if cached is not None:
-        try:
-            return cached(title, hint_s, root_s)
-        except Exception:
-            pass
-    return _encode_dish_image_b64(title, hint_s, root_s)
+    key = (title, hint_s, root_s)
+    if key in _B64_MEMO:
+        return _B64_MEMO[key]
+    val = _encode_dish_image_b64(title, hint_s, root_s)
+    _B64_MEMO[key] = val
+    return val
 
 
 def iter_local_pack_titles(*, languages: tuple[str, ...] = ("sv", "en")) -> list[str]:

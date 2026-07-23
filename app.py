@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "fix-result-crash-cache-v73-20260722"
+BUILD_ID = "fix-dish-img-visible-v74-20260722"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
