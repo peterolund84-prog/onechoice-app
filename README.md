@@ -1,12 +1,14 @@
 # OneChoice + Supabase
 
 AI that makes **one** everyday decision — never a list.  
-Streamlit UI · Supabase Auth + Postgres · premium mobile design.
+**React UI** (`web/`) + **FastAPI** (`api/`) · Streamlit `app.py` is legacy until cutover · Supabase Auth + Postgres.
 
 ## Projektstruktur
 
 ```
-app.py                 # Streamlit UI (login, beslut, historik)
+web/                   # React (Vite) consumer UI — primary frontend
+api/                   # FastAPI: /v1/home, /v1/decide, …
+app.py                 # Legacy Streamlit UI (kept until React ships)
 pipeline.py            # decide() — shared one-decision pipeline
 feasibility.py         # Domain validators (never show broken decisions)
 mocks.py               # V1 Zalando stock + JustWatch streaming catalogs
@@ -74,10 +76,26 @@ STRIPE_SECRET_KEY = "sk_test-..." # valfritt
 > Använd **anon/public** key i Streamlit-klienten (RLS skyddar datan).  
 > Dela aldrig `service_role` key i frontend.
 
-## 5) Installera & kör
+## 5) Installera & kör (React + API)
 
 ```bash
 pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+```
+
+I ett annat terminalfönster:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Öppna http://127.0.0.1:5173 — Vite proxar/anropar API via `VITE_API_BASE` (default `http://127.0.0.1:8000`).
+
+### Legacy Streamlit
+
+```bash
 python -m streamlit run app.py
 ```
 

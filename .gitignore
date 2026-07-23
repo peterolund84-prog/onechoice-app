@@ -2,3 +2,13 @@ onechoice.db
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
+web/node_modules/
+web/dist/
+web/.env
+web/.env.local
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
