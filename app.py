@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "nav-icons-freetext-cta-v87-20260723"
+BUILD_ID = "fix-film-opens-food-v88-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -1805,13 +1805,23 @@ def _resume_decision_page() -> str | None:
 
 
 def _go_home_chooser() -> None:
-    """Explicit start-over — show Mat/Kläder chooser, don't resume the last lock."""
+    """Explicit start-over — show Mat/Kläder chooser, don't resume the last lock.
+
+    Flag stays sticky across home reruns until the user starts a new path
+    (domain card / hero CTA / fridge / free-text). Popping it on first paint
+    made Film/Träning taps resume the previous accepted food dish.
+    """
     _clear_fridge_session()
     st.session_state["_force_home_chooser"] = True
     st.session_state.home_free_open = False
     st.session_state.pop("home_free_input", None)
     st.session_state.page = "home"
     st.rerun()
+
+
+def _leave_home_chooser() -> None:
+    """User started a new decision from the chooser — resume may apply again later."""
+    st.session_state.pop("_force_home_chooser", None)
 
 
 def nav() -> None:
@@ -1861,6 +1871,7 @@ def nav() -> None:
 
 def _start_domain_decision(domain: str) -> None:
     """Start a domain chip decision without ?domain= navigation (keeps auth session)."""
+    _leave_home_chooser()
     if domain == "clothes":
         st.session_state.last_domain_hint = "clothes"
         st.session_state.pending_clothes_question = pipeline._default_question(
@@ -2017,6 +2028,7 @@ def infer_home_hero(
 def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
     import food_domain as fd
 
+    _leave_home_chooser()
     domain = str(inferred.get("domain") or "food")
     if domain == "food":
         meal = inferred.get("meal_type")
@@ -2030,6 +2042,7 @@ def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
 
 def _start_fridge_flow() -> None:
     """Open fridge capture — session-safe (no ?fridge= navigation)."""
+    _leave_home_chooser()
     st.session_state.fridge_step = "capture"
     st.session_state.fridge_inventory = []
     st.session_state.fridge_mode = False
@@ -4490,7 +4503,8 @@ def page_home() -> None:
         st.session_state.pop(_k, None)
 
     # Locked decision in play → resume it. Chooser only for an explicit start-over.
-    force_chooser = bool(_session_pop("_force_home_chooser", False))
+    # Sticky: do NOT pop here — domain taps must still see the chooser on this run.
+    force_chooser = bool(st.session_state.get("_force_home_chooser"))
     if not force_chooser:
         resume = _resume_decision_page()
         if resume:
@@ -4508,6 +4522,7 @@ def page_home() -> None:
         with st.container(key="home_weekend_alt"):
             alt = str(inferred.get("weekend_headline") or "")
             if st.button(alt, key="home_weekend_alt_btn"):
+                _leave_home_chooser()
                 run_decision(
                     question="",
                     domain_hint="weekend",
@@ -4573,6 +4588,7 @@ def page_home() -> None:
             st.warning(t("too_long"))
         else:
             st.session_state.home_free_open = False
+            _leave_home_chooser()
             run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
     nav()
 

@@ -198,6 +198,44 @@ class HappyPathSmokeTest(unittest.TestCase):
         self.assertNotIn("Mat", labels)
         self.assertFalse(any("Bestäm åt mig" == lab for lab in labels), labels)
 
+    def test_film_from_chooser_after_accepted_food_does_not_resume(self) -> None:
+        """Hem chooser → Film must start a movie, not bounce to the prior food lock."""
+        at = self._boot_authenticated()
+        at.session_state["accepted"] = True
+        at.session_state["current"] = {
+            "ok": True,
+            "domain": "food",
+            "suggestion": "Köttbullar",
+            "justification": "test",
+            "accepted": True,
+            "locked": True,
+            "decision_id": 99,
+            "context": {
+                "meal_type": "middag",
+                "recipe": {
+                    "title": "Köttbullar",
+                    "steps": ["Stek"],
+                    "ingredient_lines": ["kött"],
+                    "portioner": 1,
+                },
+            },
+            "execution_type": "checklist",
+            "execution_label": "Laga",
+        }
+        at.session_state["_force_home_chooser"] = True
+        at.session_state["page"] = "home"
+        at.run()
+        self.assertEqual(at.session_state["page"], "home")
+        # Flag must stay sticky so the Film tap is not stolen by resume
+        self.assertTrue(bool(at.session_state["_force_home_chooser"]))
+        film = next(b for b in at.button if getattr(b, "key", None) == "home_domain_movie")
+        film.click().run()
+        self.assertFalse(at.exception)
+        self.assertEqual(at.session_state["page"], "result")
+        cur = at.session_state["current"]
+        self.assertEqual(cur.get("domain"), "movie")
+        self.assertNotEqual(cur.get("suggestion"), "Köttbullar")
+
 
 class DishManifestTests(unittest.TestCase):
     def test_manifest_covers_taxonomy(self) -> None:
