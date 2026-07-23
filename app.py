@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "css-diet-chips-v81-20260723"
+BUILD_ID = "css-diet-cards-v82-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
