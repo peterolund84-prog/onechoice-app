@@ -526,34 +526,6 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     color: var(--oc-ink) !important;
     text-decoration: none !important;
 }
-.oc-domain-card-icon {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: 20px !important;
-    height: 20px !important;
-    flex: 0 0 20px !important;
-    line-height: 0 !important;
-    color: var(--oc-ink) !important;
-}
-.oc-domain-card-icon svg {
-    width: 20px !important;
-    height: 20px !important;
-    stroke: currentColor !important;
-    stroke-width: 1.5 !important;
-    fill: none !important;
-}
-.oc-domain-card-label {
-    font-family: "Inter", sans-serif !important;
-    font-size: 16px !important;
-    font-weight: 500 !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-}
 .st-key-home_free_form {
     margin: 24px 0 20px !important;
     padding: 0 !important;
@@ -832,9 +804,6 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     left: 12px;
     z-index: 4;
     filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
-}
-.oc-food-decision {
-    position: relative !important;
 }
 /* Global icon-only buttons — glyph only, invisible 40px tap target */
 .oc-icon-btn,
@@ -1522,6 +1491,7 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {
     font-weight: 500 !important;
 }
 .oc-food-decision {
+    position: relative !important;
     text-align: center !important;
     padding: 0 0 1.35rem !important;
     overflow: hidden !important;
@@ -1784,20 +1754,6 @@ body:has(.oc-share-landing) .st-key-oc_nav_bar,
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
 }
-/* Legacy class kept for exec-meta; no boxed sentence on recipe cards */
-.oc-recipe .oc-nutrition,
-.oc-nutrition {
-    margin: 0.65rem 0 0.15rem; padding: 0;
-    font-size: 0.95rem; color: var(--oc-ink) !important; line-height: 1.35;
-    font-weight: 600; letter-spacing: 0; text-transform: none;
-    font-family: "Inter", sans-serif !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-}
-.oc-nutrition.missing {
-    color: var(--oc-muted) !important; font-weight: 400 !important;
-}
 /* Collapsed labels must stay hidden (home textarea, meal pills) */
 div[data-testid="stTextArea"] [data-testid="stWidgetLabel"],
 div[data-testid="stPills"] [data-testid="stWidgetLabel"],
@@ -1809,11 +1765,6 @@ div[data-testid="stPills"] label[data-testid="stWidgetLabel"] {
     margin: 0 !important;
     padding: 0 !important;
     overflow: hidden !important;
-}
-[data-testid="stMarkdownContainer"] .oc-nutrition {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
 }
 /* Profile / checkbox labels remain readable */
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] p,
@@ -1828,7 +1779,6 @@ div[data-testid="stCheckbox"] label p {
 }
 .oc-error p { color: var(--oc-muted); font-size: 1.1rem; margin: 0 0 0.4rem; }
 .oc-link-wrap { text-align: center; margin: 0.35rem 0 0.9rem; }
-.oc-checks [data-testid="stWidgetLabel"],
 div[data-testid="stCheckbox"] [data-testid="stWidgetLabel"] {
     display: flex !important;
 }
@@ -1840,15 +1790,6 @@ div[data-testid="stCheckbox"] label {
     font-size: 0.68rem; letter-spacing: 0.09em; text-transform: uppercase;
     color: var(--oc-muted); font-weight: 600; margin: 0.85rem 0 0.35rem;
 }
-.oc-hist {
-    padding: 0;
-    margin-bottom: 0;
-    border: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-}
-.oc-hist strong { display: block; font-size: 1.05rem; margin-bottom: 0.2rem; color: var(--oc-ink); }
-.oc-hist span { font-size: 0.9rem; color: var(--oc-muted); }
 .oc-pro {
     padding: 2rem 1.5rem; text-align: center; margin-top: 1.5rem;
 }
@@ -2019,47 +1960,6 @@ div[data-testid="stTextInput"] input,
 div[data-testid="stTextArea"] textarea {
     font-size: 16px !important;
 }
-.oc-shop-list {
-    margin: 0.5rem 0 1rem;
-}
-.oc-shop-row {
-    display: flex !important;
-    align-items: center;
-    gap: 0.65rem;
-    width: 100%;
-    min-height: 3rem;
-    padding: 0.85rem 1rem;
-    margin: 0.35rem 0;
-    border: 1px solid var(--oc-border);
-    border-radius: 12px;
-    background: #fff !important;
-    color: var(--oc-ink) !important;
-    text-decoration: none !important;
-    font-size: 1rem;
-    line-height: 1.3;
-    box-sizing: border-box;
-}
-.oc-shop-row.checked {
-    color: var(--oc-muted) !important;
-    text-decoration: line-through;
-    opacity: 0.72;
-}
-.oc-shop-row .oc-chk {
-    width: 1.35rem;
-    height: 1.35rem;
-    border: 2px solid var(--oc-border);
-    border-radius: 6px;
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.85rem;
-    line-height: 1;
-}
-.oc-shop-row.checked .oc-chk {
-    border-color: var(--oc-accent);
-    color: var(--oc-accent);
-}
 /* Executable shopping — quiet checklist rows (indigo reserved for ONE CTA) */
 .oc-shop-pick {
     background: #fff;
@@ -2089,83 +1989,6 @@ div[data-testid="stTextArea"] textarea {
     margin: 10px 16px 8px; padding-top: 10px;
     border-top: 1px solid rgba(0, 0, 0, 0.06);
     font-size: 13px; color: var(--oc-muted); line-height: 1.4;
-}
-a.oc-shop-row {
-    display: flex !important;
-    align-items: center !important;
-    gap: 12px !important;
-    width: 100% !important;
-    height: 44px !important;
-    min-height: 44px !important;
-    max-height: 44px !important;
-    padding: 0 16px !important;
-    margin: 0 !important;
-    box-sizing: border-box !important;
-    background: #fff !important;
-    color: var(--oc-ink) !important;
-    text-decoration: none !important;
-    border: none !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    font-family: "Inter", sans-serif !important;
-}
-a.oc-shop-row:last-of-type {
-    border-bottom: none !important;
-}
-a.oc-shop-row .oc-chk {
-    flex: 0 0 22px;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    border: 1.5px solid rgba(0, 0, 0, 0.18);
-    box-sizing: border-box;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    color: transparent;
-    font-size: 12px;
-    line-height: 1;
-}
-a.oc-shop-row.checked .oc-chk {
-    background: #3B3BC4;
-    border-color: #3B3BC4;
-    color: #fff;
-}
-a.oc-shop-row .oc-shop-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    font-size: 16px;
-    font-weight: 500;
-    line-height: 1.2;
-    color: var(--oc-ink);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-a.oc-shop-row .oc-shop-amt {
-    flex: 0 0 auto;
-    font-size: 14px;
-    font-weight: 400;
-    color: var(--oc-muted);
-    white-space: nowrap;
-}
-a.oc-shop-row .oc-shop-hint {
-    display: block;
-    font-size: 12px;
-    font-weight: 400;
-    color: var(--oc-muted);
-    line-height: 1.2;
-    margin-top: 2px;
-}
-a.oc-shop-row.checked {
-    opacity: 1;
-}
-a.oc-shop-row.checked .oc-shop-name {
-    text-decoration: none;
-    color: var(--oc-ink);
-    font-weight: 500;
 }
 /* Execute selection checklist — st.checkbox rows (no strikethrough) */
 .st-key-exec_shop_card {
@@ -2463,9 +2286,6 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     opacity: 0.5 !important;
     border-color: transparent !important;
 }
-.oc-list-badge {
-    display: none;
-}
 .oc-decision.oc-exec-lock {
     position: relative;
     max-height: 160px;
@@ -2495,16 +2315,6 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
     color: var(--oc-muted);
     line-height: 1.35;
 }
-.oc-exec-meta .oc-nutrition {
-    margin: 0 !important;
-    padding: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    font-size: 14px !important;
-    font-weight: 500 !important;
-    color: var(--oc-muted) !important;
-}
 .oc-recipe.oc-recipe-steps-only .oc-sec:first-of-type {
     margin-top: 0;
 }
@@ -2527,20 +2337,6 @@ div[data-testid="element-container"]:has(.oc-shop-tog-marker) + div[data-testid=
 .st-key-exec_sticky_cta div.stButton {
     margin: 0 !important;
     width: 100% !important;
-}
-.st-key-exec_sticky_cta .oc-list-confirm {
-    text-align: center;
-    margin: 0;
-    padding: 12px 8px;
-    font-family: "Inter", sans-serif !important;
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--oc-ink);
-}
-.st-key-exec_sticky_cta .oc-list-confirm a {
-    color: var(--oc-accent);
-    text-decoration: underline;
-    text-underline-offset: 3px;
 }
 .block-container:has(.oc-shop-pick-marker),
 .block-container:has(.st-key-exec_sticky_cta) {

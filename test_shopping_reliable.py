@@ -290,8 +290,8 @@ class ReliableShoppingUiTests(unittest.TestCase):
 
         css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
         self.assertIn("oc-shop-pick-marker", css)
-        self.assertIn("oc-shop-row", css)
         self.assertIn("oc-shop-pick", css)
+        self.assertIn("exec_shop_card", css)
         self.assertIn("exec_sticky_cta", css)
         self.assertIn("oc-exec-lock", css)
 
