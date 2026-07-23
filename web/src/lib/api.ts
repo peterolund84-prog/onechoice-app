@@ -1,7 +1,23 @@
 import { getUserId } from "./user";
 import type { Decision, ShoppingItem, UserProfile } from "./types";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+function resolveApiBase(): string {
+  const env = (import.meta.env.VITE_API_BASE as string | undefined)?.trim();
+  const apiPort = (import.meta.env.VITE_API_PORT as string | undefined)?.trim() || "8001";
+
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    const onLan =
+      Boolean(host) && host !== "localhost" && host !== "127.0.0.1";
+    // Phone on Wi‑Fi must not call 127.0.0.1 (that is the phone itself).
+    if (onLan && (!env || /127\.0\.0\.1|localhost/i.test(env))) {
+      return `http://${host}:${apiPort}`;
+    }
+  }
+  return env || "http://127.0.0.1:8000";
+}
+
+const API_BASE = resolveApiBase();
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const uid = getUserId();
@@ -10,16 +26,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     "X-User-Id": uid,
     ...(init?.headers as Record<string, string> | undefined),
   };
-  const res = await fetch(`${API_BASE}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
+  const ctrl = new AbortController();
+  const timeoutMs = 25000;
+  const timer = window.setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers,
+      signal: init?.signal ?? ctrl.signal,
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `HTTP ${res.status}`);
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      return res.json() as Promise<T>;
+    }
+    return (await res.text()) as T;
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error(
+        `API svarade inte (${API_BASE}). Kolla att uvicorn kör och att .env pekar rätt.`,
+      );
+    }
+    if (e instanceof TypeError) {
+      throw new Error(
+        `Kunde inte nå API (${API_BASE}). Starta API med --host 0.0.0.0.`,
+      );
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(timer);
   }
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) {
-    return res.json() as Promise<T>;
-  }
-  return (await res.text()) as T;
 }
 
 function withUid(path: string): string {
@@ -28,6 +67,8 @@ function withUid(path: string): string {
 }
 
 export const api = {
+  base: API_BASE,
+
   home: () => request<Record<string, unknown>>("/v1/home?language=sv"),
 
   decide: (body: {
