@@ -1657,6 +1657,28 @@ div[class*="st-key-hist_fav_"] div.stButton > button div {
     animation: oc-skel-shimmer 1.6s ease-in-out infinite;
 }
 .oc-skel-bar.is-title { height: 22px; margin-bottom: 16px; }
+.oc-skel-poster {
+    flex: 0 0 auto !important;
+    width: 112px !important;
+    height: 168px !important;
+    border-radius: 14px !important;
+}
+/* Food-only CTAs must never paint over movie/clothes/workout results */
+body:has(.oc-movie-decision) [class*="st-key-food_go_for_it"],
+body:has(.oc-movie-decision) [class*="st-key-meal_seg_"],
+body:has(.oc-movie-decision) .st-key-meal_seg,
+.block-container:has(.oc-result):not(:has(.oc-food-decision)) [class*="st-key-food_go_for_it"],
+.block-container:has(.oc-result):not(:has(.oc-food-decision)) [class*="st-key-fridge_cook_accept"],
+.block-container:has(.oc-result):not(:has(.oc-food-decision)) [class*="st-key-meal_seg_"] {
+    display: none !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
 .oc-skel-status {
     position: relative;
     height: 1.4em;

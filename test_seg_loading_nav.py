@@ -70,7 +70,7 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         painted: list[bool] = []
 
-        def fake_paint(*, fridge_mode: bool = False) -> None:
+        def fake_paint(*, fridge_mode: bool = False, domain: str | None = None) -> None:
             painted.append(True)
 
         with mock.patch.object(app_mod, "_render_decide_skeleton", side_effect=fake_paint):
@@ -88,7 +88,7 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         painted: list[bool] = []
 
-        def fake_paint(*, fridge_mode: bool = False) -> None:
+        def fake_paint(*, fridge_mode: bool = False, domain: str | None = None) -> None:
             painted.append(True)
 
         def slow() -> str:
@@ -111,7 +111,7 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 
         painted: list[bool] = []
 
-        def fake_paint(*, fridge_mode: bool = False) -> None:
+        def fake_paint(*, fridge_mode: bool = False, domain: str | None = None) -> None:
             painted.append(True)
 
         def slow() -> str:
@@ -294,6 +294,64 @@ class NavBleedTests(unittest.TestCase):
             src,
         )
         self.assertIn("len(question) > rt.MAX_INPUT_CHARS", src)
+
+
+class DomainAwareDecideSkeletonTests(unittest.TestCase):
+    def test_movie_status_never_mentions_recipe(self) -> None:
+        import app as app_mod
+
+        with mock.patch.object(app_mod, "t", side_effect=lambda k: app_mod.I18N["sv"][k]):
+            msgs = app_mod._decide_status_messages(fridge_mode=False, domain="movie")
+        blob = " ".join(msgs).lower()
+        self.assertNotIn("recept", blob)
+        self.assertNotIn("åt senast", blob)
+        self.assertIn("titta", blob)
+
+    def test_food_status_keeps_recipe_copy(self) -> None:
+        import app as app_mod
+
+        with mock.patch.object(app_mod, "t", side_effect=lambda k: app_mod.I18N["sv"][k]):
+            msgs = app_mod._decide_status_messages(fridge_mode=False, domain="food")
+        self.assertIn("receptet", " ".join(msgs).lower())
+
+    def test_skeleton_html_is_domain_shaped(self) -> None:
+        import app as app_mod
+
+        painted: list[str] = []
+
+        class _FakeContainer:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with mock.patch.object(app_mod.st, "container", return_value=_FakeContainer()):
+            with mock.patch.object(app_mod.st, "html", side_effect=lambda h: painted.append(h)):
+                with mock.patch.object(
+                    app_mod, "t", side_effect=lambda k: app_mod.I18N["sv"][k]
+                ):
+                    app_mod._render_decide_skeleton(fridge_mode=False, domain="movie")
+        self.assertTrue(painted)
+        html = painted[0]
+        self.assertIn("oc-movie-decision", html)
+        self.assertIn("oc-skel-poster", html)
+        self.assertNotIn("oc-food-decision", html)
+        self.assertNotIn("recept", html.lower())
+        self.assertIn("titta", html.lower())
+
+    def test_page_deciding_passes_domain_hint_to_skeleton(self) -> None:
+        import inspect
+        import app as app_mod
+
+        src = inspect.getsource(app_mod.page_deciding)
+        self.assertIn("domain=", src)
+        self.assertIn("domain_hint", src)
+
+    def test_css_hides_food_cta_on_movie_result(self) -> None:
+        css = _styles()
+        self.assertIn("body:has(.oc-movie-decision) [class*=\"st-key-food_go_for_it\"]", css)
+        self.assertIn(".oc-skel-poster", css)
 
 
 if __name__ == "__main__":

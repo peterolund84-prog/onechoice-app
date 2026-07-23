@@ -132,7 +132,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "nav-icons-freetext-cta-v87-20260723"
+BUILD_ID = "fix-movie-skel-copy-v89-20260723"
 
 APP_LOCAL_TZ = ZoneInfo("Europe/Stockholm")
 
@@ -205,6 +205,26 @@ I18N = {
         "decide_status_2": "Väljer efter tid och väder…",
         "decide_status_3": "Sätter ihop receptet…",
         "decide_status_4": "Nästan klart…",
+        "movie_status_1": "Kollar vad du sett senast…",
+        "movie_status_2": "Matchar format och läge…",
+        "movie_status_3": "Hittar något att titta på…",
+        "movie_status_4": "Nästan klart…",
+        "clothes_status_1": "Kollar vad du haft på dig…",
+        "clothes_status_2": "Väger in väder och tillfälle…",
+        "clothes_status_3": "Sätter ihop outfite…",
+        "clothes_status_4": "Nästan klart…",
+        "workout_status_1": "Kollar senaste passen…",
+        "workout_status_2": "Väljer efter energi och tid…",
+        "workout_status_3": "Sätter ihop passet…",
+        "workout_status_4": "Nästan klart…",
+        "weekend_status_1": "Kollar helgläget…",
+        "weekend_status_2": "Väger in väder och energi…",
+        "weekend_status_3": "Väljer något att göra…",
+        "weekend_status_4": "Nästan klart…",
+        "generic_status_1": "Tänker efter…",
+        "generic_status_2": "Väger alternativen…",
+        "generic_status_3": "Väljer åt dig…",
+        "generic_status_4": "Nästan klart…",
         "fridge_status_1": "Läser av kylen…",
         "fridge_status_2": "Ser vad som går att laga…",
         "fridge_status_3": "Sätter ihop receptet…",
@@ -396,6 +416,26 @@ I18N = {
         "decide_status_2": "Matching time and weather…",
         "decide_status_3": "Putting the recipe together…",
         "decide_status_4": "Almost ready…",
+        "movie_status_1": "Checking what you watched last…",
+        "movie_status_2": "Matching format and mood…",
+        "movie_status_3": "Finding something to watch…",
+        "movie_status_4": "Almost ready…",
+        "clothes_status_1": "Checking what you wore last…",
+        "clothes_status_2": "Matching weather and occasion…",
+        "clothes_status_3": "Putting the outfit together…",
+        "clothes_status_4": "Almost ready…",
+        "workout_status_1": "Checking recent workouts…",
+        "workout_status_2": "Matching energy and time…",
+        "workout_status_3": "Building the session…",
+        "workout_status_4": "Almost ready…",
+        "weekend_status_1": "Checking the weekend vibe…",
+        "weekend_status_2": "Matching weather and energy…",
+        "weekend_status_3": "Picking something to do…",
+        "weekend_status_4": "Almost ready…",
+        "generic_status_1": "Thinking it through…",
+        "generic_status_2": "Weighing the options…",
+        "generic_status_3": "Choosing for you…",
+        "generic_status_4": "Almost ready…",
         "fridge_status_1": "Reading the fridge…",
         "fridge_status_2": "Seeing what you can cook…",
         "fridge_status_3": "Putting the recipe together…",
@@ -1805,13 +1845,23 @@ def _resume_decision_page() -> str | None:
 
 
 def _go_home_chooser() -> None:
-    """Explicit start-over — show Mat/Kläder chooser, don't resume the last lock."""
+    """Explicit start-over — show Mat/Kläder chooser, don't resume the last lock.
+
+    Flag stays sticky across home reruns until the user starts a new path
+    (domain card / hero CTA / fridge / free-text). Popping it on first paint
+    made Film/Träning taps resume the previous accepted food dish.
+    """
     _clear_fridge_session()
     st.session_state["_force_home_chooser"] = True
     st.session_state.home_free_open = False
     st.session_state.pop("home_free_input", None)
     st.session_state.page = "home"
     st.rerun()
+
+
+def _leave_home_chooser() -> None:
+    """User started a new decision from the chooser — resume may apply again later."""
+    st.session_state.pop("_force_home_chooser", None)
 
 
 def nav() -> None:
@@ -1861,6 +1911,7 @@ def nav() -> None:
 
 def _start_domain_decision(domain: str) -> None:
     """Start a domain chip decision without ?domain= navigation (keeps auth session)."""
+    _leave_home_chooser()
     if domain == "clothes":
         st.session_state.last_domain_hint = "clothes"
         st.session_state.pending_clothes_question = pipeline._default_question(
@@ -2017,6 +2068,7 @@ def infer_home_hero(
 def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
     import food_domain as fd
 
+    _leave_home_chooser()
     domain = str(inferred.get("domain") or "food")
     if domain == "food":
         meal = inferred.get("meal_type")
@@ -2030,6 +2082,7 @@ def _run_inferred_home_decision(inferred: dict[str, Any]) -> None:
 
 def _start_fridge_flow() -> None:
     """Open fridge capture — session-safe (no ?fridge= navigation)."""
+    _leave_home_chooser()
     st.session_state.fridge_step = "capture"
     st.session_state.fridge_inventory = []
     st.session_state.fridge_mode = False
@@ -2162,30 +2215,59 @@ DECIDE_SKELETON_DELAY_S = 0.4
 DECIDE_TIMEOUT_S = 20.0
 
 
-def _decide_status_messages(*, fridge_mode: bool) -> tuple[str, str, str, str]:
+def _decide_status_messages(
+    *, fridge_mode: bool, domain: str | None = None
+) -> tuple[str, str, str, str]:
     if fridge_mode:
-        return (
-            t("fridge_status_1"),
-            t("fridge_status_2"),
-            t("fridge_status_3"),
-            t("fridge_status_4"),
-        )
+        prefix = "fridge_status"
+    else:
+        d = (domain or "").strip().lower()
+        prefix = {
+            "food": "decide_status",
+            "movie": "movie_status",
+            "clothes": "clothes_status",
+            "workout": "workout_status",
+            "weekend": "weekend_status",
+        }.get(d, "decide_status" if not d else "generic_status")
     return (
-        t("decide_status_1"),
-        t("decide_status_2"),
-        t("decide_status_3"),
-        t("decide_status_4"),
+        t(f"{prefix}_1"),
+        t(f"{prefix}_2"),
+        t(f"{prefix}_3"),
+        t(f"{prefix}_4"),
     )
 
 
-def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
+def _render_decide_skeleton(
+    *, fridge_mode: bool = False, domain: str | None = None
+) -> None:
     """Full-width decision-card placeholder — never inside a columns cell."""
-    msgs = _decide_status_messages(fridge_mode=fridge_mode)
+    d = (domain or ("food" if fridge_mode else "")).strip().lower()
+    msgs = _decide_status_messages(fridge_mode=fridge_mode, domain=d or None)
     status = "".join(f"<span>{html.escape(m)}</span>" for m in msgs)
     # key=decide_slot keeps this in the same full-width host as the real card
-    with st.container(key="decide_slot"):
-        st.html(
-            '<div class="oc-deciding-root" data-oc-deciding="1" aria-hidden="true"></div>'
+    if d == "movie":
+        card = (
+            '<div class="oc-decision oc-movie-decision oc-skel-card">'
+            '<div class="oc-movie-row">'
+            '<div class="oc-skel-poster oc-skel-shimmer" aria-hidden="true"></div>'
+            '<div class="oc-movie-col">'
+            '<div class="oc-skel-bar is-title" style="width:70%"></div>'
+            '<div class="oc-skel-bar" style="width:50%"></div>'
+            '<div class="oc-skel-bar" style="width:40%"></div>'
+            f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
+            "</div></div></div>"
+        )
+    elif d in ("clothes", "workout", "weekend"):
+        card = (
+            f'<div class="oc-decision oc-skel-card oc-skel-{html.escape(d)}">'
+            '<div class="oc-skel-bar is-title" style="width:70%"></div>'
+            '<div class="oc-skel-bar" style="width:55%"></div>'
+            '<div class="oc-skel-bar" style="width:40%"></div>'
+            f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
+            "</div>"
+        )
+    else:
+        card = (
             '<div class="oc-decision oc-food-decision oc-skel-card">'
             '<div class="oc-food-img oc-skel-shimmer" aria-hidden="true"></div>'
             '<div class="oc-food-body">'
@@ -2195,12 +2277,18 @@ def _render_decide_skeleton(*, fridge_mode: bool = False) -> None:
             f'<div class="oc-skel-status" aria-live="polite">{status}</div>'
             "</div></div>"
         )
+    with st.container(key="decide_slot"):
+        st.html(
+            '<div class="oc-deciding-root" data-oc-deciding="1" aria-hidden="true"></div>'
+            + card
+        )
 
 
 def _await_decide_with_skeleton(
     fut,
     *,
     fridge_mode: bool,
+    domain: str | None = None,
     delay_s: float = DECIDE_SKELETON_DELAY_S,
     timeout_s: float = DECIDE_TIMEOUT_S,
     immediate: bool = False,
@@ -2217,7 +2305,7 @@ def _await_decide_with_skeleton(
     from concurrent.futures import TimeoutError as FuturesTimeout
 
     if immediate:
-        _render_decide_skeleton(fridge_mode=fridge_mode)
+        _render_decide_skeleton(fridge_mode=fridge_mode, domain=domain)
         try:
             return fut.result(timeout=max(0.05, timeout_s)), True
         except FuturesTimeout:
@@ -2226,7 +2314,7 @@ def _await_decide_with_skeleton(
     try:
         return fut.result(timeout=max(0.0, delay_s)), False
     except FuturesTimeout:
-        _render_decide_skeleton(fridge_mode=fridge_mode)
+        _render_decide_skeleton(fridge_mode=fridge_mode, domain=domain)
         remaining = max(0.05, timeout_s - delay_s)
         try:
             return fut.result(timeout=remaining), True
@@ -2260,15 +2348,19 @@ def page_deciding() -> None:
         st.session_state.page = "home"
         st.rerun()
         return
+    domain_hint = pending.get("domain_hint")
     # Paint decide_slot EXACTLY once this run. Remounting skeleton later
     # (time-based await) raises StreamlitDuplicateElementKey → ui_error
     # ("Något gick fel") after Bestäm åt mig / domain taps on a cold home.
-    _render_decide_skeleton(fridge_mode=bool(st.session_state.get("fridge_mode")))
+    _render_decide_skeleton(
+        fridge_mode=bool(st.session_state.get("fridge_mode")),
+        domain=str(domain_hint) if domain_hint else None,
+    )
     st.session_state["_decide_skel_painted"] = True
     st.session_state["_decide_in_slot"] = True
     run_decision(
         question=str(pending.get("question") or ""),
-        domain_hint=pending.get("domain_hint"),
+        domain_hint=domain_hint,
         reroll=bool(pending.get("reroll")),
         via_router=bool(pending.get("via_router")),
     )
@@ -2437,6 +2529,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
                     result, _shown = _await_decide_with_skeleton(
                         fut,
                         fridge_mode=fridge_mode,
+                        domain=hint_s,
                     )
             except FuturesTimeout:
                 log.warning("decide timed out after %.0fs", DECIDE_TIMEOUT_S)
@@ -4490,7 +4583,8 @@ def page_home() -> None:
         st.session_state.pop(_k, None)
 
     # Locked decision in play → resume it. Chooser only for an explicit start-over.
-    force_chooser = bool(_session_pop("_force_home_chooser", False))
+    # Sticky: do NOT pop here — domain taps must still see the chooser on this run.
+    force_chooser = bool(st.session_state.get("_force_home_chooser"))
     if not force_chooser:
         resume = _resume_decision_page()
         if resume:
@@ -4508,6 +4602,7 @@ def page_home() -> None:
         with st.container(key="home_weekend_alt"):
             alt = str(inferred.get("weekend_headline") or "")
             if st.button(alt, key="home_weekend_alt_btn"):
+                _leave_home_chooser()
                 run_decision(
                     question="",
                     domain_hint="weekend",
@@ -4573,6 +4668,7 @@ def page_home() -> None:
             st.warning(t("too_long"))
         else:
             st.session_state.home_free_open = False
+            _leave_home_chooser()
             run_decision(question=question, domain_hint=None, reroll=False, via_router=True)
     nav()
 
@@ -5168,6 +5264,20 @@ def page_result() -> None:
     suggestion = str(cur.get("suggestion") or "")
     justification = str(cur.get("justification") or "")
     domain = cur.get("domain") or ""
+    # Drop food-only CTA keys on non-food results (Streamlit can ghost "Välj").
+    if domain != "food":
+        for _k in (
+            "food_go_for_it",
+            "fridge_cook_accept",
+            "fridge_shop_escape",
+            "meal_seg_frukost",
+            "meal_seg_lunch",
+            "meal_seg_middag",
+            "meal_seg_kvallsmal",
+            "meal_seg_choice",
+            "meal_pills",
+        ):
+            st.session_state.pop(_k, None)
     reroll_index = int(cur.get("reroll_index") or 0)
     food_cook = _is_food_cook(cur)
 
