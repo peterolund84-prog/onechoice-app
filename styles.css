@@ -255,10 +255,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
 /* Occasion / meal chip rows ONLY — never nav, never lista, never domain cards */
 .st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button,
 .st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
-.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
-.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button,
-.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-secondary"],
-.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {
+.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {
     background: transparent !important;
     color: var(--oc-ink) !important;
     border: 1px solid var(--oc-border) !important;
@@ -273,8 +270,7 @@ div[data-testid="element-container"]:has(.oc-link-wrap) + div[data-testid="eleme
     padding: 0.5rem 0.75rem !important;
     font-family: "Inter", sans-serif !important;
 }
-.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"],
-.st-key-meal_chips [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {
+.st-key-clothes_occasion [data-testid="stHorizontalBlock"] div.stButton > button[data-testid="baseButton-primary"] {
     background: transparent !important;
     color: var(--oc-ink) !important;
     font-weight: 600 !important;
@@ -2003,143 +1999,6 @@ div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
 }
 div[data-testid="stHorizontalBlock"] div.stButton {
     width: 100% !important; min-height: 2.5rem !important;
-}
-/* Domain chips — auto-width ghost pills (match pre-auth-fix look) */
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 8px !important;
-    margin: 0 0 1.25rem !important;
-}
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
-    flex: 0 0 auto !important;
-    width: auto !important;
-    min-width: fit-content !important;
-}
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton {
-    width: auto !important;
-}
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button {
-    width: auto !important;
-    background: transparent !important;
-    color: var(--oc-ink) !important;
-    border: 1px solid var(--oc-border) !important;
-    border-radius: 999px !important;
-    box-shadow: none !important;
-    font-family: "Inter", sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 14px !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    min-height: 0 !important;
-    height: auto !important;
-    padding: 8px 20px !important;
-}
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button:hover {
-    border-color: var(--oc-ink) !important;
-    color: var(--oc-ink) !important;
-    background: transparent !important;
-}
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
-.oc-chip-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {
-    width: auto !important;
-    background: transparent !important;
-    color: var(--oc-ink) !important;
-    border: 1px solid var(--oc-border) !important;
-    border-radius: 999px !important;
-    box-shadow: none !important;
-    font-family: "Inter", sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 14px !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    min-height: 0 !important;
-    height: auto !important;
-    padding: 8px 20px !important;
-}
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-secondary"],
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    font-size: 0.78rem !important;
-    font-weight: 500 !important;
-    min-height: 1.6rem !important;
-    padding: 0.15rem 0.35rem !important;
-    width: auto !important;
-}
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] button[data-testid="baseButton-primary"] {
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-}
-/* Language — compact SV · EN text, not oval buttons */
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] {
-    display: flex !important;
-    justify-content: flex-end !important;
-    gap: 0.15rem !important;
-    margin: 0 0 0.35rem !important;
-}
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="stColumn"] {
-    flex: 0 0 auto !important;
-    width: auto !important;
-    min-width: fit-content !important;
-}
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton {
-    width: auto !important;
-}
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button,
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="secondary"],
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
-    color: var(--oc-muted) !important;
-    font-family: "Inter", sans-serif !important;
-    font-size: 0.78rem !important;
-    font-weight: 500 !important;
-    min-height: 1.6rem !important;
-    height: auto !important;
-    padding: 0.15rem 0.35rem !important;
-    width: auto !important;
-}
-.oc-lang-btns-marker + div[data-testid="stHorizontalBlock"] div.stButton > button[kind="primary"] {
-    color: var(--oc-accent) !important;
-    font-weight: 600 !important;
-}
-/* Home domain chips — HTML flex row (kept for tests / fallback) */
-.oc-chip-row {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    justify-content: center !important;
-    align-items: center !important;
-    gap: 8px !important;
-    margin: 0 0 1.25rem !important;
-}
-a.oc-chip {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: transparent !important;
-    color: var(--oc-ink) !important;
-    border: 1px solid var(--oc-border) !important;
-    border-radius: 999px !important;
-    box-shadow: none !important;
-    font-family: "Inter", sans-serif !important;
-    font-weight: 500 !important;
-    font-size: 14px !important;
-    line-height: 1.2 !important;
-    white-space: nowrap !important;
-    text-decoration: none !important;
-    padding: 8px 20px !important;
-}
-a.oc-chip:hover, a.oc-chip:focus {
-    border-color: var(--oc-ink) !important;
-    color: var(--oc-ink) !important;
 }
 /* Kill Streamlit default chrome / shadows */
 [data-testid="stAppViewContainer"] * {
