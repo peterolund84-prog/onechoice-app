@@ -291,7 +291,7 @@ class HomeHeroTests(unittest.TestCase):
             "oc-hero-sub",
             "oc-cta",
             "st-key-home_hero div.stButton",
-            "margin: 0 0 28px",
+            "margin: 0 0 18px",
             "margin: 0 0 48px",
             "st-key-home_domain_",
             "margin: 4px 0 20px",

@@ -206,16 +206,16 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 class NavBleedTests(unittest.TestCase):
     def test_nav_glass_is_opaque_enough(self) -> None:
         css = _styles()
-        self.assertIn("rgba(255, 255, 255, 0.94)", css)
-        self.assertIn("blur(20px)", css)
+        self.assertIn("rgba(246, 243, 234, 0.88)", css)
+        self.assertIn("blur(18px)", css)
         self.assertIn("z-index: 10000", css)
         # Must not wipe nav bar background back to transparent
         # (children may be transparent; the bar itself must keep glass)
         nav_block = css.split("/* Bottom nav — floating pill")[1].split(
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
-        self.assertIn("rgba(255, 255, 255, 0.94)", nav_block)
-        self.assertIn("border-radius: 28px", nav_block)
+        self.assertIn("rgba(246, 243, 234, 0.88)", nav_block)
+        self.assertIn("border-radius: 24px", nav_block)
         # The bar rule itself is NOT background: transparent
         bar_only = nav_block.split(".st-key-oc_nav_bar [data-testid")[0]
         self.assertNotIn("background: transparent", bar_only)
@@ -226,7 +226,7 @@ class NavBleedTests(unittest.TestCase):
         self.assertIn("cursor: pointer !important", css)
         self.assertIn("touch-action: manipulation !important", css)
         # Must not force fully transparent fills on nav secondaries
-        self.assertIn("rgba(255, 255, 255, 0.01)", css)
+        self.assertIn("rgba(246, 243, 234, 0.01)", css)
         self.assertIn(
             ".st-key-oc_nav_bar {",
             css,
@@ -237,13 +237,13 @@ class NavBleedTests(unittest.TestCase):
         )[0]
         self.assertIn("pointer-events: auto !important", bar)
         # Floating pill: inset sides/bottom, ~56px content, 44px tabs
-        self.assertIn("left: 22px !important", bar)
-        self.assertIn("right: 22px !important", bar)
-        self.assertIn("min-height: 56px !important", bar)
-        self.assertIn("padding: 6px 0.55rem !important", bar)
+        self.assertIn("left: 28px !important", bar)
+        self.assertIn("right: 28px !important", bar)
+        self.assertIn("min-height: 52px !important", bar)
+        self.assertIn("padding: 4px 0.35rem !important", bar)
         self.assertIn("overflow: visible !important", bar)
         self.assertIn("min-height: 44px !important", bar)
-        self.assertIn("gap: 2px !important", bar)
+        self.assertIn("gap: 1px !important", bar)
         # Marker must collapse — it was eating height and clipping labels
         self.assertIn(".oc-nav-chrome", css)
         # Content clears floating pill + safe-area

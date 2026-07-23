@@ -1,13 +1,13 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@600;700&family=Sora:wght@600;700&display=swap");
 
-/* Domain icons — Lucide, mockup-black stroke, 24px */
+/* Domain icons — Lucide, mockup-black stroke, 28px */
 [class*="st-key-home_domain_food"] div.stButton > button::before {
     content: "";
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
-    margin-right: 12px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin-right: 6px;
     opacity: 1;
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232C2C2A%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20%3E%20%3Cpath%20d%3D%22M12%2021a9%209%200%200%200%209-9H3a9%209%200%200%200%209%209Z%22%20%2F%3E%20%3Cpath%20d%3D%22M7%2021h10%22%20%2F%3E%20%3Cpath%20d%3D%22M19.5%2012%2022%206%22%20%2F%3E%20%3Cpath%20d%3D%22M16.25%203c.27.1.8.53.75%201.36-.06.83-.93%201.2-1%202.02-.05.78.34%201.24.73%201.62%22%20%2F%3E%20%3Cpath%20d%3D%22M11.25%203c.27.1.8.53.74%201.36-.05.83-.93%201.2-.98%202.02-.06.78.33%201.24.72%201.62%22%20%2F%3E%20%3Cpath%20d%3D%22M6.25%203c.27.1.8.53.75%201.36-.06.83-.93%201.2-1%202.02-.05.78.34%201.24.74%201.62%22%20%2F%3E%20%3C%2Fsvg%3E");
 }
@@ -15,10 +15,10 @@
 [class*="st-key-home_domain_clothes"] div.stButton > button::before {
     content: "";
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
-    margin-right: 12px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin-right: 6px;
     opacity: 1;
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232C2C2A%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20%3E%20%3Cpath%20d%3D%22M9%205a3%203%200%201%201%205.1%202.1l-1.5%201.5A2%202%200%200%200%2012%2010v1%22%20%2F%3E%20%3Cpath%20d%3D%22M4%2021a2%202%200%200%201-1.1-3.7L12%2011l9.2%206.4A2%202%200%200%201%2020%2021Z%22%20%2F%3E%20%3C%2Fsvg%3E");
 }
@@ -26,10 +26,10 @@
 [class*="st-key-home_domain_movie"] div.stButton > button::before {
     content: "";
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
-    margin-right: 12px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin-right: 6px;
     opacity: 1;
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232C2C2A%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20%3E%20%3Cpath%20d%3D%22m12.296%203.464%203.02%203.956%22%20%2F%3E%20%3Cpath%20d%3D%22M20.2%206%203%2011l-.9-2.4c-.3-1.1.3-2.2%201.3-2.5l13.5-4c1.1-.3%202.2.3%202.5%201.3z%22%20%2F%3E%20%3Cpath%20d%3D%22M3%2011h18v8a2%202%200%200%201-2%202H5a2%202%200%200%201-2-2z%22%20%2F%3E%20%3Cpath%20d%3D%22m6.18%205.276%203.1%203.899%22%20%2F%3E%20%3C%2Fsvg%3E");
 }
@@ -37,10 +37,10 @@
 [class*="st-key-home_domain_workout"] div.stButton > button::before {
     content: "";
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
-    margin-right: 12px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin-right: 6px;
     opacity: 1;
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232C2C2A%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6.5%206.5v11%22%2F%3E%3Cpath%20d%3D%22M17.5%206.5v11%22%2F%3E%3Cpath%20d%3D%22M4%209v6%22%2F%3E%3Cpath%20d%3D%22M20%209v6%22%2F%3E%3Cpath%20d%3D%22M8%2012h8%22%2F%3E%3C%2Fsvg%3E");
 }
@@ -48,10 +48,10 @@
 [class*="st-key-home_domain_weekend"] div.stButton > button::before {
     content: "";
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
-    margin-right: 12px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin-right: 6px;
     opacity: 1;
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232C2C2A%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20%3E%20%3Cpath%20d%3D%22M13%208c0-2.76-2.46-5-5.5-5S2%205.24%202%208h2l1-1%201%201h4%22%20%2F%3E%20%3Cpath%20d%3D%22M13%207.14A5.82%205.82%200%200%201%2016.5%206c3.04%200%205.5%202.24%205.5%205h-3l-1-1-1%201h-3%22%20%2F%3E%20%3Cpath%20d%3D%22M5.89%209.71c-2.15%202.15-2.3%205.47-.35%207.43l4.24-4.25.7-.7.71-.71%202.12-2.12c-1.95-1.96-5.27-1.8-7.42.35%22%20%2F%3E%20%3Cpath%20d%3D%22M11%2015.5c.5%202.5-.17%204.5-1%206.5h4c2-5.5-.5-12-1-14%22%20%2F%3E%20%3C%2Fsvg%3E");
 }
@@ -59,10 +59,10 @@
 [class*="st-key-home_domain_fridge"] div.stButton > button::before {
     content: "";
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    flex: 0 0 24px;
-    margin-right: 12px;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    margin-right: 6px;
     opacity: 1;
     background: center / contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%232C2C2A%22%20stroke-width%3D%221.5%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20%3E%20%3Cpath%20d%3D%22M5%206a4%204%200%200%201%204-4h6a4%204%200%200%201%204%204v14a2%202%200%200%201-2%202H7a2%202%200%200%201-2-2V6Z%22%20%2F%3E%20%3Cpath%20d%3D%22M5%2010h14%22%20%2F%3E%20%3Cpath%20d%3D%22M15%207v6%22%20%2F%3E%20%3C%2Fsvg%3E");
 }
@@ -362,7 +362,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     position: relative !important;
     width: 100% !important;
     /* Mockup: more air under header before headline */
-    margin: 64px 0 48px !important;
+    margin: 40px 0 20px !important;
     padding: 0 !important;
     max-height: none !important;
     min-height: 0 !important;
@@ -434,7 +434,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     position: relative;
     z-index: 1;
     display: block;
-    margin: 0 0 28px !important;
+    margin: 0 0 18px !important;
     padding: 0 16px !important;
     font-family: "Inter", sans-serif !important;
     font-size: 14px !important;
@@ -500,18 +500,18 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     color: #8A8A84 !important;
     font-weight: 600 !important;
     text-align: center !important;
-    margin: 8px 0 22px !important;
+    margin: 4px 0 10px !important;
     padding: 0 !important;
     font-family: "Inter", sans-serif !important;
 }
 .st-key-home_domains {
-    margin: 8px 0 8px !important;
-    padding: 0 4px !important;
+    margin: 0 0 4px !important;
+    padding: 0 8px !important;
     width: 100% !important;
 }
 .st-key-home_domains [data-testid="stHorizontalBlock"] {
-    gap: 12px !important;
-    margin-bottom: 2px !important;
+    gap: 8px !important;
+    margin-bottom: 0 !important;
 }
 .st-key-home_domains [data-testid="stMarkdownContainer"],
 .st-key-home_domains [data-testid="stMarkdownContainer"] p {
@@ -541,7 +541,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     padding: 0 !important;
     width: 100% !important;
 }
-/* Quiet domain rows — mockup: black 24px icons + label, no cards */
+/* Quiet domain rows — larger icons, tight icon→label, compact rows */
 [class*="st-key-home_domain_"] div.stButton > button,
 [class*="st-key-home_domain_"] div.stButton > button[data-testid="baseButton-secondary"],
 [class*="st-key-home_domain_"] div.stButton > button[kind="secondary"],
@@ -552,12 +552,12 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     justify-content: flex-start !important;
     gap: 0 !important;
     width: 100% !important;
-    min-height: 52px !important;
-    height: 52px !important;
-    max-height: 52px !important;
+    min-height: 40px !important;
+    height: 40px !important;
+    max-height: 40px !important;
     background: transparent !important;
     background-color: transparent !important;
-    border-radius: 12px !important;
+    border-radius: 10px !important;
     border: none !important;
     box-shadow: none !important;
     box-sizing: border-box !important;
@@ -565,9 +565,9 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     font-family: "Inter", sans-serif !important;
     font-size: 16px !important;
     font-weight: 500 !important;
-    line-height: 1.2 !important;
+    line-height: 1.15 !important;
     text-align: left !important;
-    padding: 0 6px !important;
+    padding: 0 4px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -603,7 +603,7 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     margin-right: auto !important;
 }
 .st-key-home_free_disclose {
-    margin: 12px 0 16px !important;
+    margin: 6px 0 10px !important;
     padding: 0 !important;
     text-align: center !important;
 }
@@ -785,28 +785,28 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     color: var(--oc-ink) !important;
     font-weight: 600 !important;
 }
-/* Bottom nav — floating pill like mockup (inset, rounded, soft shadow)
-   Content row ~52px; safe-area via bottom offset so labels stay clear. */
+/* Bottom nav — floating frosted pill (not solid white); compact + centered icons */
 .st-key-oc_nav_bar {
     position: fixed !important;
-    left: 22px !important;
-    right: 22px !important;
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+    left: 28px !important;
+    right: 28px !important;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
     z-index: 10000 !important;
     width: auto !important;
-    max-width: 360px !important;
+    max-width: 340px !important;
     margin: 0 auto !important;
     height: auto !important;
-    min-height: 56px !important;
+    min-height: 52px !important;
     max-height: none !important;
-    padding: 6px 0.55rem !important;
-    background: rgba(255, 255, 255, 0.94) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
-    border-top: 1px solid rgba(0, 0, 0, 0.06) !important;
-    border-radius: 28px !important;
-    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.10), 0 1px 0 rgba(255, 255, 255, 0.8) inset !important;
+    padding: 4px 0.35rem !important;
+    /* Off-white frosted — matches page paper, not pure white slab */
+    background: rgba(246, 243, 234, 0.88) !important;
+    backdrop-filter: blur(18px) saturate(1.1) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(1.1) !important;
+    border: 1px solid rgba(0, 0, 0, 0.07) !important;
+    border-top: 1px solid rgba(0, 0, 0, 0.07) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
     box-sizing: border-box !important;
     overflow: visible !important;
     display: flex !important;
@@ -837,7 +837,8 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 .st-key-oc_nav_bar [data-testid="stVerticalBlock"],
 .st-key-oc_nav_bar [data-testid="stVerticalBlockBorderWrapper"] {
     gap: 0 !important;
-    align-items: flex-start !important;
+    align-items: center !important;
+    justify-content: center !important;
     pointer-events: auto !important;
     background: transparent !important;
     border: none !important;
@@ -861,6 +862,9 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     border: none !important;
     pointer-events: auto !important;
     overflow: visible !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
 }
 [class*="st-key-nav_"] div.stButton {
     margin: 0 !important;
@@ -878,25 +882,26 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     width: 100% !important;
     /* iOS Safari ignores taps on fully transparent controls — keep a
        near-invisible fill so secondary tabs (execute/result) still work. */
-    background: rgba(255, 255, 255, 0.01) !important;
-    background-color: rgba(255, 255, 255, 0.01) !important;
+    background: rgba(246, 243, 234, 0.01) !important;
+    background-color: rgba(246, 243, 234, 0.01) !important;
     border: none !important;
-    border-radius: 999px !important;
+    border-radius: 16px !important;
     box-shadow: none !important;
     color: var(--oc-muted) !important;
     font-family: "Inter", sans-serif !important;
-    font-size: 11px !important;
+    font-size: 10px !important;
     font-weight: 500 !important;
     min-height: 44px !important;
     height: 44px !important;
     max-height: 44px !important;
-    padding: 4px 0.25rem 2px !important;
+    padding: 2px 0.15rem 1px !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
-    gap: 2px !important;
-    line-height: 1.15 !important;
+    gap: 1px !important;
+    line-height: 1.1 !important;
+    text-align: center !important;
     text-decoration: none !important;
     text-underline-offset: unset !important;
     cursor: pointer !important;
@@ -911,13 +916,14 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
 [class*="st-key-nav_"] div.stButton > button::before {
     content: "" !important;
     display: block !important;
-    width: 22px !important;
-    height: 22px !important;
-    flex: 0 0 22px !important;
+    width: 24px !important;
+    height: 24px !important;
+    flex: 0 0 24px !important;
+    margin: 0 auto !important;
     background-size: contain !important;
     background-position: center !important;
     background-repeat: no-repeat !important;
-    opacity: 0.72 !important;
+    opacity: 0.78 !important;
 }
 .st-key-oc_nav_bar .st-key-nav_home div.stButton > button::before,
 .st-key-nav_home div.stButton > button::before {
@@ -944,8 +950,8 @@ div.stButton > button[data-testid="stBaseButton-secondary"] {
     color: var(--oc-accent) !important;
     font-weight: 600 !important;
     /* Mockup: no lavender pill — active = blue icon + blue label only */
-    background: rgba(255, 255, 255, 0.01) !important;
-    background-color: rgba(255, 255, 255, 0.01) !important;
+    background: rgba(246, 243, 234, 0.01) !important;
+    background-color: rgba(246, 243, 234, 0.01) !important;
 }
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[kind="primary"]::before,
 .st-key-oc_nav_bar [class*="st-key-nav_"] div.stButton > button[data-testid="baseButton-primary"]::before,

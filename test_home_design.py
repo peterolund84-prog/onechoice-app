@@ -32,7 +32,7 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("oc-orb-breathe", css)
         self.assertIn("st-key-home_domain_", css)
         self.assertIn("flex-direction: row", css)
-        self.assertIn("min-height: 52px", css)
+        self.assertIn("min-height: 40px", css)
         self.assertIn("width: 100%", css)
         self.assertIn("font-size: 34px", css)
         self.assertIn("Playfair+Display", css)
@@ -58,7 +58,7 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("st-key-oc_nav_bar", css)
         self.assertIn("linear-gradient(180deg, #F8F4EB", css)
         self.assertIn("%232C2C2A", css)  # soft domain icon stroke
-        self.assertIn("border-radius: 28px", css)  # floating nav pill
+        self.assertIn("border-radius: 24px", css)  # floating nav pill
         self.assertFalse(app_mod.SHOW_LANG_TOGGLE)
 
     def test_home_structure_and_no_char_counter_early(self) -> None:
