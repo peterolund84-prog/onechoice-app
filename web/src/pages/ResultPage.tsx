@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Heart, Share2 } from "lucide-react";
 import { api } from "../lib/api";
+import { resolveDishPublicPath } from "../lib/dishImage";
 import type { Decision } from "../lib/types";
 
 const MAX_REROLLS = 3;
@@ -46,14 +47,20 @@ function moviePoster(d: Decision): string | null {
 }
 
 function mediaSrc(d: Decision): string | null {
-  if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
-    return d.image_data_url;
-  }
+  // Food: Vite-hosted /dishes first — no dependency on API media/embed.
   if (d.domain === "food" && d.suggestion) {
+    const local = resolveDishPublicPath(d.suggestion, dishHint(d));
+    if (local) return local;
+    if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
+      return d.image_data_url;
+    }
     const q = new URLSearchParams({ title: d.suggestion });
     const hint = dishHint(d);
     if (hint) q.set("hint", hint);
     return `${api.base}/v1/media/dish?${q}`;
+  }
+  if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
+    return d.image_data_url;
   }
   if (d.domain === "movie") return moviePoster(d);
   return null;
@@ -81,6 +88,8 @@ export function ResultPage() {
     const current = decision;
     if (!current || current.domain !== "food" || current.image_data_url) return;
     if (!current.suggestion) return;
+    // Local Vite dishes already cover this title — no API fetch needed.
+    if (resolveDishPublicPath(current.suggestion, dishHint(current))) return;
     let cancelled = false;
     const q = new URLSearchParams({ title: current.suggestion });
     const hint = dishHint(current);
