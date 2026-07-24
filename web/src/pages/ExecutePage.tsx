@@ -7,7 +7,6 @@ import {
   readDecision,
   saveDecision,
 } from "../lib/decisionStorage";
-import { resolveDishPublicPath } from "../lib/dishImage";
 import {
   amountMap,
   assumedLine,
@@ -50,18 +49,20 @@ function dishHint(d: Decision): string | null {
 }
 
 function mediaSrc(d: Decision): string | null {
-  if (d.domain === "food" && d.suggestion) {
-    const local = resolveDishPublicPath(d.suggestion, dishHint(d));
-    if (local) return local;
-    if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
-      return d.image_data_url;
-    }
-    const q = new URLSearchParams({ title: d.suggestion });
-    const hint = dishHint(d);
-    if (hint) q.set("hint", hint);
-    return `${api.base}/v1/media/dish?${q}`;
+  if (d.domain !== "food") return null;
+  if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
+    return d.image_data_url;
   }
-  return null;
+  if (typeof d.image_url === "string" && d.image_url) {
+    return d.image_url.startsWith("http")
+      ? d.image_url
+      : `${api.base}${d.image_url}`;
+  }
+  if (!d.suggestion) return null;
+  const q = new URLSearchParams({ title: d.suggestion });
+  const hint = dishHint(d);
+  if (hint) q.set("hint", hint);
+  return `${api.base}/v1/media/dish?${q}`;
 }
 
 function WorkoutExecute({

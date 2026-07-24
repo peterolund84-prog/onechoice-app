@@ -33,6 +33,8 @@ export type Decision = {
   accepted?: boolean;
   route_log_id?: number | null;
   image_data_url?: string | null;
+  image_url?: string | null;
+  allows_shopping?: boolean | null;
 };
 
 export type UserProfile = {

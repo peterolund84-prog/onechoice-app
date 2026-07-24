@@ -827,6 +827,7 @@ _EN_ALIASES: dict[str, str] = {
     "filmjölk or yoghurt": "fil eller yoghurt",
     "plain yoghurt": "fil eller yoghurt",
     "yoghurt with jam": "fil eller yoghurt",
+    "yoghurt med sylt": "fil eller yoghurt",
     "yoghurt bowl with banana": "fil med müsli",
     "filmjölk with muesli": "fil med müsli",
     "egg sandwich and coffee": "äggmacka och kaffe",

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import uuid
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
@@ -14,7 +13,17 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from api.deps import apply_auth_tokens, boot_db_guest, ensure_guest_user
+from api.deps import (
+    apply_auth_tokens,
+    boot_db_guest,
+    clear_auth_cookies,
+    ensure_request_user,
+    is_guest_id,
+    resolve_user_from_request,
+    set_auth_cookies,
+    tokens_from_request,
+    user_id_from_access_token,
+)
 from api.home import infer_home_hero
 
 app = FastAPI(title="OneChoice API", version="0.3.0")
@@ -22,43 +31,56 @@ app = FastAPI(title="OneChoice API", version="0.3.0")
 _DEFAULT_ORIGINS = (
     "http://localhost:5173,"
     "http://127.0.0.1:5173,"
-    "http://192.168.1.114:5173,"
     "http://localhost:5174,"
-    "http://127.0.0.1:5174,"
-    "http://192.168.1.114:5174"
+    "http://127.0.0.1:5174"
 )
+
+_IS_PROD = os.getenv("OC_ENV", "").strip().lower() in ("prod", "production")
+
 
 class _SupabaseAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
-        apply_auth_tokens(
-            request.headers.get("X-Access-Token"),
-            request.headers.get("X-Refresh-Token"),
-        )
+        at, rt = tokens_from_request(request)
+        apply_auth_tokens(at, rt)
+        request.state.access_token = at
+        request.state.refresh_token = rt
+        request.state.jwt_user_id = user_id_from_access_token(at) if at else None
         return await call_next(request)
 
 
 # Auth first (inner), CORS last (outer) so preflight always gets headers.
 app.add_middleware(_SupabaseAuthMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        o.strip()
-        for o in os.getenv("OC_CORS_ORIGINS", _DEFAULT_ORIGINS).split(",")
-        if o.strip()
-    ],
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
+_cors_origins = [
+    o.strip()
+    for o in os.getenv("OC_CORS_ORIGINS", _DEFAULT_ORIGINS).split(",")
+    if o.strip()
+]
+_cors_kwargs: dict[str, Any] = {
+    "allow_origins": _cors_origins,
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+# LAN regex is dev-only — production must use explicit OC_CORS_ORIGINS allowlist.
+if not _IS_PROD:
+    _cors_kwargs["allow_origin_regex"] = (
+        r"https?://(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|"
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?$"
+    )
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 
 def _uid(
+    request: Request,
     body_user_id: str | None = None,
     x_user_id: str | None = None,
+    *,
+    mint_guest: bool = True,
 ) -> str:
-    uid = (body_user_id or x_user_id or "").strip()
-    return uid or f"guest-{uuid.uuid4().hex[:12]}"
+    """Resolve acting user: JWT wins; guest-* only without token."""
+    client = (body_user_id or x_user_id or "").strip() or None
+    return resolve_user_from_request(request, client, mint_guest=mint_guest)
 
 
 # ── health / home ────────────────────────────────────────────────────────────
@@ -114,6 +136,7 @@ class DecideBody(BaseModel):
 
 @app.post("/v1/decide")
 def decide(
+    request: Request,
     body: DecideBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
@@ -121,8 +144,8 @@ def decide(
     import food_domain as fd
     import pipeline
 
-    user_id = _uid(body.user_id, x_user_id)
-    ensure_guest_user(user_id, language=body.language)
+    user_id = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(user_id, language=body.language)
 
     context_extra: dict[str, Any] = {}
     if body.meal_type and body.meal_type in getattr(fd, "MEAL_TYPES", ()):
@@ -170,12 +193,21 @@ def decide(
 
             ctx = payload.get("context") if isinstance(payload.get("context"), dict) else {}
             hint = ctx.get("dish_category") or ctx.get("category")
+            meal = str(ctx.get("meal_type") or body.meal_type or "middag")
+            source = str(ctx.get("source") or "")
+            payload["allows_shopping"] = bool(fd.show_shopping(meal)) and source != "fridge_photo"
             b64 = dimg.resolve_dish_image_b64(
                 str(payload.get("suggestion") or ""),
                 str(hint) if hint else None,
             )
             if b64:
                 payload["image_data_url"] = f"data:image/jpeg;base64,{b64}"
+            # Public media URL — single Python resolver; clients should not re-match.
+            q = __import__("urllib.parse").quote(str(payload.get("suggestion") or ""))
+            hint_q = __import__("urllib.parse").quote(str(hint or ""))
+            payload["image_url"] = f"/v1/media/dish?title={q}" + (
+                f"&hint={hint_q}" if hint else ""
+            )
         except Exception:
             pass
 
@@ -190,10 +222,12 @@ class FreeTextBody(BaseModel):
 
 @app.post("/v1/decide/free-text")
 def decide_free_text(
+    request: Request,
     body: FreeTextBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     return decide(
+        request,
         DecideBody(
             question=body.question.strip(),
             domain_hint=None,
@@ -214,6 +248,7 @@ class AcceptBody(BaseModel):
 
 @app.post("/v1/decisions/{decision_id}/accept")
 def accept_decision(
+    request: Request,
     decision_id: int,
     body: AcceptBody | None = None,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
@@ -221,8 +256,8 @@ def accept_decision(
     import pipeline
 
     body = body or AcceptBody()
-    user_id = _uid(body.user_id, x_user_id)
-    ensure_guest_user(user_id)
+    user_id = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(user_id)
     out = pipeline.try_accept_decision(
         decision_id, route_log_id=body.route_log_id
     )
@@ -238,14 +273,15 @@ class FavoriteBody(BaseModel):
 
 @app.post("/v1/decisions/{decision_id}/favorite")
 def favorite_decision(
+    request: Request,
     decision_id: int,
     body: FavoriteBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    user_id = _uid(body.user_id, x_user_id)
-    ensure_guest_user(user_id)
+    user_id = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(user_id)
     try:
         row = db.set_decision_favorite(decision_id, body.favorite)
     except KeyError as exc:
@@ -257,6 +293,7 @@ def favorite_decision(
 
 @app.get("/v1/decisions")
 def list_decisions(
+    request: Request,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     favorite: bool | None = None,
@@ -266,10 +303,8 @@ def list_decisions(
 ) -> dict[str, Any]:
     import db
 
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-    ensure_guest_user(uid)
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
+    ensure_request_user(uid)
     rows = db.list_decisions(
         uid,
         domain=domain,
@@ -282,16 +317,15 @@ def list_decisions(
 
 @app.get("/v1/decisions/{decision_id}")
 def get_decision(
+    request: Request,
     decision_id: int,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-    ensure_guest_user(uid)
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
+    ensure_request_user(uid)
     rows = db.list_decisions(uid, limit=200)
     for row in rows:
         if int(row.get("id") or 0) == int(decision_id):
@@ -304,15 +338,14 @@ def get_decision(
 
 @app.get("/v1/shopping")
 def get_shopping(
+    request: Request,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-    ensure_guest_user(uid)
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
+    ensure_request_user(uid)
     try:
         db.purge_stale_checked_shopping_items(uid, hours=24)
     except Exception:
@@ -328,13 +361,14 @@ class AddShoppingBody(BaseModel):
 
 @app.post("/v1/shopping")
 def add_shopping(
+    request: Request,
     body: AddShoppingBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    uid = _uid(body.user_id, x_user_id)
-    ensure_guest_user(uid)
+    uid = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(uid)
     row = db.add_manual_shopping_item(uid, body.name)
     if row is None:
         raise HTTPException(status_code=400, detail="invalid name")
@@ -348,14 +382,15 @@ class ToggleShoppingBody(BaseModel):
 
 @app.patch("/v1/shopping/{item_id}")
 def toggle_shopping(
+    request: Request,
     item_id: int,
     body: ToggleShoppingBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    uid = _uid(body.user_id, x_user_id)
-    ensure_guest_user(uid)
+    uid = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(uid)
     row = db.toggle_shopping_item(uid, item_id, body.checked)
     if row is None:
         raise HTTPException(status_code=404, detail="item not found")
@@ -369,14 +404,15 @@ class ClearCheckedBody(BaseModel):
 
 @app.delete("/v1/shopping/checked")
 def clear_checked_shopping(
+    request: Request,
     body: ClearCheckedBody | None = None,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
     body = body or ClearCheckedBody()
-    uid = _uid(body.user_id, x_user_id)
-    ensure_guest_user(uid)
+    uid = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(uid)
     deleted = 0
     if body.item_ids:
         deleted = db.delete_shopping_items(uid, body.item_ids)
@@ -392,19 +428,21 @@ class MergeShoppingBody(BaseModel):
 
 @app.post("/v1/shopping/merge")
 def merge_shopping(
+    request: Request,
     body: MergeShoppingBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    uid = _uid(body.user_id, x_user_id)
-    ensure_guest_user(uid)
+    uid = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(uid)
     added = db.merge_shopping_from_decision(uid, body.decision_id, body.to_buy)
     return {"added": added, "count": len(added), "user_id": uid}
 
 
 @app.get("/v1/shopping/share-text", response_class=PlainTextResponse)
 def shopping_share_text(
+    request: Request,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     language: str = "sv",
@@ -412,10 +450,8 @@ def shopping_share_text(
     import db
     import share_domain
 
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-    ensure_guest_user(uid)
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
+    ensure_request_user(uid)
     items = db.list_shopping_items(uid)
     return share_domain.format_list_share_text(items, language=language)
 
@@ -430,10 +466,6 @@ class AuthBody(BaseModel):
     privacy_consent: bool = False
 
 
-class RefreshBody(BaseModel):
-    refresh_token: str = Field(..., min_length=10)
-
-
 @app.get("/v1/auth/status")
 def auth_status() -> dict[str, Any]:
     import supabase_client as sb
@@ -442,7 +474,7 @@ def auth_status() -> dict[str, Any]:
 
 
 @app.post("/v1/auth/login")
-def auth_login(body: AuthBody) -> dict[str, Any]:
+def auth_login(request: Request, body: AuthBody) -> JSONResponse:
     import supabase_client as sb
 
     if not sb.is_configured():
@@ -452,14 +484,25 @@ def auth_login(body: AuthBody) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     uid = str(sess.get("user_id") or "")
-    if uid:
-        apply_auth_tokens(sess.get("access_token"), sess.get("refresh_token"))
-        ensure_guest_user(uid, language=body.language)
-    return {"ok": True, **sess}
+    at = sess.get("access_token")
+    rt = sess.get("refresh_token")
+    if uid and at and rt:
+        apply_auth_tokens(at, rt)
+        ensure_request_user(uid, language=body.language)
+    # Tokens live in httpOnly cookies — not returned to JS.
+    payload = {
+        "ok": True,
+        "user_id": uid,
+        "email": sess.get("email"),
+    }
+    resp = JSONResponse(content=payload)
+    if at and rt:
+        set_auth_cookies(resp, access_token=str(at), refresh_token=str(rt), request=request)
+    return resp
 
 
 @app.post("/v1/auth/signup")
-def auth_signup(body: AuthBody) -> dict[str, Any]:
+def auth_signup(request: Request, body: AuthBody) -> JSONResponse:
     import supabase_client as sb
 
     if not sb.is_configured():
@@ -471,42 +514,68 @@ def auth_signup(body: AuthBody) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     uid = str(sess.get("user_id") or "")
-    if uid and sess.get("access_token") and sess.get("refresh_token"):
-        apply_auth_tokens(sess.get("access_token"), sess.get("refresh_token"))
-        ensure_guest_user(uid, language=body.language)
-    return {"ok": True, **sess}
+    at = sess.get("access_token")
+    rt = sess.get("refresh_token")
+    if uid and at and rt:
+        apply_auth_tokens(at, rt)
+        ensure_request_user(uid, language=body.language)
+    payload = {
+        "ok": True,
+        "user_id": uid,
+        "email": sess.get("email"),
+        "needs_confirmation": not bool(at and rt),
+    }
+    resp = JSONResponse(content=payload)
+    if at and rt:
+        set_auth_cookies(resp, access_token=str(at), refresh_token=str(rt), request=request)
+    return resp
+
+
+class RefreshBody(BaseModel):
+    refresh_token: str | None = None
 
 
 @app.post("/v1/auth/refresh")
-def auth_refresh(body: RefreshBody) -> dict[str, Any]:
+def auth_refresh(request: Request, body: RefreshBody | None = None) -> JSONResponse:
     import supabase_client as sb
 
     if not sb.is_configured():
         raise HTTPException(status_code=503, detail="Supabase is not configured")
+    body = body or RefreshBody()
+    _at, cookie_rt = tokens_from_request(request)
+    rt = (body.refresh_token or cookie_rt or "").strip()
+    if not rt:
+        raise HTTPException(status_code=401, detail="refresh_token required")
     try:
-        sess = sb.refresh_session(body.refresh_token)
+        sess = sb.refresh_session(rt)
     except Exception as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     uid = str(sess.get("user_id") or "")
-    if uid:
-        apply_auth_tokens(sess.get("access_token"), sess.get("refresh_token"))
-        ensure_guest_user(uid)
-    return {"ok": True, **sess}
+    at = sess.get("access_token")
+    new_rt = sess.get("refresh_token")
+    if uid and at and new_rt:
+        apply_auth_tokens(at, new_rt)
+        ensure_request_user(uid)
+    payload = {"ok": True, "user_id": uid, "email": sess.get("email")}
+    resp = JSONResponse(content=payload)
+    if at and new_rt:
+        set_auth_cookies(resp, access_token=str(at), refresh_token=str(new_rt), request=request)
+    return resp
 
 
 @app.post("/v1/auth/logout")
-def auth_logout(
-    x_access_token: str | None = Header(default=None, alias="X-Access-Token"),
-    x_refresh_token: str | None = Header(default=None, alias="X-Refresh-Token"),
-) -> dict[str, Any]:
+def auth_logout(request: Request) -> JSONResponse:
     import supabase_client as sb
 
+    at, rt = tokens_from_request(request)
     try:
-        sb.sign_out(x_access_token, x_refresh_token)
+        sb.sign_out(at, rt)
     except Exception:
         pass
     boot_db_guest()
-    return {"ok": True}
+    resp = JSONResponse(content={"ok": True})
+    clear_auth_cookies(resp)
+    return resp
 
 
 # ── domain options / execute heal ────────────────────────────────────────────
@@ -557,6 +626,7 @@ class ExecuteFoodBody(BaseModel):
 
 @app.post("/v1/execute/food")
 def execute_food(
+    request: Request,
     body: ExecuteFoodBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
@@ -564,8 +634,8 @@ def execute_food(
     import shopping as shopping_mod
     import shopping_compat as shop_compat
 
-    uid = _uid(body.user_id, x_user_id)
-    ensure_guest_user(uid)
+    uid = _uid(request, body.user_id, x_user_id)
+    ensure_request_user(uid)
     ctx = dict(body.context or {})
     suggestion = str(body.suggestion or ctx.get("title") or "").strip()
     meal_type = str(body.meal_type or ctx.get("meal_type") or "middag")
@@ -621,14 +691,13 @@ def execute_food(
 
 @app.get("/v1/me")
 def get_me(
+    request: Request,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
     language: str = "sv",
 ) -> dict[str, Any]:
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-    user = ensure_guest_user(uid, language=language)
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
+    user = ensure_request_user(uid, language=language)
     # Parse JSON fields for clients
     out = dict(user)
     for key in ("profile_json", "dietary_json", "wardrobe_json"):
@@ -638,7 +707,7 @@ def get_me(
                 out[key] = json.loads(raw)
             except json.JSONDecodeError:
                 pass
-    out["guest"] = str(uid).startswith("guest-")
+    out["guest"] = is_guest_id(uid)
     return {"user": out, "user_id": uid}
 
 
@@ -651,13 +720,14 @@ class PatchMeBody(BaseModel):
 
 @app.patch("/v1/me")
 def patch_me(
+    request: Request,
     body: PatchMeBody,
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import db
 
-    uid = _uid(body.user_id, x_user_id)
-    ensure_guest_user(uid)
+    uid = _uid(request, body.user_id, x_user_id, mint_guest=False)
+    ensure_request_user(uid)
     fields: dict[str, Any] = {}
     if body.language is not None:
         fields["language"] = body.language
@@ -673,29 +743,27 @@ def patch_me(
 
 @app.get("/v1/me/export")
 def export_me(
+    request: Request,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> JSONResponse:
     import gdpr
 
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
-    ensure_guest_user(uid)
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
+    ensure_request_user(uid)
     data = gdpr.export_user_data(uid)
     return JSONResponse(content=data)
 
 
 @app.delete("/v1/me")
 def delete_me(
+    request: Request,
     user_id: str | None = Query(default=None),
     x_user_id: str | None = Header(default=None, alias="X-User-Id"),
 ) -> dict[str, Any]:
     import gdpr
 
-    uid = (user_id or x_user_id or "").strip()
-    if not uid:
-        raise HTTPException(status_code=400, detail="user_id required")
+    uid = _uid(request, user_id, x_user_id, mint_guest=False)
     boot_db_guest()
     gdpr.delete_user_account(uid)
     return {"ok": True, "deleted_user_id": uid}

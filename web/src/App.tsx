@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { AppShell } from "./layout/AppShell";
 import { AuthPage } from "./pages/AuthPage";
 import { ClothesPage } from "./pages/ClothesPage";
@@ -13,21 +14,23 @@ import "./styles/global.css";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route index element={<HomePage />} />
-          <Route path="lista" element={<ListaPage />} />
-          <Route path="historik" element={<HistorikPage />} />
-          <Route path="profil" element={<ProfilPage />} />
-          <Route path="login" element={<AuthPage />} />
-          <Route path="klader" element={<ClothesPage />} />
-          <Route path="kylen" element={<FridgePage />} />
-          <Route path="resultat" element={<ResultPage />} />
-          <Route path="utfor" element={<ExecutePage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route index element={<HomePage />} />
+            <Route path="lista" element={<ListaPage />} />
+            <Route path="historik" element={<HistorikPage />} />
+            <Route path="profil" element={<ProfilPage />} />
+            <Route path="login" element={<AuthPage />} />
+            <Route path="klader" element={<ClothesPage />} />
+            <Route path="kylen" element={<FridgePage />} />
+            <Route path="resultat" element={<ResultPage />} />
+            <Route path="utfor" element={<ExecutePage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

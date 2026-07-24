@@ -143,6 +143,22 @@ def restore_session(access_token: str, refresh_token: str) -> Client:
     return client
 
 
+def user_id_from_access_token(access_token: str) -> str | None:
+    """Verify JWT with Supabase Auth and return the user id, or None."""
+    at = (access_token or "").strip()
+    if not at:
+        return None
+    client = get_client()
+    res = client.auth.get_user(at)
+    user = getattr(res, "user", None) or res
+    uid = getattr(user, "id", None)
+    if uid:
+        return str(uid)
+    if isinstance(user, dict) and user.get("id"):
+        return str(user["id"])
+    return None
+
+
 def refresh_session(refresh_token: str) -> dict[str, Any]:
     """Exchange refresh token for a new session."""
     client = get_client()

@@ -40,8 +40,6 @@ export function AuthPage() {
         writeAuth({
           user_id: sess.user_id,
           email: sess.email,
-          access_token: sess.access_token,
-          refresh_token: sess.refresh_token,
         });
         navigate("/");
         return;
@@ -51,12 +49,10 @@ export function AuthPage() {
         return;
       }
       const sess = await api.signup(email.trim(), password, true);
-      if (sess.access_token && sess.refresh_token && sess.user_id) {
+      if (sess.user_id && !sess.needs_confirmation) {
         writeAuth({
           user_id: sess.user_id,
           email: sess.email,
-          access_token: sess.access_token,
-          refresh_token: sess.refresh_token,
         });
         navigate("/");
         return;

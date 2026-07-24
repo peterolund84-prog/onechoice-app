@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Clapperboard, Dumbbell, Soup, TreePalm } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { DecideSkeleton } from "../components/DecideSkeleton";
 import { api } from "../lib/api";
 import type { Decision } from "../lib/types";
 
@@ -87,7 +88,7 @@ export function HomePage() {
   const navigate = useNavigate();
   const [home, setHome] = useState<HomePayload>(FALLBACK);
   const [busy, setBusy] = useState(false);
-  const [busyLabel, setBusyLabel] = useState<string | null>(null);
+  const [busyDomain, setBusyDomain] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [freeOpen, setFreeOpen] = useState(false);
   const [freeText, setFreeText] = useState("");
@@ -113,7 +114,7 @@ export function HomePage() {
     meal_type?: string | null;
   }) {
     setBusy(true);
-    setBusyLabel(opts.domain_hint === "food" ? "Bestämmer mat…" : "Bestämmer…");
+    setBusyDomain(opts.domain_hint || "food");
     setError(null);
     try {
       const result = await api.decide({
@@ -152,8 +153,12 @@ export function HomePage() {
       setError(e instanceof Error ? e.message : "Kunde inte bestämma just nu.");
     } finally {
       setBusy(false);
-      setBusyLabel(null);
+      setBusyDomain(null);
     }
+  }
+
+  if (busy) {
+    return <DecideSkeleton domain={busyDomain} />;
   }
 
   return (
@@ -170,7 +175,7 @@ export function HomePage() {
             runDecide({ domain_hint: "food", meal_type: home.meal_type ?? null })
           }
         >
-          {busy ? busyLabel || "Bestämmer…" : home.cta}
+          {home.cta}
         </button>
       </div>
 
@@ -237,11 +242,6 @@ export function HomePage() {
       </div>
 
       {error && <p className="oc-error">{error}</p>}
-      {busy && (
-        <p className="oc-page-sub" style={{ marginTop: 10 }}>
-          {busyLabel || "Bestämmer…"}
-        </p>
-      )}
     </section>
   );
 }

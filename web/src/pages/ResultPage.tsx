@@ -8,17 +8,13 @@ import {
   readDecision,
   saveDecision,
 } from "../lib/decisionStorage";
-import { resolveDishPublicPath } from "../lib/dishImage";
+import { resolveMoviePosterPath, displayMovieTitle } from "../lib/moviePoster";
 import {
   FORMAT_OPTIONS,
   MEAL_OPTIONS,
   MOOD_OPTIONS,
   SERVICE_LABELS,
 } from "../lib/domainMeta";
-import {
-  displayMovieTitle,
-  resolveMoviePosterPath,
-} from "../lib/moviePoster";
 import type { Decision } from "../lib/types";
 
 const MAX_REROLLS = 3;
@@ -100,17 +96,23 @@ function movieRatingLine(d: Decision): string | null {
 }
 
 function mediaSrc(d: Decision): string | null {
-  // Food: Vite-hosted /dishes first — no dependency on API media/embed.
-  if (d.domain === "food" && d.suggestion) {
-    const local = resolveDishPublicPath(d.suggestion, dishHint(d));
-    if (local) return local;
+  // Food: API embed / public media URL only (Python dish_images is the resolver).
+  if (d.domain === "food") {
     if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
       return d.image_data_url;
     }
-    const q = new URLSearchParams({ title: d.suggestion });
-    const hint = dishHint(d);
-    if (hint) q.set("hint", hint);
-    return `${api.base}/v1/media/dish?${q}`;
+    if (typeof d.image_url === "string" && d.image_url) {
+      return d.image_url.startsWith("http")
+        ? d.image_url
+        : `${api.base}${d.image_url}`;
+    }
+    if (d.suggestion) {
+      const q = new URLSearchParams({ title: d.suggestion });
+      const hint = dishHint(d);
+      if (hint) q.set("hint", hint);
+      return `${api.base}/v1/media/dish?${q}`;
+    }
+    return null;
   }
   if (typeof d.image_data_url === "string" && d.image_data_url.startsWith("data:")) {
     return d.image_data_url;
@@ -191,14 +193,13 @@ export function ResultPage() {
     const current = decision;
     if (!current || current.domain !== "food" || current.image_data_url) return;
     if (!current.suggestion) return;
-    // Local Vite dishes already cover this title — no API fetch needed.
-    if (resolveDishPublicPath(current.suggestion, dishHint(current))) return;
+    if (current.image_url) return;
     let cancelled = false;
     const q = new URLSearchParams({ title: current.suggestion });
     const hint = dishHint(current);
     if (hint) q.set("hint", hint);
     const url = `${api.base}/v1/media/dish?${q}`;
-    fetch(url)
+    fetch(url, { credentials: "include" })
       .then((res) => {
         if (!res.ok) throw new Error("no image");
         return res.blob();
@@ -228,7 +229,7 @@ export function ResultPage() {
     return () => {
       cancelled = true;
     };
-  }, [decision?.suggestion, decision?.domain, decision?.image_data_url]);
+  }, [decision?.suggestion, decision?.domain, decision?.image_data_url, decision?.image_url]);
 
   // After max rerolls the API marks locked — auto-accept so the user isn't stuck.
   useEffect(() => {

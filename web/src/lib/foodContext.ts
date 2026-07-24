@@ -169,10 +169,10 @@ export function selectedToBuy(
 }
 
 export function mealAllowsShopping(d: Decision): boolean {
-  const ctx = decisionContext(d);
-  const meal = String(ctx.meal_type || "middag");
-  if (meal === "frukost" || meal === "kvallsmal") return false;
-  if (String(ctx.source || "") === "fridge_photo") return false;
+  // Prefer API flag (Python food_domain.show_shopping) — one source of truth.
+  if (typeof d.allows_shopping === "boolean") {
+    return d.allows_shopping;
+  }
   const shop = extractShopping(d);
   return Boolean(shop?.to_buy && Object.keys(shop.to_buy).length);
 }

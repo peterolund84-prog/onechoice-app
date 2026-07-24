@@ -1117,3 +1117,61 @@ input {
   line-height: 16px;
   text-align: center;
 }
+
+.oc-error-card {
+  text-align: center;
+  padding-top: 48px;
+  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.oc-skel {
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.oc-skel-block {
+  width: 100%;
+  max-width: 340px;
+  aspect-ratio: 4 / 3;
+  border-radius: 18px;
+  background: linear-gradient(90deg, #eceff3 0%, #f6f7f9 50%, #eceff3 100%);
+  background-size: 200% 100%;
+  animation: oc-shimmer 1.2s ease infinite;
+  margin-bottom: 16px;
+}
+
+.oc-skel-line {
+  height: 14px;
+  width: 80%;
+  border-radius: 8px;
+  margin: 0 auto 10px;
+  background: linear-gradient(90deg, #eceff3 0%, #f6f7f9 50%, #eceff3 100%);
+  background-size: 200% 100%;
+  animation: oc-shimmer 1.2s ease infinite;
+}
+
+.oc-skel-line--title {
+  height: 28px;
+  width: 60%;
+  margin-bottom: 14px;
+}
+
+.oc-skel-line--short {
+  width: 45%;
+}
+
+.oc-skel-status {
+  margin-top: 18px;
+  color: var(--oc-muted);
+  font-size: 14px;
+  animation: oc-fade-up 420ms ease both;
+}
+
+@keyframes oc-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}

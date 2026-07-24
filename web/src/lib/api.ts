@@ -1,30 +1,40 @@
-import { authHeaders } from "./auth";
-import { getUserId } from "./user";
+import { isLoggedIn } from "./auth";
+import { getUserId, isGuestId } from "./user";
 import type { Decision, ShoppingItem, UserProfile } from "./types";
 
+/**
+ * Prefer same-origin (Vite proxy → API) so httpOnly cookies work on LAN.
+ * Absolute VITE_API_BASE is only for special setups without the proxy.
+ */
 function resolveApiBase(): string {
   const env = (import.meta.env.VITE_API_BASE as string | undefined)?.trim();
-  const apiPort = (import.meta.env.VITE_API_PORT as string | undefined)?.trim() || "8001";
-
-  if (typeof window !== "undefined") {
-    const host = window.location.hostname;
-    const onLan =
-      Boolean(host) && host !== "localhost" && host !== "127.0.0.1";
-    if (onLan && (!env || /127\.0\.0\.1|localhost/i.test(env))) {
-      return `http://${host}:${apiPort}`;
-    }
+  if (env && !/127\.0\.0\.1|localhost/i.test(env)) {
+    return env.replace(/\/$/, "");
   }
-  return env || "http://127.0.0.1:8000";
+  // Empty = same origin (dev proxy / production reverse proxy).
+  return "";
 }
 
 const API_BASE = resolveApiBase();
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+function identityHeaders(): Record<string, string> {
+  // Authenticated sessions: never send a client id — JWT cookie is source of truth.
+  if (isLoggedIn()) return {};
   const uid = getUserId();
+  if (!isGuestId(uid)) return {};
+  return { "X-User-Id": uid };
+}
+
+function guestUserId(): string | undefined {
+  if (isLoggedIn()) return undefined;
+  const uid = getUserId();
+  return isGuestId(uid) ? uid : undefined;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-User-Id": uid,
-    ...authHeaders(),
+    ...identityHeaders(),
     ...(init?.headers as Record<string, string> | undefined),
   };
   const ctrl = new AbortController();
@@ -34,6 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetch(`${API_BASE}${path}`, {
       ...init,
       headers,
+      credentials: "include",
       signal: init?.signal ?? ctrl.signal,
     });
     if (!res.ok) {
@@ -48,12 +59,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       throw new Error(
-        `API svarade inte (${API_BASE}). Kolla att uvicorn kör och att .env pekar rätt.`,
+        `API svarade inte (${API_BASE || "same-origin"}). Kolla att uvicorn kör.`,
       );
     }
     if (e instanceof TypeError) {
       throw new Error(
-        `Kunde inte nå API (${API_BASE}). Starta API med --host 0.0.0.0.`,
+        `Kunde inte nå API (${API_BASE || "same-origin"}). Starta API + Vite-proxy.`,
       );
     }
     throw e;
@@ -63,8 +74,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function withUid(path: string): string {
+  const uid = guestUserId();
+  if (!uid) return path;
   const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}user_id=${encodeURIComponent(getUserId())}`;
+  return `${path}${sep}user_id=${encodeURIComponent(uid)}`;
 }
 
 export type DecideBody = {
@@ -86,7 +99,7 @@ export type DecideBody = {
 };
 
 export const api = {
-  base: API_BASE,
+  base: API_BASE || (typeof window !== "undefined" ? window.location.origin : ""),
 
   home: () => request<Record<string, unknown>>("/v1/home?language=sv"),
 
@@ -102,7 +115,11 @@ export const api = {
   decide: (body: DecideBody) =>
     request<Decision>("/v1/decide", {
       method: "POST",
-      body: JSON.stringify({ language: "sv", user_id: getUserId(), ...body }),
+      body: JSON.stringify({
+        language: "sv",
+        user_id: guestUserId(),
+        ...body,
+      }),
     }),
 
   executeFood: (body: {
@@ -116,7 +133,7 @@ export const api = {
       shopping: Record<string, unknown> | null;
     }>("/v1/execute/food", {
       method: "POST",
-      body: JSON.stringify({ user_id: getUserId(), ...body }),
+      body: JSON.stringify({ user_id: guestUserId(), ...body }),
     }),
 
   authStatus: () => request<{ configured: boolean }>("/v1/auth/status"),
@@ -126,8 +143,6 @@ export const api = {
       ok: boolean;
       user_id: string;
       email?: string;
-      access_token: string;
-      refresh_token: string;
     }>("/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password, language: "sv" }),
@@ -138,8 +153,7 @@ export const api = {
       ok: boolean;
       user_id: string;
       email?: string;
-      access_token?: string | null;
-      refresh_token?: string | null;
+      needs_confirmation?: boolean;
     }>("/v1/auth/signup", {
       method: "POST",
       body: JSON.stringify({
@@ -159,7 +173,7 @@ export const api = {
       {
         method: "POST",
         body: JSON.stringify({
-          user_id: getUserId(),
+          user_id: guestUserId(),
           route_log_id: routeLogId ?? null,
         }),
       },
@@ -170,16 +184,19 @@ export const api = {
       `/v1/decisions/${decisionId}/favorite`,
       {
         method: "POST",
-        body: JSON.stringify({ user_id: getUserId(), favorite }),
+        body: JSON.stringify({ user_id: guestUserId(), favorite }),
       },
     ),
 
   listDecisions: (opts?: { favorite?: boolean; limit?: number }) => {
-    const q = new URLSearchParams({ user_id: getUserId() });
+    const q = new URLSearchParams();
+    const uid = guestUserId();
+    if (uid) q.set("user_id", uid);
     if (opts?.favorite != null) q.set("favorite", String(opts.favorite));
     if (opts?.limit) q.set("limit", String(opts.limit));
+    const qs = q.toString();
     return request<{ items: Decision[]; user_id: string }>(
-      `/v1/decisions?${q}`,
+      `/v1/decisions${qs ? `?${qs}` : ""}`,
     );
   },
 
@@ -192,20 +209,20 @@ export const api = {
   addShopping: (name: string) =>
     request<{ item: ShoppingItem }>("/v1/shopping", {
       method: "POST",
-      body: JSON.stringify({ name, user_id: getUserId() }),
+      body: JSON.stringify({ name, user_id: guestUserId() }),
     }),
 
   toggleShopping: (itemId: number, checked: boolean) =>
     request<{ item: ShoppingItem }>(`/v1/shopping/${itemId}`, {
       method: "PATCH",
-      body: JSON.stringify({ checked, user_id: getUserId() }),
+      body: JSON.stringify({ checked, user_id: guestUserId() }),
     }),
 
   clearCheckedShopping: (itemIds?: number[]) =>
     request<{ deleted: number }>("/v1/shopping/checked", {
       method: "DELETE",
       body: JSON.stringify({
-        user_id: getUserId(),
+        user_id: guestUserId(),
         item_ids: itemIds ?? null,
       }),
     }),
@@ -214,7 +231,7 @@ export const api = {
     request<{ added: ShoppingItem[]; count: number }>("/v1/shopping/merge", {
       method: "POST",
       body: JSON.stringify({
-        user_id: getUserId(),
+        user_id: guestUserId(),
         decision_id: decisionId,
         to_buy: toBuy,
       }),
@@ -232,7 +249,7 @@ export const api = {
   }) =>
     request<{ user: UserProfile }>("/v1/me", {
       method: "PATCH",
-      body: JSON.stringify({ user_id: getUserId(), ...body }),
+      body: JSON.stringify({ user_id: guestUserId(), ...body }),
     }),
 
   exportMe: () =>
