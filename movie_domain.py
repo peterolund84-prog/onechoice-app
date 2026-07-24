@@ -20,7 +20,7 @@ FORMATS: dict[str, dict[str, Any]] = {
         "sv": "Film",
         "en": "Movie",
         "kind": "film",
-        "max_minutes": 140,
+        "max_minutes": 180,
         "repeat_days": 14,
     },
     "ny_serie": {
@@ -77,26 +77,36 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
     "avkopplat": {
         "sv": [
             {
-                "suggestion": "Seinfeld",
-                "justification": "Lugn bekant sitcom — noll energi, måndagssoffa.",
-                "meta": {"title": "seinfeld", "kind": "series"},
+                "suggestion": "Bonusfamiljen",
+                "justification": "Svensk vardagshumor på SVT — låg tröskel, hög mysfaktor.",
+                "meta": {"title": "bonusfamiljen", "kind": "series"},
             },
             {
                 "suggestion": "Vänner",
                 "justification": "Varm och lätt — ett avsnitt och du är klar.",
                 "meta": {"title": "vänner", "kind": "series"},
             },
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Lugn bekant sitcom — noll energi, måndagssoffa.",
+                "meta": {"title": "seinfeld", "kind": "series"},
+            },
         ],
         "en": [
             {
-                "suggestion": "Seinfeld",
-                "justification": "Familiar comfort — zero effort, weekday sofa.",
-                "meta": {"title": "seinfeld", "kind": "series"},
+                "suggestion": "Bonusfamiljen",
+                "justification": "Swedish comfort comedy on SVT — low effort, high cozy.",
+                "meta": {"title": "bonusfamiljen", "kind": "series"},
             },
             {
                 "suggestion": "Friends",
                 "justification": "Warm and easy — one episode and you're done.",
                 "meta": {"title": "friends", "kind": "series"},
+            },
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Familiar comfort — zero effort, weekday sofa.",
+                "meta": {"title": "seinfeld", "kind": "series"},
             },
         ],
     },
@@ -139,31 +149,46 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
     "skratta": {
         "sv": [
             {
-                "suggestion": "Seinfeld",
-                "justification": "Torr humor i lagom dos — skratt utan ansträngning.",
-                "meta": {"title": "seinfeld", "kind": "series"},
+                "suggestion": "Bonusfamiljen",
+                "justification": "Svenska skratt på SVT — igenkänning utan ansträngning.",
+                "meta": {"title": "bonusfamiljen", "kind": "series"},
             },
             {
                 "suggestion": "Vänner",
                 "justification": "Klassiska skratt — lätt efter en lång dag.",
                 "meta": {"title": "vänner", "kind": "series"},
             },
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Torr humor i lagom dos — skratt utan ansträngning.",
+                "meta": {"title": "seinfeld", "kind": "series"},
+            },
         ],
         "en": [
             {
-                "suggestion": "Seinfeld",
-                "justification": "Dry laughs in a right-sized dose.",
-                "meta": {"title": "seinfeld", "kind": "series"},
+                "suggestion": "Bonusfamiljen",
+                "justification": "Swedish laughs on SVT — recognition without effort.",
+                "meta": {"title": "bonusfamiljen", "kind": "series"},
             },
             {
                 "suggestion": "Friends",
                 "justification": "Classic laughs — easy after a long day.",
                 "meta": {"title": "friends", "kind": "series"},
             },
+            {
+                "suggestion": "Seinfeld",
+                "justification": "Dry laughs in a right-sized dose.",
+                "meta": {"title": "seinfeld", "kind": "series"},
+            },
         ],
     },
     "lar_mig": {
         "sv": [
+            {
+                "suggestion": "Det sista kapitlet",
+                "justification": "Svenskt och tankeväckande — perfekt för en nyfiken kväll.",
+                "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
+            },
             {
                 "suggestion": "Our Planet",
                 "justification": "Lär dig om naturen — ett avsnitt, lagom tempo.",
@@ -175,17 +200,17 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "meta": {"title": "explained", "kind": "series", "genres": ["documentary"]},
             },
             {
-                "suggestion": "Det sista kapitlet",
-                "justification": "Svenskt och tankeväckande — perfekt för en nyfiken kväll.",
-                "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
-            },
-            {
                 "suggestion": "My Octopus Teacher",
                 "justification": "En film som lär och stillar — under 90 minuter.",
                 "meta": {"title": "my octopus teacher", "kind": "film", "genres": ["documentary", "nature"]},
             },
         ],
         "en": [
+            {
+                "suggestion": "Det sista kapitlet",
+                "justification": "Swedish and thought-provoking — curious evening without stress.",
+                "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
+            },
             {
                 "suggestion": "Our Planet",
                 "justification": "Learn about the natural world — one episode, easy pace.",
@@ -195,11 +220,6 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Explained",
                 "justification": "Short and smart — one topic, one evening.",
                 "meta": {"title": "explained", "kind": "series", "genres": ["documentary"]},
-            },
-            {
-                "suggestion": "Det sista kapitlet",
-                "justification": "Swedish and thought-provoking — curious evening without stress.",
-                "meta": {"title": "det sista kapitlet", "kind": "series", "genres": ["documentary"]},
             },
             {
                 "suggestion": "My Octopus Teacher",

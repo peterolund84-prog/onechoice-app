@@ -574,6 +574,18 @@ def decide(
     )
     top = ranked[0] if ranked else survivors[0]
     prev_suggestion = str((context_extra or {}).get("previous_suggestion") or "").strip()
+    # Heal previous title from DB when client only sent previous_decision_id
+    if reroll and not prev_suggestion and previous_decision_id:
+        try:
+            with db.get_conn(db_path) as conn:
+                row = conn.execute(
+                    "SELECT suggestion FROM decisions WHERE id = ?",
+                    (int(previous_decision_id),),
+                ).fetchone()
+            if row is not None:
+                prev_suggestion = str(row["suggestion"] if "suggestion" in row.keys() else row[0] or "").strip()
+        except Exception as exc:
+            log.warning("previous_suggestion lookup failed: %s", exc)
     if reroll and prev_suggestion and ranked:
         prev_l = prev_suggestion.lower()
         alt = [

@@ -40,29 +40,119 @@ def _get_api_key() -> str | None:
     return os.environ.get("TMDB_API_KEY")
 
 
-# Minimal offline mapping for unit tests and local dev.
-# Values are intentionally stable and do not claim real TMDB ratings.
+# Minimal offline mapping for unit tests and local dev (no TMDB_API_KEY).
+# poster_path values are real TMDB CDN paths so posters load without an API key.
 _OFFLINE_TMDB: dict[str, dict[str, Any]] = {
     # series
-    "wednesday": {"tmdb_id": 1, "year": 2022, "vote_average": 7.8, "poster_path": "/wednesday.jpg"},
-    "seinfeld": {"tmdb_id": 2, "year": 1989, "vote_average": 8.6, "poster_path": "/seinfeld.jpg"},
-    "vänner": {"tmdb_id": 3, "year": 1994, "vote_average": 8.4, "poster_path": "/vanner.jpg"},
-    "friends": {"tmdb_id": 3, "year": 1994, "vote_average": 8.4, "poster_path": "/vanner.jpg"},
-    "the night agent": {"tmdb_id": 4, "year": 2023, "vote_average": 7.2, "poster_path": "/night-agent.jpg"},
-    "andor": {"tmdb_id": 5, "year": 2022, "vote_average": 8.0, "poster_path": "/andor.jpg"},
-    "the bear": {"tmdb_id": 6, "year": 2022, "vote_average": 8.7, "poster_path": "/the-bear.jpg"},
-    "succession": {"tmdb_id": 7, "year": 2018, "vote_average": 8.9, "poster_path": "/succession.jpg"},
-    " Succession": {"tmdb_id": 7, "year": 2018, "vote_average": 8.9, "poster_path": "/succession.jpg"},
+    "wednesday": {
+        "tmdb_id": 119051,
+        "year": 2022,
+        "vote_average": 7.8,
+        "poster_path": "/36xXlhEpQqVVPuiZhfoQuaY4OlA.jpg",
+    },
+    "seinfeld": {
+        "tmdb_id": 1400,
+        "year": 1989,
+        "vote_average": 8.6,
+        "poster_path": "/aCw8ONfyz3AhngVQa1E2Ss4KSUQ.jpg",
+    },
+    "vänner": {
+        "tmdb_id": 1668,
+        "year": 1994,
+        "vote_average": 8.4,
+        "poster_path": "/2koX1xLkpTQM4IZebYvKysFW1Nh.jpg",
+    },
+    "friends": {
+        "tmdb_id": 1668,
+        "year": 1994,
+        "vote_average": 8.4,
+        "poster_path": "/2koX1xLkpTQM4IZebYvKysFW1Nh.jpg",
+    },
+    "the night agent": {
+        "tmdb_id": 124364,
+        "year": 2023,
+        "vote_average": 7.2,
+        "poster_path": "/pRtJagIxpfODzzb0T0NAvZSzErC.jpg",
+    },
+    "andor": {
+        "tmdb_id": 83867,
+        "year": 2022,
+        "vote_average": 8.0,
+        "poster_path": "/khZqmwHQicTYoS7Flreb9EddFZC.jpg",
+    },
+    "the bear": {
+        "tmdb_id": 136315,
+        "year": 2022,
+        "vote_average": 8.7,
+        "poster_path": "/eKfVzzEazSIjJMrw9ADa2x8ksLz.jpg",
+    },
+    "succession": {
+        "tmdb_id": 76331,
+        "year": 2018,
+        "vote_average": 8.9,
+        "poster_path": "/z0XiwdrCQ9yVIr4O0pxzaAYRxdW.jpg",
+    },
+    " Succession": {
+        "tmdb_id": 76331,
+        "year": 2018,
+        "vote_average": 8.9,
+        "poster_path": "/z0XiwdrCQ9yVIr4O0pxzaAYRxdW.jpg",
+    },
     # films
-    "dune": {"tmdb_id": 101, "year": 2021, "vote_average": 8.2, "poster_path": "/dune.jpg"},
-    "det sista kapitlet": {"tmdb_id": 102, "year": 2020, "vote_average": 6.8, "poster_path": "/det-sista-kapitlet.jpg"},
-    "top gun maverick": {"tmdb_id": 103, "year": 2022, "vote_average": 7.7, "poster_path": "/top-gun-maverick.jpg"},
-    "beck": {"tmdb_id": 104, "year": 2015, "vote_average": 7.1, "poster_path": "/beck.jpg"},
-    "our planet": {"tmdb_id": 201, "year": 2019, "vote_average": 8.5, "poster_path": "/our-planet.jpg"},
-    "my octopus teacher": {"tmdb_id": 202, "year": 2020, "vote_average": 8.1, "poster_path": "/octopus.jpg"},
-    "hilda": {"tmdb_id": 203, "year": 2018, "vote_average": 8.0, "poster_path": "/hilda.jpg"},
-    "kung fu panda": {"tmdb_id": 204, "year": 2008, "vote_average": 7.6, "poster_path": "/kfp.jpg"},
-    "explained": {"tmdb_id": 205, "year": 2018, "vote_average": 7.9, "poster_path": "/explained.jpg"},
+    "dune": {
+        "tmdb_id": 438631,
+        "year": 2021,
+        "vote_average": 8.2,
+        "poster_path": "/gDzOcq0pfeCeqMBwKIJlSmQpjkZ.jpg",
+    },
+    "det sista kapitlet": {
+        "tmdb_id": 211088,
+        "year": 2020,
+        "vote_average": 6.8,
+        "poster_path": "/kmlzoUI8Jj0UuVeAP1Hb8cYtx6G.jpg",
+    },
+    "top gun maverick": {
+        "tmdb_id": 361743,
+        "year": 2022,
+        "vote_average": 7.7,
+        "poster_path": "/n0YuM4f5lvGAP6MAW2kBIzugXnc.jpg",
+    },
+    "bonusfamiljen": {
+        "tmdb_id": 67760,
+        "year": 2015,
+        "vote_average": 7.1,
+        "poster_path": "/8FevKpYnnKSYLwTbpBgXmrHuTP0.jpg",
+    },
+    "our planet": {
+        "tmdb_id": 85852,
+        "year": 2019,
+        "vote_average": 8.5,
+        "poster_path": "/5ETY99uYe6O5h8WXRPA8G7FbmZr.jpg",
+    },
+    "my octopus teacher": {
+        "tmdb_id": 653651,
+        "year": 2020,
+        "vote_average": 8.1,
+        "poster_path": "/vmda3T7hT1kpCugE8oUpTxkZCQU.jpg",
+    },
+    "hilda": {
+        "tmdb_id": 86331,
+        "year": 2018,
+        "vote_average": 8.0,
+        "poster_path": "/5dwUlKkKHTv5VJ3llxWFS2B00Aj.jpg",
+    },
+    "kung fu panda": {
+        "tmdb_id": 9502,
+        "year": 2008,
+        "vote_average": 7.6,
+        "poster_path": "/wWt4JYXTg5Wr3xBW2phBrMKgp3x.jpg",
+    },
+    "explained": {
+        "tmdb_id": 81356,
+        "year": 2018,
+        "vote_average": 7.9,
+        "poster_path": "/bc3bmTdnoKcRuO9xdQKgAbB7Y9Z.jpg",
+    },
 }
 
 
@@ -141,4 +231,3 @@ def lookup_title(title: str, kind: str = "series") -> dict[str, Any] | None:
         "poster_url": poster_url,
         "vote_average": vote_average,
     }
-
