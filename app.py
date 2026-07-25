@@ -96,14 +96,15 @@ st.set_page_config(
 )
 
 # Design tokens — premium minimal (accent ONLY on CTA, tagline dot, active nav)
-BG = "#FAFAF7"
+BG = "#F7F6FC"
 INK = "#1A1A1A"
 MUTED = "#6B6B66"
-BORDER = "#E5E5E0"
+BORDER = "#E8E6F0"
 ACCENT = "#3B3BC4"
+ACCENT_SOFT = "#6B5CE7"
 # Legacy aliases (non-accent UI — never use ACCENT except CTA / tag dot / active nav)
 PRIMARY = INK
-PRIMARY_SOFT = "#F0F0EB"
+PRIMARY_SOFT = "#F0EEF8"
 BG_SOFT = BG
 NAVY = INK
 SHADOW = "none"
@@ -132,7 +133,7 @@ ICON_LIST = (
 )
 
 # Server-side only — never render in the consumer UI
-BUILD_ID = "premium-home-lucide-icons-v94-20260723"
+BUILD_ID = "premium-mockup-ui-v95-20260725"
 # Keep i18n + lang_bar() for later; hide the SV/EN control while we ship Swedish-first.
 SHOW_LANG_TOGGLE = False
 
@@ -143,12 +144,22 @@ I18N = {
         "tagline": "Ett beslut. Klart.",
         "ask": "Vad behöver du bestämma?",
         "decide": "Bestäm åt mig",
-        "home_or_choose": "Eller välj själv",
-        "home_hero_sub": "Ett tryck — jag tar beslutet.",
+        "decide_sub": "Jag tar hand om allt",
+        "home_or_choose": "Vad vill du bestämma?",
+        "home_hero_title": "Vad ska vi bestämma idag?",
+        "home_hero_sub": "Ett tryck. Jag tar beslutet.",
         "home_free_disclose": "Något annat?",
+        "home_tip_banner": "Har du ett eget förslag? Tipsa oss om ny kategori så kan vi lägga till den.",
         "home_free_placeholder": "Vad ska du bestämma?",
         "home_free_submit": "Bestäm",
         "home_fridge_card": "Fota kylen",
+        "home_gifts_card": "Presenter",
+        "domain_sub_food": "Frukost, lunch, middag & mer",
+        "domain_sub_clothes": "Outfit, skor & accessoarer",
+        "domain_sub_movie": "Hitta något värt att se",
+        "domain_sub_workout": "Pass, övningar & motivation",
+        "domain_sub_weekend": "Weekend, destination & aktiviteter",
+        "domain_sub_gifts": "Till någon du bryr dig om",
         "new": "Nytt förslag",
         "lock_msg": "Det är {suggestion}. Kör.",
         "do_it": "Gör det nu",
@@ -266,9 +277,10 @@ I18N = {
         "domains": {
             "food": "Mat",
             "clothes": "Kläder",
-            "movie": "Film",
+            "movie": "Film & serier",
             "workout": "Träning",
-            "weekend": "Helg",
+            "weekend": "Resor",
+            "gifts": "Presenter",
         },
         "pro_title": "OneChoice Pro",
         "pro_desc": "Obegränsad historik och skarpare preferenser.",
@@ -356,12 +368,22 @@ I18N = {
         "tagline": "One decision. Done.",
         "ask": "What do you need decided?",
         "decide": "Decide for me",
-        "home_or_choose": "Or choose yourself",
-        "home_hero_sub": "One tap — I’ll decide.",
+        "decide_sub": "I’ll take care of everything",
+        "home_or_choose": "What do you want to decide?",
+        "home_hero_title": "What should we decide today?",
+        "home_hero_sub": "One tap. I make the decision.",
         "home_free_disclose": "Something else?",
+        "home_tip_banner": "Have your own idea? Tip us a new category and we can add it.",
         "home_free_placeholder": "What do you need to decide?",
         "home_free_submit": "Decide",
         "home_fridge_card": "Snap the fridge",
+        "home_gifts_card": "Gifts",
+        "domain_sub_food": "Breakfast, lunch, dinner & more",
+        "domain_sub_clothes": "Outfit, shoes & accessories",
+        "domain_sub_movie": "Find something worth watching",
+        "domain_sub_workout": "Sessions, moves & motivation",
+        "domain_sub_weekend": "Weekend, destination & activities",
+        "domain_sub_gifts": "For someone you care about",
         "new": "New suggestion",
         "lock_msg": "It’s {suggestion}. Go.",
         "do_it": "Do it now",
@@ -479,9 +501,10 @@ I18N = {
         "domains": {
             "food": "Food",
             "clothes": "Clothes",
-            "movie": "Movie",
+            "movie": "Movies & series",
             "workout": "Workout",
-            "weekend": "Weekend",
+            "weekend": "Travel",
+            "gifts": "Gifts",
         },
         "pro_title": "OneChoice Pro",
         "pro_desc": "Unlimited history and sharper preferences.",
@@ -859,6 +882,8 @@ def _dynamic_css_block() -> str:
         f"--oc-muted:{MUTED};"
         f"--oc-border:{BORDER};"
         f"--oc-accent:{ACCENT};"
+        f"--oc-accent-soft:{ACCENT_SOFT};"
+        f"--oc-cta-grad:linear-gradient(135deg,{ACCENT_SOFT} 0%,{ACCENT} 55%,#25258F 100%);"
         "}"
     )
 
@@ -2015,7 +2040,10 @@ _DOMAIN_CARD_ICONS: dict[str, str] = {
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z" /> <path d="m2.5 21.5 1.4-1.4" /> <path d="m20.1 3.9 1.4-1.4" /> <path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z" /> <path d="m9.6 14.4 4.8-4.8" /> </svg>'
     ),
     "weekend": (
-        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M13 8c0-2.76-2.46-5-5.5-5S2 5.24 2 8h2l1-1 1 1h4" /> <path d="M13 7.14A5.82 5.82 0 0 1 16.5 6c3.04 0 5.5 2.24 5.5 5h-3l-1-1-1 1h-3" /> <path d="M5.89 9.71c-2.15 2.15-2.3 5.47-.35 7.43l4.24-4.25.7-.7.71-.71 2.12-2.12c-1.95-1.96-5.27-1.8-7.42.35" /> <path d="M11 15.5c.5 2.5-.17 4.5-1 6.5h4c2-5.5-.5-12-1-14" /> </svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M4 10h16"/><path d="M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10"/><path d="M10 14h4"/></svg>'
+    ),
+    "gifts": (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>'
     ),
     "fridge": (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#6B6B66" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" > <path d="M5 6a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6Z" /> <path d="M5 10h14" /> <path d="M15 7v6" /> </svg>'
@@ -2076,15 +2104,42 @@ def _start_fridge_flow() -> None:
     st.rerun()
 
 
-def render_home_hero(inferred: dict[str, Any]) -> None:
-    headline = html.escape(str(inferred.get("headline") or ""))
+def _domain_card_button_label(domain: str) -> str:
+    """Title + subtitle for mockup domain cards (newline → CSS pre-line)."""
+    title = t("home_gifts_card") if domain == "gifts" else domain_label(domain)
+    lang = st.session_state.get("language", "sv")
+    pack = I18N.get(lang, I18N["sv"])
+    sub = str(pack.get(f"domain_sub_{domain}") or I18N["sv"].get(f"domain_sub_{domain}") or "")
+    if sub:
+        return f"{title}\n{sub}"
+    return title
+
+
+def _start_gifts_decision() -> None:
+    """Presenter card → near-domain gift pack (honest LLM/local gift suggestions)."""
+    _leave_home_chooser()
+    lang = st.session_state.get("language", "sv")
+    q = (
+        "Vilken present ska jag ge?"
+        if lang == "sv"
+        else "What gift should I get?"
+    )
+    run_decision(question=q, domain_hint="other", reroll=False, via_router=False)
+
+
+def render_home_hero(inferred: dict[str, Any] | None = None) -> None:
+    """Brand-level mockup hero; meal inference still drives the CTA silently."""
+    _ = inferred
+    headline = html.escape(t("home_hero_title"))
     sub = html.escape(t("home_hero_sub"))
+    decide_sub = html.escape(t("decide_sub"))
     st.markdown(
         '<div class="oc-hero-orb" aria-hidden="true"></div>'
         f'<div class="oc-hero">'
         f'<div class="oc-hero-title" role="heading" aria-level="1">{headline}</div>'
         f'<p class="oc-hero-sub">{sub}</p>'
-        f"</div>",
+        f"</div>"
+        f'<div class="oc-cta-sub" data-oc-cta-sub="{decide_sub}" aria-hidden="true"></div>',
         unsafe_allow_html=True,
     )
     if st.button(
@@ -2093,40 +2148,61 @@ def render_home_hero(inferred: dict[str, Any]) -> None:
         type="primary",
         use_container_width=True,
     ):
-        _run_inferred_home_decision(inferred)
+        _run_inferred_home_decision(
+            infer_home_hero(language=st.session_state.get("language", "sv"))
+        )
 
 
 def render_home_domain_grid() -> None:
-    """Secondary tier — compact icon cards in a 2-column grid (session-safe buttons)."""
-    domains = ("food", "clothes", "movie", "workout", "weekend")
-    entries: list[tuple[str, str, str]] = [
-        (d, domain_label(d), _DOMAIN_CARD_ICONS.get(d, "")) for d in domains
-    ]
-    entries.append(
-        ("fridge", t("home_fridge_card"), _DOMAIN_CARD_ICONS.get("fridge", ""))
-    )
+    """Mockup 2×3 domain cards — icon, title, subtitle (session-safe buttons)."""
+    domains = ("food", "clothes", "movie", "workout", "weekend", "gifts")
     with st.container(key="home_domains"):
         st.markdown(
             f'<div class="oc-section-label">{html.escape(t("home_or_choose"))}</div>',
             unsafe_allow_html=True,
         )
-        for i in range(0, len(entries), 2):
+        for i in range(0, len(domains), 2):
             cols = st.columns(2, gap="small")
             for j in range(2):
                 idx = i + j
-                if idx >= len(entries):
+                if idx >= len(domains):
                     break
-                domain, label, _icon = entries[idx]
+                domain = domains[idx]
                 with cols[j]:
                     if st.button(
-                        label,
+                        _domain_card_button_label(domain),
                         key=f"home_domain_{domain}",
                         use_container_width=True,
                     ):
-                        if domain == "fridge":
-                            _start_fridge_flow()
+                        if domain == "gifts":
+                            _start_gifts_decision()
                         else:
                             _start_domain_decision(domain)
+
+
+def render_home_tip_banner() -> None:
+    """Lavender tip strip — opens free-text; fridge stays one tap away."""
+    with st.container(key="home_tip_banner"):
+        if st.button(
+            t("home_tip_banner"),
+            key="home_free_disclose_btn",
+            type="secondary",
+            use_container_width=True,
+        ):
+            st.session_state.home_free_open = not bool(
+                st.session_state.get("home_free_open")
+            )
+            if not st.session_state.home_free_open:
+                st.session_state.pop("home_free_input", None)
+            st.rerun()
+    with st.container(key="home_fridge_link"):
+        if st.button(
+            t("home_fridge_card"),
+            key="home_domain_fridge",
+            type="secondary",
+            use_container_width=True,
+        ):
+            _start_fridge_flow()
 
 
 def render_logo() -> None:
@@ -4353,7 +4429,9 @@ def render_top_chrome(*, extra_class: str = "", show_lang: bool | None = None) -
     extra = f" {extra_class}" if extra_class else ""
     st.markdown(
         f'<header class="oc-header{extra}" aria-label="OneChoice">'
-        f'<span class="oc-header-wordmark oc-logo">OneChoice</span>'
+        f'<span class="oc-header-wordmark oc-logo">'
+        f'<span class="oc-logo-spark" aria-hidden="true"></span>'
+        f"OneChoice</span>"
         f"</header>",
         unsafe_allow_html=True,
     )
@@ -4585,37 +4663,13 @@ def page_home() -> None:
             return
 
     render_logo()
-    inferred = infer_home_hero(language=st.session_state.get("language", "sv"))
-
     with st.container(key="home_hero"):
-        render_home_hero(inferred)
-
-    if inferred.get("weekend_alternate"):
-        with st.container(key="home_weekend_alt"):
-            alt = str(inferred.get("weekend_headline") or "")
-            if st.button(alt, key="home_weekend_alt_btn"):
-                _leave_home_chooser()
-                run_decision(
-                    question="",
-                    domain_hint="weekend",
-                    reroll=False,
-                    via_router=False,
-                )
+        render_home_hero()
 
     render_home_domain_grid()
+    render_home_tip_banner()
 
     free_open = bool(st.session_state.get("home_free_open"))
-    with st.container(key="home_free_disclose"):
-        if st.button(
-            t("home_free_disclose"),
-            key="home_free_disclose_btn",
-            type="secondary",
-        ):
-            st.session_state.home_free_open = not free_open
-            if not st.session_state.home_free_open:
-                st.session_state.pop("home_free_input", None)
-            st.rerun()
-
     submitted = False
     q = ""
     if free_open:

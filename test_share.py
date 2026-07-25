@@ -321,7 +321,7 @@ class ShareLandingUiTests(unittest.TestCase):
                     at.session_state["_auth_cookie_checked"] = True
                     at.session_state["food_meal_type"] = "middag"
                     at.run()
-        mat = next(b for b in at.button if (b.label or "") == "Mat")
+        mat = next(b for b in at.button if (b.label or "").startswith("Mat"))
         mat.click().run()
         self.assertEqual(at.session_state["page"], "result")
         _assert_share_icon(self, at, where="food decision")
