@@ -261,7 +261,11 @@ class AuthBootTests(unittest.TestCase):
                             at.session_state["page"] = "home"
                             at.session_state["_auth_cookie_checked"] = True
                             at.run()
-                            mat = next(b for b in at.button if b.label == "Mat")
+                            mat = next(
+                                b
+                                for b in at.button
+                                if (b.label or "").startswith("Mat")
+                            )
                             mat.click().run()
                             self.assertNotEqual(at.session_state["page"], "auth")
                             self.assertEqual(at.session_state["access_token"], "at")

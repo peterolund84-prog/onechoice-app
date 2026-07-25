@@ -70,11 +70,19 @@ class PageButtonInventoryTests(unittest.TestCase):
         self.assertNotIn("Nytt förslag", labels)
         self.assertTrue(any("Bestäm" in lab for lab in labels), labels)
         # Domain cards
-        for domain in ("food", "clothes", "movie", "workout", "weekend", "fridge"):
+        for domain in ("food", "clothes", "movie", "workout", "weekend", "gifts"):
             self.assertTrue(
                 any(str(k).startswith(f"home_domain_{domain}") for k in keys),
                 keys,
             )
+        # Fridge lives behind tip expand
+        tip = next(b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn")
+        tip.click().run()
+        keys = _keys(at)
+        self.assertTrue(
+            any(str(k).startswith("home_domain_fridge") for k in keys),
+            keys,
+        )
         # Hem is the active tab on home
         nav_home = next(b for b in at.button if getattr(b, "key", None) == "nav_home")
         self.assertEqual(getattr(nav_home.proto, "type", None), "primary")
@@ -242,7 +250,10 @@ class PageButtonInventoryTests(unittest.TestCase):
         at.session_state["page"] = "home"
         at.run()
         self.assertEqual(at.session_state["page"], "home")
-        self.assertIn("Mat", _labels(at))
+        self.assertTrue(
+            any(lab.startswith("Mat") for lab in _labels(at)),
+            _labels(at),
+        )
         # Hem is primary only on home; Lista was reachable while all tabs were secondary
         nav_home = next(b for b in at.button if getattr(b, "key", None) == "nav_home")
         self.assertEqual(getattr(nav_home.proto, "type", None), "primary")

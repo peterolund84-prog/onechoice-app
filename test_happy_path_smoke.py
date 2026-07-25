@@ -65,7 +65,7 @@ class HappyPathSmokeTest(unittest.TestCase):
         self._assert_authenticated(at)
 
         at.session_state["food_meal_type"] = "middag"
-        mat = next(b for b in at.button if (b.label or "") == "Mat")
+        mat = next(b for b in at.button if (b.label or "").startswith("Mat"))
         mat.click().run()
         self.assertFalse(at.exception)
         self._assert_authenticated(at)
@@ -128,7 +128,7 @@ class HappyPathSmokeTest(unittest.TestCase):
         # Nav Hem always opens the domain chooser — never resume the dish.
         self.assertEqual(at.session_state["page"], "home")
         labels = [b.label or "" for b in at.button]
-        self.assertIn("Mat", labels)
+        self.assertTrue(any(lab.startswith("Mat") for lab in labels), labels)
 
     def test_home_nav_from_lista_opens_chooser(self) -> None:
         """Lista → Hem must not bounce back to the accepted dish/execute page."""
@@ -147,7 +147,7 @@ class HappyPathSmokeTest(unittest.TestCase):
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "home")
         labels = [b.label or "" for b in at.button]
-        self.assertIn("Mat", labels)
+        self.assertTrue(any(lab.startswith("Mat") for lab in labels), labels)
         self.assertNotEqual(at.session_state["page"], "execute")
 
     def test_nav_chrome_identical_across_pages(self) -> None:

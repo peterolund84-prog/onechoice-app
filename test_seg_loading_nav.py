@@ -206,7 +206,7 @@ class TimeBasedSkeletonTests(unittest.TestCase):
 class NavBleedTests(unittest.TestCase):
     def test_nav_glass_is_opaque_enough(self) -> None:
         css = _styles()
-        self.assertIn("rgba(250, 250, 247, 0.92)", css)
+        self.assertIn("rgba(247, 246, 252, 0.94)", css)
         self.assertIn("blur(20px)", css)
         self.assertIn("z-index: 10000", css)
         # Must not wipe nav bar background back to transparent
@@ -214,7 +214,7 @@ class NavBleedTests(unittest.TestCase):
         nav_block = css.split("/* Bottom nav — frosted glass bar")[1].split(
             "[class*=\"st-key-nav_\"] div.stButton > button::before"
         )[0]
-        self.assertIn("rgba(250, 250, 247, 0.92)", nav_block)
+        self.assertIn("rgba(247, 246, 252, 0.94)", nav_block)
         # The bar rule itself is NOT background: transparent
         bar_only = nav_block.split(".st-key-oc_nav_bar [data-testid")[0]
         self.assertNotIn("background: transparent", bar_only)

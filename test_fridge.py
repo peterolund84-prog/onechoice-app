@@ -373,6 +373,10 @@ class FridgeUiTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=45)
         at.run()
+        tip = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        tip.click().run()
         labels = [b.label or "" for b in at.button]
         self.assertIn("Fota kylen", labels)
         body = " ".join(str(m.value or "") for m in at.markdown)

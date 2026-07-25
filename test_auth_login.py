@@ -179,10 +179,11 @@ class AuthUiTests(unittest.TestCase):
         from pathlib import Path
 
         css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
-        self.assertIn("st-key-home_domain_", css)
-        # Domain card buttons must explicitly kill underline
+        self.assertIn("home_dslot_", css)
+        self.assertIn("oc-domain-face", css)
+        # Domain hit targets sit over the face (session-safe buttons)
         self.assertIn(
-            '[class*="st-key-home_domain_"] div.stButton > button',
+            'div[class*="st-key-home_dslot_"] div.stButton > button',
             css,
         )
         # Global secondary must not force underline on all buttons

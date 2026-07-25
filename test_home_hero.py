@@ -84,7 +84,7 @@ class HomeHeroTests(unittest.TestCase):
         now = datetime(2026, 7, 18, 14, 0, tzinfo=TZ)  # Saturday
         inferred = app_mod.infer_home_hero(now, language="sv")
         self.assertTrue(inferred["weekend_alternate"])
-        self.assertEqual(inferred["weekend_headline"], "Helg?")
+        self.assertEqual(inferred["weekend_headline"], "Resor?")
 
     def test_home_hero_and_domain_cards_render(self) -> None:
         from streamlit.testing.v1 import AppTest
@@ -100,21 +100,31 @@ class HomeHeroTests(unittest.TestCase):
         self.assertNotIn("<h1", body.lower())
         self.assertIn("oc-section-label", body)
         labels = [b.label or "" for b in at.button]
-        for needle in ("Mat", "Kläder", "Film", "Träning", "Helg"):
-            self.assertIn(needle, labels, f"missing domain button {needle}")
-        self.assertIn("Fota kylen", labels)
-        self.assertIn("Bestäm åt mig", labels)
+        for needle in ("Mat", "Kläder", "Film", "Träning", "Resor", "Presenter"):
+            self.assertTrue(
+                any(needle in lab for lab in labels),
+                f"missing domain button {needle}: {labels}",
+            )
+        self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
+        self.assertIn("Vad ska vi bestämma idag?", body)
+        self.assertIn("oc-domain-face", body)
+        self.assertIn("oc-domain-sub", body)
+        self.assertIn("oc-cta-face", body)
+        self.assertIn("oc-tip-face", body)
+        self.assertIn("Frukost, lunch, middag", body)
         self.assertNotIn("Vad finns i kylen?", body)
-        # Domain card icons live in styles.css data-URIs
+        # Fridge is behind tip expand (not on default home surface)
+        self.assertFalse(any("Fota kylen" in lab for lab in labels), labels)
         from pathlib import Path
 
         css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
-        self.assertIn("st-key-home_domain_", css)
-        self.assertGreaterEqual(css.count("data:image/svg+xml"), 6)
-        # Lucide motifs (muted) — soup / coat-hanger / clapperboard / palm / fridge
-        self.assertIn("%236B6B66", css)  # muted stroke
-        self.assertIn("M12%2021a9%209%200%200%200%209-9H3", css)  # soup bowl
-        self.assertIn("M5%206a4%204%200%200%201%204-4h6", css)  # refrigerator
+        self.assertIn("oc-domain-face", css)
+        self.assertIn("home_dslot_", css)
+        self.assertIn("oc-cta-face", css)
+        import app as app_mod
+
+        self.assertIn("M8 6V4a2 2 0 0 1 2-2h4", app_mod._DOMAIN_CARD_ICONS["weekend"])
+        self.assertIn("M3 2v7", app_mod._DOMAIN_CARD_ICONS["food"])  # utensils
         self.assertNotIn("▯", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)
@@ -125,7 +135,7 @@ class HomeHeroTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=90)
         at.run()
-        hero = next(b for b in at.button if b.label == "Bestäm åt mig")
+        hero = next(b for b in at.button if (b.label or "").startswith("Bestäm åt mig"))
         hero.click().run()
         self.assertFalse(at.exception)
         self.assertIn(
@@ -138,7 +148,7 @@ class HomeHeroTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        workout = next(b for b in at.button if b.label == "Träning")
+        workout = next(b for b in at.button if (b.label or "").startswith("Träning"))
         workout.click().run()
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "result")
@@ -151,20 +161,25 @@ class HomeHeroTests(unittest.TestCase):
             ("Kläder", "clothes_occasion"),
             ("Film", "result"),
             ("Träning", "result"),
-            ("Helg", "result"),
+            ("Resor", "result"),
+            ("Presenter", "result"),
         ]
         for label, expected_page in cases:
             with self.subTest(label=label):
                 at = AppTest.from_file("app.py", default_timeout=60)
                 at.run()
-                btn = next(b for b in at.button if b.label == label)
+                btn = next(b for b in at.button if (b.label or "").startswith(label))
                 btn.click().run()
                 self.assertFalse(at.exception)
                 self.assertEqual(at.session_state["page"], expected_page)
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
-        fridge = next(b for b in at.button if b.label == "Fota kylen")
+        tip = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        tip.click().run()
+        fridge = next(b for b in at.button if (b.label or "") == "Fota kylen")
         fridge.click().run()
         self.assertFalse(at.exception)
         self.assertEqual(at.session_state["page"], "fridge")
@@ -178,8 +193,8 @@ class HomeHeroTests(unittest.TestCase):
         disclose = next(
             b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
         )
-        self.assertEqual(disclose.label, "Något annat?")
-        self.assertIn("Något annat?", labels)
+        self.assertIn("Tipsa oss", disclose.label or "")
+        self.assertTrue(any("Tipsa oss" in lab for lab in labels), labels)
         # Collapsed: no free-text input in the tree
         self.assertEqual(len(list(getattr(at, "text_input", []) or [])), 0)
         self.assertFalse(any(lab == "Bestäm" for lab in labels), labels)
@@ -224,10 +239,14 @@ class HomeHeroTests(unittest.TestCase):
         disclose.click().run()
         self.assertTrue(bool(at.session_state["home_free_open"]))
         self.assertTrue(at.text_input, "expanded free-text input missing")
-        submit_btns = [b for b in at.button if b.label == "Bestäm åt mig"]
+        submit_btns = [
+            b for b in at.button if (b.label or "").startswith("Bestäm åt mig")
+        ]
         self.assertTrue(submit_btns, [b.label for b in at.button])
         # Hero CTA and free-text submit share the same label
-        decide_labels = [b.label for b in at.button if b.label == "Bestäm åt mig"]
+        decide_labels = [
+            b.label for b in at.button if (b.label or "").startswith("Bestäm åt mig")
+        ]
         self.assertGreaterEqual(len(decide_labels), 2, decide_labels)
         at.text_input[0].set_value("Vad ska jag laga till middag?").run()
         submit_btns[0].click().run()
@@ -247,7 +266,9 @@ class HomeHeroTests(unittest.TestCase):
             b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
         ).click().run()
         at.text_input[0].set_value("Film ikväll").run()
-        submit = next(b for b in at.button if b.label == "Bestäm åt mig")
+        submit = next(
+            b for b in at.button if (b.label or "").startswith("Bestäm åt mig")
+        )
         submit.click().run()
         self.assertFalse(at.exception)
         self.assertIn(at.session_state["page"], ("result", "ambiguous", "clothes_occasion"))
@@ -289,18 +310,16 @@ class HomeHeroTests(unittest.TestCase):
             "text-align: center",
             "oc-hero-title",
             "oc-hero-sub",
-            "oc-cta",
-            "st-key-home_hero div.stButton",
-            "margin: 0 0 28px",
-            "margin: 0 0 48px",
-            "st-key-home_domain_",
-            "margin: 4px 0 20px",
-            "min-height: 48px",
+            "oc-cta-face",
+            "oc-domain-face",
+            "oc-tip-face",
+            "min-height: 124px",
             "border-radius: 999px",
             "oc-section-label",
             "oc-header-wordmark",
-            "st-key-home_free_disclose",
-            "linear-gradient(180deg, #F7F4EC",
+            "st-key-home_tip_banner",
+            "linear-gradient(180deg, #F7F6FC",
+            "Fraunces",
         ):
             self.assertIn(needle, css, needle)
         # Stacked free-text CTA — no side-by-side column layout
@@ -313,31 +332,41 @@ class HomeHeroTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertNotIn('class="oc-domain-card"', body)
+        self.assertIn("oc-domain-face", body)
         self.assertNotIn('href="?domain=', body)
         labels = [b.label or "" for b in at.button]
-        domain_labels = [
+        for needle in (
             "Mat",
             "Kläder",
             "Film",
             "Träning",
-            "Helg",
-            "Fota kylen",
-        ]
-        for lab in domain_labels:
-            self.assertIn(lab, labels, labels)
+            "Resor",
+            "Presenter",
+        ):
+            self.assertTrue(any(needle in lab for lab in labels), labels)
+        # Fridge is not a default home surface card
+        self.assertFalse(any("Fota kylen" in lab for lab in labels), labels)
 
-    def test_home_domain_card_labels_fit_compact_row(self) -> None:
+    def test_home_domain_card_titles_present(self) -> None:
         import app as app_mod
 
-        labels = [
+        titles = [
             app_mod.I18N["sv"]["domains"][d]
-            for d in ("food", "clothes", "movie", "workout", "weekend")
+            for d in ("food", "clothes", "movie", "workout", "weekend", "gifts")
         ]
-        labels.append(app_mod.I18N["sv"]["home_fridge_card"])
-        # ~170px card @ 390px viewport — keep labels short (no font shrink)
-        for label in labels:
-            self.assertLessEqual(len(label), 12, label)
+        for title in titles:
+            self.assertGreaterEqual(len(title), 3, title)
+            self.assertLessEqual(len(title), 20, title)
+        # Subtitles exist for mockup cards
+        for key in (
+            "domain_sub_food",
+            "domain_sub_clothes",
+            "domain_sub_movie",
+            "domain_sub_workout",
+            "domain_sub_weekend",
+            "domain_sub_gifts",
+        ):
+            self.assertTrue(app_mod.I18N["sv"][key])
 
 
 if __name__ == "__main__":

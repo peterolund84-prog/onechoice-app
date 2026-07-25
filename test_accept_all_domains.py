@@ -311,7 +311,10 @@ class AppAcceptUiTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         labels = [b.label or "" for b in at.button]
         for needle in ("Mat", "Kläder", "Träning"):
-            self.assertIn(needle, labels, f"missing domain button {needle}")
+            self.assertTrue(
+                any(needle in lab for lab in labels),
+                f"missing domain button {needle}: {labels}",
+            )
         for needle in ("Mat", "Kläder", "Träning"):
             self.assertNotIn(f'href="?domain={needle.lower()}"', body)
         self.assertNotIn('href="?domain=', body)
