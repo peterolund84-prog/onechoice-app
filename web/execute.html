@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Laga — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="header"><div class="logo"><span class="logo-spark"></span>OneChoice</div></header>
+  <main class="app" id="app"><div class="loading">Laddar…</div></main>
+  <nav class="nav">
+    <a href="/" data-nav="home">Hem</a>
+    <a href="/lista" data-nav="lista">Lista</a>
+    <a href="/history" data-nav="history">Historik</a>
+    <a href="/profile" data-nav="profile">Profil</a>
+  </nav>
+  <script src="/static/app.js"></script>
+  <script>
+    (async function () {
+      const { api, go, ensureGuest } = window.OC;
+      await ensureGuest();
+      const root = document.getElementById("app");
+      let data;
+      try {
+        data = await api.get("/api/decision/execute");
+      } catch (_) {
+        go("/");
+        return;
+      }
+      const recipe = data.recipe || {};
+      const shopping = data.shopping || {};
+      const toBuy = shopping.to_buy || {};
+      const items = [];
+      Object.entries(toBuy).forEach(([sec, arr]) => {
+        (arr || []).forEach((name) => items.push({ name, sec }));
+      });
+      const steps = recipe.steps || [];
+
+      root.innerHTML = `
+        <article class="panel">
+          <div class="label">Att laga</div>
+          <h1>${data.suggestion || "—"}</h1>
+          <p>${data.justification || ""}</p>
+        </article>
+        ${
+          items.length
+            ? `<div class="section-label">Handla</div>
+               <ul class="list" id="shop">
+                 ${items
+                   .map(
+                     (it, i) =>
+                       `<li><input type="checkbox" data-i="${i}" checked /> <span>${it.name}</span></li>`
+                   )
+                   .join("")}
+               </ul>
+               <button class="btn btn-primary" type="button" id="merge">Lägg till i handlingslista</button>`
+            : ""
+        }
+        ${
+          steps.length
+            ? `<div class="section-label">Recept</div>
+               <ol class="list" style="list-style:decimal;padding-left:1.2rem">
+                 ${steps.map((s) => `<li style="display:list-item;border:0">${s}</li>`).join("")}
+               </ol>`
+            : ""
+        }
+        <button class="btn btn-ghost" type="button" id="home">Hem</button>
+        <p class="error" id="err" hidden></p>
+      `;
+
+      const merge = document.getElementById("merge");
+      if (merge) {
+        merge.onclick = async () => {
+          const names = [...document.querySelectorAll("#shop input:checked")].map(
+            (el) => items[Number(el.dataset.i)].name
+          );
+          try {
+            const res = await api.post("/api/decision/execute/merge-list", {
+              item_names: names,
+            });
+            merge.textContent = `Tillagt ✓ (${res.added}) · Öppna listan`;
+            merge.onclick = () => go("/lista");
+          } catch (e) {
+            document.getElementById("err").hidden = false;
+            document.getElementById("err").textContent = e.message;
+          }
+        };
+      }
+      document.getElementById("home").onclick = () => go("/");
+    })();
+  </script>
+</body>
+</html>

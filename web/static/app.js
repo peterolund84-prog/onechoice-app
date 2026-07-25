@@ -1,0 +1,64 @@
+/* OneChoice HTML client */
+const api = {
+  async json(path, opts = {}) {
+    const res = await fetch(path, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+      ...opts,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.detail || data.error || res.statusText);
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  },
+  get: (p) => api.json(p),
+  post: (p, body) => api.json(p, { method: "POST", body: JSON.stringify(body || {}) }),
+  patch: (p, body) => api.json(p, { method: "PATCH", body: JSON.stringify(body || {}) }),
+};
+
+function go(page) {
+  window.location.href = page;
+}
+
+function navActive(name) {
+  document.querySelectorAll(".nav a").forEach((a) => {
+    a.classList.toggle("active", a.dataset.nav === name);
+  });
+}
+
+const ICONS = {
+  utensils: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>`,
+  hanger: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5a3 3 0 1 1 5.1 2.1l-1.5 1.5A2 2 0 0 0 12 10v1"/><path d="M4 21a2 2 0 0 1-1.1-3.7L12 11l9.2 6.4A2 2 0 0 1 20 21Z"/></svg>`,
+  clapper: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m12.296 3.464 3.02 3.956"/><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3z"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="m6.18 5.276 3.1 3.899"/></svg>`,
+  dumbbell: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.596 12.768a2 2 0 1 0 2.829-2.829l-1.768-1.767a2 2 0 0 0 2.828-2.829l-2.828-2.828a2 2 0 0 0-2.829 2.828l-1.767-1.768a2 2 0 1 0-2.829 2.829z"/><path d="m2.5 21.5 1.4-1.4"/><path d="m20.1 3.9 1.4-1.4"/><path d="M5.343 21.485a2 2 0 1 0 2.829-2.828l1.767 1.768a2 2 0 1 0 2.829-2.829l-6.364-6.364a2 2 0 1 0-2.829 2.829l1.768 1.767a2 2 0 0 0-2.828 2.829z"/><path d="m9.6 14.4 4.8-4.8"/></svg>`,
+  suitcase: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M4 10h16"/><path d="M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10"/><path d="M10 14h4"/></svg>`,
+  gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M2 7h20v5H2z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>`,
+};
+
+const SPARK = `<svg class="cta-spark" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.4 5.2L18 9l-4 2.6L15.4 17 12 14.2 8.6 17 10 11.6 6 9l4.6-.8L12 3z"/></svg>`;
+
+const TIP_ICO = `<svg viewBox="0 0 24 24" fill="none" stroke="#3B3BC4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9.5v5l4.5-2.5z"/></svg>`;
+
+async function ensureGuest() {
+  try {
+    await api.post("/api/auth/guest", {});
+  } catch (_) {}
+}
+
+async function routeDecide(payload) {
+  const data = await api.post("/api/decide", payload);
+  const page = data.page || "result";
+  if (page === "result") go("/result");
+  else if (page === "clothes_occasion") {
+    sessionStorage.setItem("oc_occasions", JSON.stringify(data.occasions || []));
+    go("/result?mode=occasion");
+  } else if (page === "execute") go("/execute");
+  else go("/result");
+  return data;
+}
+
+window.OC = { api, go, navActive, ICONS, SPARK, TIP_ICO, ensureGuest, routeDecide };

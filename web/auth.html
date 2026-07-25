@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Logga in — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <header class="header"><div class="logo"><span class="logo-spark"></span>OneChoice</div></header>
+  <main class="app">
+    <h1 class="hero-title" style="font-size:1.8rem;text-align:left;margin-bottom:16px">Logga in</h1>
+    <form class="auth-form" id="form">
+      <input type="email" id="email" placeholder="E-post" required />
+      <input type="password" id="password" placeholder="Lösenord" required />
+      <button class="btn btn-primary" type="submit">Logga in</button>
+    </form>
+    <p class="error" id="err" hidden></p>
+    <p class="muted">Saknar du konto? Guest-läge funkar utan login.</p>
+    <a class="linkish" href="/">Tillbaka</a>
+  </main>
+  <script src="/static/app.js"></script>
+  <script>
+    document.getElementById("form").onsubmit = async (e) => {
+      e.preventDefault();
+      const err = document.getElementById("err");
+      try {
+        const res = await window.OC.api.post("/api/auth/login", {
+          email: document.getElementById("email").value,
+          password: document.getElementById("password").value,
+        });
+        if (!res.ok) throw new Error(res.error || "Login misslyckades");
+        location.href = "/profile";
+      } catch (ex) {
+        err.hidden = false;
+        err.textContent = ex.message;
+      }
+    };
+  </script>
+</body>
+</html>
