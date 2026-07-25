@@ -631,6 +631,7 @@ div[class*="st-key-home_dslot_"]:hover .oc-domain-face {
     padding: 0 !important;
 }
 .oc-tip-face {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 12px;
