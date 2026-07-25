@@ -8,7 +8,7 @@ from api.secrets import grok_api_key
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
-BUILD_ID = "html-fastapi-mvp-v1-20260725"
+BUILD_ID = "html-premium-layout-v2-20260726"
 
 
 @router.get("")

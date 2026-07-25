@@ -76,6 +76,25 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIn("html+fastapi", prof.json()["stack"])
         self.assertIn("ai_status", prof.json())
 
+    def test_cta_stack_centered_in_css(self) -> None:
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "web" / "static" / "app.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(".cta {", css)
+        self.assertIn("align-items: center", css)
+        self.assertIn("justify-content: center", css)
+        self.assertIn(".cta-stack", css)
+        self.assertIn("text-align: center", css)
+        html = (Path(__file__).resolve().parent / "web" / "index.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("cta-stack", html)
+        self.assertIn("cta-spark-wrap", html)
+        self.assertIn("cta-title", html)
+        self.assertIn("cta-sub", html)
+
 
 if __name__ == "__main__":
     unittest.main()
