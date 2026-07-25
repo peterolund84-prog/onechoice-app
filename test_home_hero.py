@@ -105,19 +105,26 @@ class HomeHeroTests(unittest.TestCase):
                 any(needle in lab for lab in labels),
                 f"missing domain button {needle}: {labels}",
             )
-        self.assertTrue(any("Fota kylen" in lab for lab in labels), labels)
         self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
         self.assertIn("Vad ska vi bestämma idag?", body)
+        self.assertIn("oc-domain-face", body)
+        self.assertIn("oc-domain-sub", body)
+        self.assertIn("oc-cta-face", body)
+        self.assertIn("oc-tip-face", body)
+        self.assertIn("Frukost, lunch, middag", body)
         self.assertNotIn("Vad finns i kylen?", body)
-        # Domain card icons live in styles.css data-URIs
+        # Fridge is behind tip expand (not on default home surface)
+        self.assertFalse(any("Fota kylen" in lab for lab in labels), labels)
         from pathlib import Path
 
         css = (Path(__file__).resolve().parent / "styles.css").read_text(encoding="utf-8")
-        self.assertIn("st-key-home_domain_", css)
-        self.assertGreaterEqual(css.count("data:image/svg+xml"), 6)
-        self.assertIn("%236B6B66", css)  # muted stroke
-        self.assertIn("st-key-home_domain_gifts", css)
-        self.assertIn("M8%206V4a2%202%200%200%201%202-2h4", css)  # suitcase (encoded)
+        self.assertIn("oc-domain-face", css)
+        self.assertIn("home_dslot_", css)
+        self.assertIn("oc-cta-face", css)
+        import app as app_mod
+
+        self.assertIn("M8 6V4a2 2 0 0 1 2-2h4", app_mod._DOMAIN_CARD_ICONS["weekend"])
+        self.assertIn("M3 2v7", app_mod._DOMAIN_CARD_ICONS["food"])  # utensils
         self.assertNotIn("▯", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)
@@ -168,6 +175,10 @@ class HomeHeroTests(unittest.TestCase):
 
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
+        tip = next(
+            b for b in at.button if getattr(b, "key", None) == "home_free_disclose_btn"
+        )
+        tip.click().run()
         fridge = next(b for b in at.button if (b.label or "") == "Fota kylen")
         fridge.click().run()
         self.assertFalse(at.exception)
@@ -299,12 +310,10 @@ class HomeHeroTests(unittest.TestCase):
             "text-align: center",
             "oc-hero-title",
             "oc-hero-sub",
-            "oc-cta",
-            "st-key-home_hero div.stButton",
-            "margin: 0 0 28px",
-            "margin: 0 0 48px",
-            "st-key-home_domain_",
-            "min-height: 118px",
+            "oc-cta-face",
+            "oc-domain-face",
+            "oc-tip-face",
+            "min-height: 124px",
             "border-radius: 999px",
             "oc-section-label",
             "oc-header-wordmark",
@@ -323,7 +332,7 @@ class HomeHeroTests(unittest.TestCase):
         at = AppTest.from_file("app.py", default_timeout=60)
         at.run()
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertNotIn('class="oc-domain-card"', body)
+        self.assertIn("oc-domain-face", body)
         self.assertNotIn('href="?domain=', body)
         labels = [b.label or "" for b in at.button]
         for needle in (
@@ -333,9 +342,10 @@ class HomeHeroTests(unittest.TestCase):
             "Träning",
             "Resor",
             "Presenter",
-            "Fota kylen",
         ):
             self.assertTrue(any(needle in lab for lab in labels), labels)
+        # Fridge is not a default home surface card
+        self.assertFalse(any("Fota kylen" in lab for lab in labels), labels)
 
     def test_home_domain_card_titles_present(self) -> None:
         import app as app_mod

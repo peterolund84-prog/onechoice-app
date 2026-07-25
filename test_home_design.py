@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Home premium mockup design — tokens, chrome, and structure."""
+"""Home premium mockup design — exact face+hit chrome."""
 
 from __future__ import annotations
 
@@ -32,18 +32,16 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("family=Inter", css)
         self.assertIn("oc-hero", css)
         self.assertIn("oc-orb-breathe", css)
-        self.assertIn("st-key-home_domain_", css)
-        self.assertIn("flex-direction: column", css)
-        self.assertIn("min-height: 118px", css)
-        self.assertIn("white-space: pre-line", css)
-        self.assertIn("oc-hero-sub", css)
-        self.assertIn("translateX(-50%)", css)
-        self.assertIn("translateY(-42%)", css)
+        self.assertIn("oc-domain-face", css)
+        self.assertIn("oc-cta-face", css)
+        self.assertIn("oc-tip-face", css)
+        self.assertIn("oc-domain-sub", css)
+        self.assertIn("min-height: 124px", css)
+        self.assertIn("border-radius: 24px", css)
         self.assertIn("st-key-home_domains", css)
         self.assertIn("st-key-home_tip_banner", css)
         self.assertIn("st-key-home_free_form", css)
         self.assertIn("var(--oc-accent)", css)
-        self.assertIn("oc-cta-grad", css)
         self.assertNotIn("5A8BFF", css)
         self.assertNotIn("F4F6F8", css)
         self.assertIn("oc-shop-pick-marker", css)
@@ -56,7 +54,6 @@ class HomeDesignTests(unittest.TestCase):
         self.assertIn("st-key-oc_lang_bar", css)
         self.assertIn("st-key-oc_nav_bar", css)
         self.assertIn("linear-gradient(180deg, #F7F6FC", css)
-        self.assertIn("Jag tar hand om allt", css)
         self.assertIn("oc-logo-spark", css)
         self.assertFalse(app_mod.SHOW_LANG_TOGGLE)
 
@@ -68,22 +65,24 @@ class HomeDesignTests(unittest.TestCase):
         labels = [b.label or "" for b in at.button]
         self.assertTrue(any("Bestäm åt mig" in lab for lab in labels), labels)
         body = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertTrue(any("Fota kylen" in lab for lab in labels), labels)
         self.assertNotIn("Vad finns i kylen?", body)
         caps = [str(c.value or "") for c in at.caption]
         self.assertFalse(any("/" in c and c[:1].isdigit() for c in caps), caps)
         self.assertIn("oc-hero-title", body)
+        self.assertIn("oc-domain-face", body)
+        self.assertIn("oc-cta-face", body)
+        self.assertIn("oc-tip-face", body)
+        self.assertIn("oc-domain-sub", body)
         self.assertNotIn("<h1", body.lower())
         self.assertIn("oc-section-label", body)
         self.assertEqual(body.count('class="oc-header"'), 1)
         self.assertNotIn("oc-topbar", body)
         for need in ("Mat", "Kläder", "Film", "Träning", "Resor", "Presenter"):
             self.assertTrue(any(need in lab for lab in labels), labels)
+            self.assertIn(need, body)
         self.assertIn("Vad vill du bestämma?", body)
-        self.assertTrue(
-            any("Tipsa oss" in lab or "eget förslag" in lab for lab in labels),
-            labels,
-        )
+        self.assertIn("Frukost, lunch, middag", body)
+        self.assertIn("Tipsa oss", body)
         self.assertEqual(len(list(getattr(at, "text_input", []) or [])), 0)
         import app as app_mod
 
@@ -91,25 +90,16 @@ class HomeDesignTests(unittest.TestCase):
             app_mod.I18N["sv"]["home_free_placeholder"],
             "Vad ska du bestämma?",
         )
-        self.assertEqual(
-            app_mod.I18N["en"]["home_free_placeholder"],
-            "What do you need to decide?",
-        )
         self.assertNotIn(">SV<", body)
         self.assertNotIn(">EN<", body)
-        self.assertNotIn('key="oc_lang_bar"', body)
         self.assertEqual(at.session_state["language"], "sv")
         self.assertIn("oc-hero-sub", body)
         self.assertIn("Vad ska vi bestämma idag?", body)
         self.assertIn("Ett tryck. Jag tar beslutet.", body)
+        self.assertIn("Jag tar hand om allt", body)
         self.assertNotIn("build ", body.lower())
-        self.assertNotIn("home_free_input", body.lower())
         self.assertNotIn("Vad behöver du bestämma?", body)
-        for c in caps:
-            self.assertNotIn("build ", str(c).lower())
         self.assertIn('class="oc-header-wordmark', body.replace(" ", ""))
-        css = " ".join(str(m.value or "") for m in at.markdown)
-        self.assertIn("oc-tagline", css)
 
 
 if __name__ == "__main__":
