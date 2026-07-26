@@ -35,8 +35,15 @@ if DISHES.is_dir():
 def _page(name: str) -> FileResponse:
     path = WEB / name
     if not path.is_file():
-        return FileResponse(WEB / "index.html")
-    return FileResponse(path)
+        path = WEB / "index.html"
+    # Avoid sticky phone caches of HTML that point at old CSS/JS.
+    return FileResponse(
+        path,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @app.get("/")

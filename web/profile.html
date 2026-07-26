@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Profil — OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <link rel="stylesheet" href="/static/app.css?v=v7-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
@@ -15,7 +15,7 @@
     <a href="/history" data-nav="history">Historik</a>
     <a href="/profile" data-nav="profile" class="active">Profil</a>
   </nav>
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=v7-20260726"></script>
   <script>
     (async function () {
       const { api, ensureGuest, navActive, esc } = window.OC;
@@ -37,7 +37,9 @@
           <p class="muted">TMDB (film): ${esc(integ.tmdb || "—")}</p>
           <p class="muted">AI (Grok): ${esc(integ.grok || p.ai_status || "—")}</p>
         </div>
-        <p class="muted">Build: ${esc(p.build)} · ${esc(p.stack)}</p>
+        <p class="muted"><strong>Build:</strong> ${esc(p.build)}</p>
+        <p class="muted">Stack: ${esc(p.stack)}</p>
+        <p class="muted" style="font-size:12px">Om build inte är <code>html-icon-bar-v7</code> kör du gammal kod — git pull + starta om uvicorn.</p>
         <p style="margin-top:20px"><a class="linkish" href="/auth">Logga in</a></p>
       `;
     })();
