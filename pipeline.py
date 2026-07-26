@@ -913,6 +913,33 @@ def decide(
             rec["active_minutes"] = int(active)
             shop["recipe"] = rec
             execution["shopping"] = shop
+        # One source of truth for cost estimate (constraint + recipe-view stat)
+        try:
+            import food_budget as fbud
+
+            meta_for_cost = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+            if isinstance(execution.get("recipe"), dict):
+                execution["recipe"] = fbud.ensure_recipe_cost(
+                    execution["recipe"], meta=meta_for_cost, allow_estimate=True
+                )
+                cost_val = fbud.read_cost_per_portion(execution["recipe"])
+                if cost_val is not None:
+                    top_meta = dict(meta_for_cost)
+                    top_meta["cost_per_portion_sek"] = cost_val
+                    top = dict(top)
+                    top["meta"] = top_meta
+            elif isinstance(execution.get("shopping"), dict):
+                shop = dict(execution["shopping"])
+                rec = fbud.ensure_recipe_cost(
+                    shop.get("recipe") if isinstance(shop.get("recipe"), dict) else {},
+                    meta=meta_for_cost,
+                    allow_estimate=True,
+                )
+                shop["recipe"] = rec
+                execution["shopping"] = shop
+                execution["recipe"] = rec
+        except Exception as exc:
+            log.warning("ensure_recipe_cost failed: %s", exc)
     status = "locked" if locked else "shown"
 
     dish_category = None
@@ -968,6 +995,15 @@ def decide(
             "route_log_id": (route_meta or {}).get("route_log_id"),
             "availability_source": (top.get("meta") or {}).get("availability_source"),
             "se_services": (top.get("meta") or {}).get("se_services"),
+            "meal_budget": (profile.get("food") or {}).get("meal_budget"),
+            "cost_per_portion_sek": (
+                (top.get("meta") or {}).get("cost_per_portion_sek")
+                or (
+                    (execution.get("recipe") or {}).get("cost_per_portion_sek")
+                    if isinstance(execution.get("recipe"), dict)
+                    else None
+                )
+            ),
         },
         execution_type=execution.get("type"),
         execution_label=execution.get("label"),
@@ -1445,6 +1481,7 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
         "assumed at home; rice, pasta, soy sauce, coconut milk, canned tomatoes = buy."
     )
     if domain == "food":
+        import food_budget as fbud
         import food_categories as fcat
 
         food_rule += (
@@ -1452,6 +1489,21 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
             + fcat.dish_category_prompt_list()
             + ". Never invent a category outside that list."
         )
+        food_rule += (
+            " REQUIRED: set meta.cost_per_portion_sek to an estimated integer SEK "
+            "per portion from the ingredient amounts (Swedish supermarket ballpark). "
+            "Round to nearest 5. This is an estimate labelled 'ca', NOT a store price — "
+            "never invent exact kronor or a shopping-list total."
+        )
+        budget_level = fbud.normalize_meal_budget(
+            (profile.get("food") or {}).get("meal_budget")
+        )
+        ceiling = fbud.ceiling_sek(budget_level)
+        if ceiling is not None:
+            food_rule += (
+                f" HARD budget: meal_budget={budget_level} — every candidate MUST have "
+                f"meta.cost_per_portion_sek ≤ {ceiling}. Discard anything over the ceiling."
+            )
     rules = {
         "food": food_rule,
         "clothes": (

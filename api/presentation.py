@@ -212,6 +212,8 @@ def enrich_decision(
         "movie_year": ctx.get("movie_tmdb_year"),
         "movie_rating": movie_rating_line(ctx),
         "nutrition": None,
+        # Cost is execute/recipe-only — never attach to decision-card presentation.
+        "cost": None,
         "is_favorite": bool(out.get("favorite")),
         "share_text": share_text_for(out, language=language),
         "decision_id": out.get("decision_id") or out.get("id"),
@@ -229,6 +231,7 @@ def enrich_decision(
         recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
         if not recipe and shop:
             recipe = shop.get("recipe") if isinstance(shop.get("recipe"), dict) else None
+        # Nutrition may hydrate recipe payloads for execute; result.html must not render it.
         presentation["nutrition"] = nutrition_stats(recipe, suggestion=suggestion)
     out["presentation"] = presentation
     return out

@@ -147,15 +147,46 @@ def execute(sess: SessionDep) -> dict:
                 )
         except Exception:
             pass
+        try:
+            import food_budget as fbud
+
+            meta = cur.get("meta") if isinstance(cur.get("meta"), dict) else {}
+            recipe = fbud.ensure_recipe_cost(recipe, meta=meta, allow_estimate=True)
+        except Exception:
+            pass
     enriched = _enriched(sess) or {}
     presentation = enriched.get("presentation") or {}
     nut = nutrition_stats(
         recipe if isinstance(recipe, dict) else None,
         suggestion=str(cur.get("suggestion") or ""),
     )
-    if nut:
+    # Cost / nutrition stats: recipe view only — never feed the pre-lock card.
+    cost = None
+    show_cost = False
+    try:
+        import food_budget as fbud
+
+        level = fbud.normalize_meal_budget(ctx.get("meal_budget"))
+        show_cost = fbud.budget_active(level)
+        if show_cost and isinstance(recipe, dict):
+            cost = fbud.cost_stat(recipe, language=sess.language or "sv")
+            if cost is None and ctx.get("cost_per_portion_sek") is not None:
+                cost = {
+                    "sek": fbud.round_cost_sek(ctx.get("cost_per_portion_sek")),
+                    "label": fbud.format_cost_label(
+                        ctx.get("cost_per_portion_sek"), language=sess.language or "sv"
+                    ),
+                    "unit": "portion",
+                    "approx": True,
+                }
+    except Exception:
+        cost = None
+        show_cost = False
+    if nut or cost:
         presentation = dict(presentation)
-        presentation["nutrition"] = nut
+        if nut:
+            presentation["nutrition"] = nut
+        # Intentionally omit cost from presentation used by result cards.
     return {
         "suggestion": cur.get("suggestion"),
         "justification": cur.get("justification"),
@@ -167,6 +198,9 @@ def execute(sess: SessionDep) -> dict:
         "recipe": recipe,
         "presentation": presentation,
         "nutrition": nut,
+        "cost": cost if show_cost else None,
+        "show_cost": bool(show_cost and cost),
+        "meal_budget": ctx.get("meal_budget"),
         "accepted": sess.accepted,
         "session": sess.public(),
     }

@@ -11,13 +11,13 @@
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
   <title>Laga — OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v38-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v39-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
   <main class="app" id="app"><div class="loading">Laddar…</div></main>
   <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
-  <script src="/static/app.js?v=v38-20260726"></script>
+  <script src="/static/app.js?v=v39-20260726"></script>
   <script>
     (async function () {
       const {
@@ -37,6 +37,7 @@
       const toBuy = shopping.to_buy || {};
       const pres = data.presentation || {};
       const nut = data.nutrition || pres.nutrition || null;
+      const cost = data.show_cost ? data.cost : null;
       const items = [];
       Object.entries(toBuy).forEach(([sec, arr]) => {
         (arr || []).forEach((name) => items.push({ name, sec }));
@@ -49,12 +50,21 @@
         shareText: pres.share_text || "",
       });
 
-      const nutHtml = nut
-        ? `<div class="nut-stats" role="group" aria-label="Näringsvärden per portion">
-            <div class="nut-stat"><span class="nut-val">${esc(nut.kcal)}</span><span class="nut-lab">KCAL</span></div>
+      const nutHtml = nut || cost
+        ? `<div class="nut-stats" role="group" aria-label="Per portion">
+            ${
+              nut
+                ? `<div class="nut-stat"><span class="nut-val">${esc(nut.kcal)}</span><span class="nut-lab">KCAL</span></div>
             <div class="nut-stat"><span class="nut-val">${esc(nut.protein_g)} g</span><span class="nut-lab">PROTEIN</span></div>
             <div class="nut-stat"><span class="nut-val">${esc(nut.fat_g)} g</span><span class="nut-lab">FETT</span></div>
-            <div class="nut-stat"><span class="nut-val">${esc(nut.carbs_g)} g</span><span class="nut-lab">KOLH</span></div>
+            <div class="nut-stat"><span class="nut-val">${esc(nut.carbs_g)} g</span><span class="nut-lab">KOLH</span></div>`
+                : ""
+            }
+            ${
+              cost
+                ? `<div class="nut-stat"><span class="nut-val">${esc(cost.label || ("ca " + cost.sek + " kr"))}</span><span class="nut-lab">/ PORTION</span></div>`
+                : ""
+            }
           </div>`
         : "";
 

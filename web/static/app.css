@@ -953,6 +953,23 @@ a { color: inherit; text-decoration: none; }
   text-transform: uppercase;
   color: var(--oc-muted);
 }
+.profile-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 0;
+  color: var(--oc-cream);
+  font-size: 0.95rem;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.profile-toggle input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--oc-accent);
+  flex: 0 0 auto;
+}
 
 /* Decide wait — cardless, ambient (no opaque skeleton box) */
 .oc-decide-skel-host {

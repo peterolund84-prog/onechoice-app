@@ -113,6 +113,15 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
         food["show_nutrition"] = bool(food.get("show_nutrition"))
     else:
         food["show_nutrition"] = bool(ctx.get("show_nutrition", True))
+    # Meal budget: optional cost ceiling (off by default — Spelar ingen roll)
+    try:
+        import food_budget as fbud
+
+        food["meal_budget"] = fbud.normalize_meal_budget(
+            food.get("meal_budget", ctx.get("meal_budget", fbud.BUDGET_ANY))
+        )
+    except Exception:
+        food.setdefault("meal_budget", str(ctx.get("meal_budget") or "any"))
 
     clothes.setdefault("section", ctx.get("clothing_section") or "båda")  # herr|dam|båda
     clothes.setdefault("sizes", ctx.get("sizes") or {"top": "M", "bottom": "32", "shoes": "42"})
@@ -287,6 +296,30 @@ def _check_food(
     if active is not None and int(active) > max_min and not fridge_mode:
         reasons.append("too_long")
 
+    # Optional meal budget ceiling — generate freely, filter by cost estimate.
+    budget_cost: int | None = None
+    try:
+        import food_budget as fbud
+
+        budget_level = fbud.normalize_meal_budget(
+            (profile.get("food") or {}).get("meal_budget")
+            or context.get("meal_budget")
+        )
+        ceiling = fbud.ceiling_sek(budget_level)
+        if ceiling is not None and not eating_out and not fridge_mode:
+            budget_cost = fbud.cost_from_candidate(candidate)
+            if budget_cost is None:
+                # No ingredients yet — estimate from suggestion keywords lightly
+                budget_cost = fbud.estimate_cost_per_portion(
+                    list((candidate.get("meta") or {}).get("ingredients") or [])
+                    or [suggestion],
+                    servings=2,
+                )
+            if budget_cost is not None and int(budget_cost) > int(ceiling):
+                reasons.append("over_budget")
+    except Exception:
+        budget_cost = None
+
     # Leftovers require evidence of a recent home-cooked dinner (non-fridge food).
     if not fridge_mode:
         try:
@@ -397,6 +430,14 @@ def _check_food(
             servings=1 if meal_type in ("frukost", "kvallsmal") else None,
             meal_type=meal_type,
         )
+        try:
+            import food_budget as fbud
+
+            recipe = fbud.ensure_recipe_cost(recipe, meta=meta, allow_estimate=True)
+            if budget_cost is None:
+                budget_cost = fbud.read_cost_per_portion(recipe)
+        except Exception:
+            pass
         execution = {
             "type": "recipe",
             "label": "Ät nu",
@@ -408,7 +449,14 @@ def _check_food(
             "meal_type": meal_type,
             "max_active_minutes": max_min,
         }
-        return FeasibilityResult(ok=True, execution=execution)
+        enriched_meta = {**(candidate.get("meta") or {})}
+        if budget_cost is not None:
+            enriched_meta["cost_per_portion_sek"] = budget_cost
+        return FeasibilityResult(
+            ok=True,
+            execution=execution,
+            enriched={"meta": enriched_meta} if enriched_meta else None,
+        )
 
     # Middag: recipe first → smart shopping list from structured ingredients
     import shopping_compat as shop_compat
@@ -425,6 +473,17 @@ def _check_food(
     )
     if not shop or not recipe:
         return FeasibilityResult(ok=False, reasons=["shopping_incomplete"])
+    try:
+        import food_budget as fbud
+
+        recipe = fbud.ensure_recipe_cost(recipe, meta=meta, allow_estimate=True)
+        if isinstance(shop, dict):
+            shop = dict(shop)
+            shop["recipe"] = recipe
+        if budget_cost is None:
+            budget_cost = fbud.read_cost_per_portion(recipe)
+    except Exception:
+        pass
 
     execution = {
         "type": "recipe",
@@ -438,16 +497,19 @@ def _check_food(
         "max_active_minutes": max_min,
         "meal_type": meal_type,
     }
+    meta_out = {
+        **(candidate.get("meta") or {}),
+        "ingredients": shop["ingredients"],
+        "shopping": shop,
+    }
+    if budget_cost is not None:
+        meta_out["cost_per_portion_sek"] = budget_cost
     return FeasibilityResult(
         ok=True,
         execution=execution,
         enriched={
             "wildcard": bool(candidate.get("wildcard")),
-            "meta": {
-                **(candidate.get("meta") or {}),
-                "ingredients": shop["ingredients"],
-                "shopping": shop,
-            },
+            "meta": meta_out,
         },
     )
 

@@ -248,6 +248,12 @@ I18N = {
         "nutrition_recipe_toggle": "Visa ca-värden (kcal / protein)",
         "nutrition_missing": "Näringsvärden saknas",
         "nutrition_saved": "Sparat.",
+        "meal_budget_title": "Budget för måltider",
+        "meal_budget_hint": "När budget är på filtreras dyra rätter bort. Kostnad visas som ca-värde bara i receptvyn.",
+        "meal_budget_any": "Spelar ingen roll",
+        "meal_budget_billigt": "Håll det billigt",
+        "meal_budget_snalt": "Snålt",
+        "meal_budget_saved": "Budget sparad.",
         "back_to_decision": "Tillbaka",
         "error_friendly": "Något gick fel — försök igen",
         "retry": "Försök igen",
@@ -459,6 +465,12 @@ I18N = {
         "nutrition_recipe_toggle": "Show approx. nutrition (kcal / protein)",
         "nutrition_missing": "Nutrition unavailable",
         "nutrition_saved": "Saved.",
+        "meal_budget_title": "Meal budget",
+        "meal_budget_hint": "When on, expensive dishes are filtered out. Cost shows as approx. only in the recipe view.",
+        "meal_budget_any": "Doesn't matter",
+        "meal_budget_billigt": "Keep it cheap",
+        "meal_budget_snalt": "Tight budget",
+        "meal_budget_saved": "Budget saved.",
         "recipe_unavailable": "Could not build a trustworthy recipe for this dish — try a new suggestion.",
         "back_to_decision": "Back",
         "error_friendly": "Something went wrong — try again",
@@ -6636,6 +6648,38 @@ def page_profile() -> None:
         new_profile["food"] = food_row
         db.update_user(st.session_state.user_id, profile_json=new_profile)
         safe_toast(t("nutrition_saved"))
+        st.rerun()
+
+    import food_budget as fbud
+
+    st.caption(t("meal_budget_hint"))
+    budget_now = fbud.normalize_meal_budget(food_prof.get("meal_budget", fbud.BUDGET_ANY))
+    budget_choices = [
+        fbud.BUDGET_ANY,
+        fbud.BUDGET_BILLIGT,
+        fbud.BUDGET_SNALT,
+    ]
+    budget_labels = {
+        fbud.BUDGET_ANY: t("meal_budget_any"),
+        fbud.BUDGET_BILLIGT: t("meal_budget_billigt"),
+        fbud.BUDGET_SNALT: t("meal_budget_snalt"),
+    }
+    new_budget = st.radio(
+        t("meal_budget_title"),
+        options=budget_choices,
+        index=budget_choices.index(budget_now),
+        format_func=lambda k: budget_labels.get(k, k),
+        key="prof_meal_budget",
+        horizontal=True,
+    )
+    new_budget = fbud.normalize_meal_budget(new_budget)
+    if new_budget != budget_now:
+        new_profile = dict(ensured) if isinstance(ensured, dict) else {}
+        food_row = dict(new_profile.get("food") or {})
+        food_row["meal_budget"] = new_budget
+        new_profile["food"] = food_row
+        db.update_user(st.session_state.user_id, profile_json=new_profile)
+        safe_toast(t("meal_budget_saved"))
         st.rerun()
 
     # --- GDPR: export + hard delete (Art. 17 / 20) ---
