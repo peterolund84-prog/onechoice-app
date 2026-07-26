@@ -98,6 +98,54 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertGreater(len(r.content), 100)
 
+    def test_health_assets_and_llm(self) -> None:
+        from pathlib import Path
+
+        assets = self.client.get("/health/assets")
+        self.assertEqual(assets.status_code, 200)
+        body = assets.json()
+        self.assertTrue(body["dishes"]["mounted"])
+        self.assertTrue(body["posters"]["mounted"])
+        self.assertGreater(body["dishes"]["count"], 0)
+        self.assertGreaterEqual(body["posters"]["count"], 0)
+        self.assertIn("path", body["dishes"])
+        self.assertIn("path", body["posters"])
+
+        posters = Path(__file__).resolve().parent / "assets" / "posters"
+        sample = next(posters.glob("*.jpg"), None)
+        if sample is not None:
+            img = self.client.get(f"/assets/posters/{sample.name}")
+            self.assertEqual(img.status_code, 200)
+            self.assertGreater(len(img.content), 100)
+
+        llm = self.client.get("/api/health/llm")
+        self.assertEqual(llm.status_code, 200)
+        payload = llm.json()
+        self.assertIn("ok", payload)
+        self.assertIn("model", payload)
+        self.assertIn("detail", payload)
+
+    def test_shared_nav_has_icons(self) -> None:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent
+        js = (root / "web" / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function mountNav", js)
+        self.assertIn("NAV_SVGS", js)
+        self.assertIn('id="app-nav"', (root / "web" / "index.html").read_text(encoding="utf-8"))
+        for name in ("index", "result", "execute", "lista", "history", "profile"):
+            html = (root / "web" / f"{name}.html").read_text(encoding="utf-8")
+            self.assertIn('id="app-nav"', html, name)
+            self.assertNotIn(">Hem</a>", html, name)
+        css = (root / "web" / "static" / "app.css").read_text(encoding="utf-8")
+        self.assertIn(".chips-scroll", css)
+        self.assertIn("movie-poster-ph--compact", css)
+        self.assertIn("posterPhHtml", js)
+        self.assertIn("mediaUrl", js)
+        result = (root / "web" / "result.html").read_text(encoding="utf-8")
+        self.assertIn("chips-scroll", result)
+        self.assertIn("showToast", result)
+
     def test_icon_buttons_have_visible_chip_styles(self) -> None:
         from pathlib import Path
 

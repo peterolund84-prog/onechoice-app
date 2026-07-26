@@ -1,5 +1,5 @@
-/* OneChoice service worker — cache shell + dish/poster images */
-const CACHE = "onechoice-shell-v12";
+/* OneChoice service worker — shell offline; media always network-first */
+const CACHE = "onechoice-shell-v14";
 const SHELL = [
   "/",
   "/result",
@@ -30,13 +30,12 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-function isAssetRequest(url) {
+function isMediaRequest(url) {
   return (
     url.pathname.startsWith("/assets/dishes/") ||
     url.pathname.startsWith("/assets/posters/") ||
-    url.pathname.startsWith("/api/media/dish") ||
-    url.pathname.startsWith("/api/media/poster") ||
-    url.pathname.startsWith("/static/icons/")
+    url.pathname.startsWith("/api/media/") ||
+    url.pathname.startsWith("/api/")
   );
 }
 
@@ -45,6 +44,12 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+
+  // Never cache API / media — LAN + poster proxies must hit the live server.
+  if (isMediaRequest(url)) {
+    event.respondWith(fetch(req));
+    return;
+  }
 
   // Network-first for HTML navigations (fresh decisions), cache fallback
   if (req.mode === "navigate" || (req.headers.get("accept") || "").includes("text/html")) {
@@ -60,12 +65,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Cache-first for shell + media images
+  // Cache-first for shell static only
   if (
     url.pathname.startsWith("/static/") ||
     url.pathname === "/manifest.webmanifest" ||
-    url.pathname === "/sw.js" ||
-    isAssetRequest(url)
+    url.pathname === "/sw.js"
   ) {
     event.respondWith(
       caches.match(req).then((hit) => {

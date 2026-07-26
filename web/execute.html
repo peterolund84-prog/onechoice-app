@@ -11,18 +11,13 @@
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
   <title>Laga — OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v13-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v14-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
   <main class="app" id="app"><div class="loading">Laddar…</div></main>
-  <nav class="nav">
-    <a href="/" data-nav="home">Hem</a>
-    <a href="/lista" data-nav="lista">Lista</a>
-    <a href="/history" data-nav="history">Historik</a>
-    <a href="/profile" data-nav="profile">Profil</a>
-  </nav>
-  <script src="/static/app.js?v=v13-20260726"></script>
+  <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
+  <script src="/static/app.js?v=v14-20260726"></script>
   <script>
     (async function () {
       const {

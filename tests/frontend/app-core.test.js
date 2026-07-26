@@ -144,4 +144,34 @@ describe("OneChoice HTML core flow", () => {
       OC.api.post("/api/decide", {}, { timeoutMs: 20 })
     ).rejects.toThrow(/för lång tid/i);
   });
+
+  it("mediaUrl stays origin-relative (never localhost)", () => {
+    expect(OC.mediaUrl("/assets/posters/foo.jpg")).toBe("/assets/posters/foo.jpg");
+    expect(OC.mediaUrl("http://localhost:8080/assets/dishes/a.jpg")).toBe(
+      "/assets/dishes/a.jpg"
+    );
+    expect(OC.mediaUrl("http://127.0.0.1:8080/api/media/poster?u=x")).toBe(
+      "/api/media/poster?u=x"
+    );
+    expect(OC.imgOrPh(null, "movie-poster")).toContain("movie-poster-ph--compact");
+    expect(OC.imgOrPh(null, "movie-poster")).toContain("film-glyph");
+  });
+
+  it("mountNav renders icon+label for all four tabs", () => {
+    document.body.innerHTML =
+      '<nav class="nav" id="app-nav" data-active="lista"></nav>';
+    OC.mountNav("lista");
+    const links = [...document.querySelectorAll("#app-nav a")];
+    expect(links).toHaveLength(4);
+    expect(links.every((a) => a.querySelector("svg"))).toBe(true);
+    expect(links.map((a) => a.textContent.trim())).toEqual([
+      "Hem",
+      "Lista",
+      "Historik",
+      "Profil",
+    ]);
+    expect(document.querySelector('[data-nav="lista"]').classList.contains("active")).toBe(
+      true
+    );
+  });
 });

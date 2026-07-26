@@ -105,6 +105,59 @@ function navActive(name) {
   });
 }
 
+const NAV_SVGS = {
+  home: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V10"/></svg>`,
+  lista: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/></svg>`,
+  history: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>`,
+  profile: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg>`,
+};
+
+const FILM_GLYPH = `<svg class="film-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14"/><path d="M17 5v14"/><path d="M3 9h4"/><path d="M3 15h4"/><path d="M17 9h4"/><path d="M17 15h4"/></svg>`;
+
+/** Shared footer nav — ONE implementation used verbatim on every page. */
+function mountNav(active) {
+  const el = document.getElementById("app-nav");
+  if (!el) return;
+  const items = [
+    ["home", "/", "Hem", NAV_SVGS.home],
+    ["lista", "/lista", "Lista", NAV_SVGS.lista],
+    ["history", "/history", "Historik", NAV_SVGS.history],
+    ["profile", "/profile", "Profil", NAV_SVGS.profile],
+  ];
+  const current = active || el.getAttribute("data-active") || "";
+  el.innerHTML = items
+    .map(
+      ([key, href, label, svg]) =>
+        `<a href="${href}" data-nav="${key}"${
+          key === current ? ' class="active"' : ""
+        }>${svg}<span>${label}</span></a>`
+    )
+    .join("");
+}
+
+function mediaUrl(url) {
+  if (!url) return "";
+  const s = String(url).trim();
+  if (!s) return "";
+  try {
+    if (s.startsWith("http://") || s.startsWith("https://")) {
+      const u = new URL(s);
+      // Never point phone clients at the Dell's localhost.
+      if (
+        u.hostname === "localhost" ||
+        u.hostname === "127.0.0.1" ||
+        u.hostname === "0.0.0.0"
+      ) {
+        return `${u.pathname}${u.search}`;
+      }
+      return s;
+    }
+  } catch (_) {}
+  if (s.startsWith("//")) return s;
+  if (s.startsWith("/")) return s;
+  return `/${s}`;
+}
+
 const ICONS = {
   utensils: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2v0a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/></svg>`,
   hanger: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5a3 3 0 1 1 5.1 2.1l-1.5 1.5A2 2 0 0 0 12 10v1"/><path d="M4 21a2 2 0 0 1-1.1-3.7L12 11l9.2 6.4A2 2 0 0 1 20 21Z"/></svg>`,
@@ -324,22 +377,34 @@ function bindCardActions() {
   };
 }
 
+function posterPhHtml() {
+  return `<div class="movie-poster movie-poster-ph movie-poster-ph--compact" aria-hidden="true">${FILM_GLYPH}</div>`;
+}
+
 function phImg(img) {
   try {
     const cls = (img.className || "food-img").split(/\s+/)[0];
     const div = document.createElement("div");
-    div.className = `${cls} ${cls}-ph`;
-    div.setAttribute("aria-hidden", "true");
-    div.innerHTML = '<div class="food-ph-circle"></div>';
+    if (cls === "movie-poster") {
+      div.className = "movie-poster movie-poster-ph movie-poster-ph--compact";
+      div.setAttribute("aria-hidden", "true");
+      div.innerHTML = FILM_GLYPH;
+    } else {
+      div.className = `${cls} ${cls}-ph`;
+      div.setAttribute("aria-hidden", "true");
+      div.innerHTML = '<div class="food-ph-circle"></div>';
+    }
     img.replaceWith(div);
   } catch (_) {}
 }
 
 function imgOrPh(url, className) {
-  if (!url) {
+  const src = mediaUrl(url);
+  if (!src) {
+    if (className === "movie-poster") return posterPhHtml();
     return `<div class="${className} ${className}-ph" aria-hidden="true"><div class="food-ph-circle"></div></div>`;
   }
-  return `<img class="${className}" src="${esc(url)}" alt="" loading="lazy" onerror="window.OC&&window.OC.phImg(this)" />`;
+  return `<img class="${className}" src="${esc(src)}" alt="" loading="lazy" onerror="window.OC&&window.OC.phImg(this)" />`;
 }
 
 function registerServiceWorker() {
@@ -353,11 +418,19 @@ function registerServiceWorker() {
 
 registerServiceWorker();
 
+// Shared footer — mount once from #app-nav so pages cannot drift to labels-only.
+try {
+  const bootNav = document.getElementById("app-nav");
+  if (bootNav) mountNav(bootNav.getAttribute("data-active") || "");
+} catch (_) {}
+
 window.OC = {
   api,
   go,
   esc,
   navActive,
+  mountNav,
+  mediaUrl,
   ICONS,
   SPARK,
   TIP_ICO,
@@ -370,6 +443,7 @@ window.OC = {
   bindCardActions,
   imgOrPh,
   phImg,
+  posterPhHtml,
   skeletonHtml,
   showDecideSkeleton,
   hideDecideSkeleton,
