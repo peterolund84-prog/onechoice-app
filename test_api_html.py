@@ -145,6 +145,50 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertEqual(sess.status_code, 200)
         self.assertIn("secrets", sess.json())
 
+    def test_lista_delete_and_clear_checked(self) -> None:
+        self.client.post("/api/auth/guest")
+        add = self.client.post("/api/lista/items", json={"name": "Mjölk"})
+        self.assertEqual(add.status_code, 200, add.text)
+        add2 = self.client.post("/api/lista/items", json={"name": "Bröd"})
+        self.assertEqual(add2.status_code, 200, add2.text)
+        rows = self.client.get("/api/lista").json()["items"]
+        self.assertGreaterEqual(len(rows), 2)
+        by_name = {str(r["name"]).lower(): r for r in rows}
+        milk = by_name.get("mjölk")
+        bread = by_name.get("bröd")
+        self.assertIsNotNone(milk)
+        self.assertIsNotNone(bread)
+        assert milk is not None and bread is not None
+        gone = self.client.delete(f"/api/lista/items/{milk['id']}")
+        self.assertEqual(gone.status_code, 200, gone.text)
+        self.assertTrue(gone.json().get("ok"))
+        after = self.client.get("/api/lista").json()["items"]
+        self.assertFalse(any(int(r["id"]) == int(milk["id"]) for r in after))
+        patched = self.client.patch(
+            f"/api/lista/items/{bread['id']}", json={"checked": True}
+        )
+        self.assertEqual(patched.status_code, 200, patched.text)
+        cleared = self.client.post("/api/lista/clear-checked")
+        self.assertEqual(cleared.status_code, 200, cleared.text)
+        self.assertGreaterEqual(int(cleared.json().get("removed") or 0), 1)
+        final = self.client.get("/api/lista").json()["items"]
+        self.assertFalse(any(int(r["id"]) == int(bread["id"]) for r in final))
+
+    def test_execute_and_lista_use_glass_blocks(self) -> None:
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent
+        execute = (root / "web" / "execute.html").read_text(encoding="utf-8")
+        lista = (root / "web" / "lista.html").read_text(encoding="utf-8")
+        css = (root / "web" / "static" / "app.css").read_text(encoding="utf-8")
+        self.assertIn("glass-block", execute)
+        self.assertIn("recipe-steps", execute)
+        self.assertIn("glass-block", lista)
+        self.assertIn("list-del", lista)
+        self.assertIn("clear-checked", lista)
+        self.assertIn(".glass-block", css)
+        self.assertIn(".list-del", css)
+
     def test_dish_assets_mounted(self) -> None:
         from pathlib import Path
 

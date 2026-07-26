@@ -84,6 +84,7 @@ const api = {
     api.json(p, { method: "POST", body: JSON.stringify(body || {}), ...(opts || {}) }),
   patch: (p, body, opts) =>
     api.json(p, { method: "PATCH", body: JSON.stringify(body || {}), ...(opts || {}) }),
+  delete: (p, opts) => api.json(p, { method: "DELETE", ...(opts || {}) }),
 };
 
 function go(page) {

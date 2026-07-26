@@ -75,3 +75,37 @@ def patch_item(item_id: int, body: PatchBody, sess: SessionDep) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"ok": True, "checked": body.checked}
+
+
+@router.delete("/items/{item_id}")
+def delete_item(item_id: int, sess: SessionDep) -> dict:
+    apply_auth(sess)
+    try:
+        removed = db.delete_shopping_items(sess.user_id, [int(item_id)])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not removed:
+        raise HTTPException(status_code=404, detail="Varan hittades inte.")
+    return {"ok": True, "removed": int(removed)}
+
+
+@router.post("/clear-checked")
+def clear_checked(sess: SessionDep) -> dict:
+    """Remove all checked (done) shopping items."""
+    apply_auth(sess)
+    try:
+        items = db.list_shopping_items(sess.user_id)
+    except Exception:
+        items = []
+    ids = [
+        int(it["id"])
+        for it in (items or [])
+        if isinstance(it, dict) and it.get("checked") and it.get("id")
+    ]
+    if not ids:
+        return {"ok": True, "removed": 0}
+    try:
+        removed = db.delete_shopping_items(sess.user_id, ids)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"ok": True, "removed": int(removed or 0)}
