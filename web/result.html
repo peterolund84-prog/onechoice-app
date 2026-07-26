@@ -11,13 +11,13 @@
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
   <title>Beslut — OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v33-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v36-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
   <main class="app" id="app"><div class="loading">Laddar beslut…</div></main>
   <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
-  <script src="/static/app.js?v=v33-20260726"></script>
+  <script src="/static/app.js?v=v36-20260726"></script>
   <script>
     (async function () {
       const {
@@ -30,21 +30,32 @@
       const mode = params.get("mode");
 
       if (mode === "occasion") {
-        const occasions = JSON.parse(sessionStorage.getItem("oc_occasions") || '["jobb","vardag","träning","dejt","fest"]');
+        let occasions = ["jobb", "vardag", "träning", "dejt", "fest"];
+        try {
+          const parsed = JSON.parse(sessionStorage.getItem("oc_occasions") || "null");
+          if (Array.isArray(parsed) && parsed.length) occasions = parsed;
+        } catch (_) {}
         const labels = { jobb: "Jobb", vardag: "Vardag", "träning": "Träning", dejt: "Dejt", fest: "Fest" };
         root.innerHTML = `
           <div class="section-label">Vart ska du?</div>
           <div class="chips" id="chips">
-            ${occasions.map((o) => `<button class="chip" type="button" data-o="${o}">${labels[o] || o}</button>`).join("")}
+            ${occasions.map((o) => `<button class="chip" type="button" data-o="${esc(o)}">${esc(labels[o] || o)}</button>`).join("")}
           </div>
           <p class="error" id="err" hidden></p>
         `;
+        let occasionBusy = false;
         root.querySelectorAll("[data-o]").forEach((b) => {
           b.onclick = async () => {
+            if (occasionBusy) return;
+            occasionBusy = true;
+            root.querySelectorAll("[data-o]").forEach((x) => { x.disabled = true; });
             try {
               const data = await api.post("/api/decide/clothes-occasion", { occasion: b.dataset.o });
-              go(data.page === "result" ? "/result" : "/");
+              // refused still has a decision card on /result
+              go(data.page === "execute" ? "/execute" : "/result");
             } catch (e) {
+              occasionBusy = false;
+              root.querySelectorAll("[data-o]").forEach((x) => { x.disabled = false; });
               document.getElementById("err").hidden = false;
               document.getElementById("err").textContent = e.message;
             }
@@ -229,7 +240,16 @@
       const hasDecisionCard = !!root.querySelector(".decision-card") && !refused;
       if (hasDecisionCard) showErr("");
 
+      let chipBusy = false;
+      const setChipsDisabled = (on) => {
+        root.querySelectorAll(".chip, .movie-seg-btn").forEach((el) => {
+          el.disabled = !!on;
+        });
+      };
       const postMovieChips = async (payload) => {
+        if (chipBusy) return;
+        chipBusy = true;
+        setChipsDisabled(true);
         try {
           showErr("");
           await withDecideLoading(root, "movie", () =>
@@ -237,6 +257,8 @@
           );
           location.reload();
         } catch (e) {
+          chipBusy = false;
+          setChipsDisabled(false);
           showErr(e.message);
         }
       };
@@ -244,6 +266,9 @@
       if (domain === "food") {
         root.querySelectorAll("[data-meal]").forEach((b) => {
           b.onclick = async () => {
+            if (chipBusy) return;
+            chipBusy = true;
+            setChipsDisabled(true);
             try {
               await withDecideLoading(root, "food", () =>
                 api.post(
@@ -254,6 +279,8 @@
               );
               location.reload();
             } catch (e) {
+              chipBusy = false;
+              setChipsDisabled(false);
               showErr(e.message);
             }
           };
@@ -285,9 +312,13 @@
           const streamUrl = btn.dataset.execUrl || execUrl || "";
           // Open stream/map URL in the same tap (before await) so mobile allows it.
           if (streamUrl && domain !== "food") {
+            let opened = null;
             try {
-              window.open(streamUrl, "_blank", "noopener,noreferrer");
+              opened = window.open(streamUrl, "_blank", "noopener,noreferrer");
             } catch (_) {
+              opened = null;
+            }
+            if (!opened) {
               location.href = streamUrl;
               return;
             }
@@ -295,14 +326,15 @@
           btn.disabled = true;
           if (rerollBtn) rerollBtn.disabled = true;
           try {
+            // Execute UI is food-only (recipe / shopping). Workout stays on the card.
             const data = await api.post("/api/decision/accept", {
-              open_execute: domain === "food" || domain === "workout",
+              open_execute: domain === "food",
             });
-            if (domain === "food" || domain === "workout") {
+            if (domain === "food") {
               go(data.page === "execute" ? "/execute" : "/");
               return;
             }
-            // Movie/clothes/weekend: stream already opened; stay on card.
+            // Movie/clothes/workout/weekend: stay on card after accept.
             btn.textContent =
               domain === "movie" ? "Öppnar…" : "Klart";
             setTimeout(() => {

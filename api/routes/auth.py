@@ -36,6 +36,19 @@ def session_info(sess: SessionDep) -> dict:
 
 @router.post("/guest")
 def ensure_guest(sess: SessionDep, response: Response) -> dict:
+    # Pages call this on every boot — never wipe an already-logged-in session.
+    if sess.access_token and not sess.guest_mode:
+        apply_auth(sess)
+        STORE.save(sess)
+        response.set_cookie(
+            key=COOKIE_NAME,
+            value=sess.sid,
+            max_age=COOKIE_MAX_AGE,
+            httponly=True,
+            samesite="lax",
+            path="/",
+        )
+        return sess.public()
     sess.guest_mode = True
     sess.access_token = None
     sess.refresh_token = None

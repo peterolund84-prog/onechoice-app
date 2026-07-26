@@ -93,6 +93,7 @@ class TrendingPipelineTests(unittest.TestCase):
                 "mood": "avkopplat",
                 "streaming_services": ["netflix"],
             },
+            grok_api_key="test-key",
         )
         self.assertTrue(r.ok, msg=r.refusal_message)
         self.assertFalse(r.refused)
@@ -138,6 +139,7 @@ class TrendingPipelineTests(unittest.TestCase):
                 "format": "avsnitt",
                 "streaming_services": ["netflix"],
             },
+            grok_api_key="test-key",
         )
         self.assertTrue(r.ok)
         self.assertNotEqual(str(r.suggestion).strip().lower(), "andor")

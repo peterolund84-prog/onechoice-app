@@ -57,6 +57,9 @@ describe("OneChoice HTML core flow", () => {
     mockFetchSequence([
       (path) => {
         calls.push(path);
+        if (path.includes("/api/auth/session")) {
+          return { body: { authenticated: false, guest_mode: true } };
+        }
         if (path.includes("/api/auth/guest")) return { body: { ok: true } };
         if (path.includes("/api/decide")) {
           return {

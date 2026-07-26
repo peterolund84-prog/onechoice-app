@@ -40,7 +40,7 @@ def open_decision(decision_id: int, sess: SessionDep) -> dict:
             break
     if not found:
         raise HTTPException(status_code=404, detail="Beslutet hittades inte.")
-    # Rebuild a minimal current decision for the UI
+    # Rebuild current decision for the UI (keep favorite / execute links)
     ctx = found.get("context_json") or found.get("context") or {}
     if isinstance(ctx, str):
         import json
@@ -49,6 +49,8 @@ def open_decision(decision_id: int, sess: SessionDep) -> dict:
             ctx = json.loads(ctx)
         except Exception:
             ctx = {}
+    if not isinstance(ctx, dict):
+        ctx = {}
     sess.current = {
         "ok": True,
         "domain": found.get("domain"),
@@ -57,7 +59,11 @@ def open_decision(decision_id: int, sess: SessionDep) -> dict:
         "decision_id": found.get("id"),
         "accepted": True,
         "locked": True,
-        "context": ctx if isinstance(ctx, dict) else {},
+        "favorite": bool(found.get("favorite")),
+        "execution_type": found.get("execution_type"),
+        "execution_label": found.get("execution_label"),
+        "execution_url": found.get("execution_url"),
+        "context": ctx,
     }
     sess.decision_id = int(found.get("id"))
     sess.accepted = True

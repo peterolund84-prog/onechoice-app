@@ -260,6 +260,82 @@ class ApiHtmlSmokeTests(unittest.TestCase):
                 landing = self.client.get("/share")
                 self.assertEqual(landing.status_code, 200)
 
+    def test_guest_does_not_wipe_authenticated_session(self) -> None:
+        from api.session_store import COOKIE_NAME, STORE
+
+        self.client.post("/api/auth/guest")
+        sid = self.client.cookies.get(COOKIE_NAME)
+        self.assertTrue(sid)
+        sess = STORE.get(sid)
+        self.assertIsNotNone(sess)
+        assert sess is not None
+        sess.guest_mode = False
+        sess.access_token = "test-access-token"
+        sess.refresh_token = "test-refresh-token"
+        sess.email = "user@example.com"
+        STORE.save(sess)
+
+        again = self.client.post("/api/auth/guest")
+        self.assertEqual(again.status_code, 200)
+        body = again.json()
+        self.assertFalse(body.get("guest_mode"))
+        self.assertTrue(body.get("authenticated"))
+        self.assertEqual(body.get("email"), "user@example.com")
+
+    def test_merge_list_empty_selection_adds_nothing(self) -> None:
+        self.client.post("/api/auth/guest")
+        r = self.client.post(
+            "/api/decide",
+            json={
+                "domain_hint": "food",
+                "context_extra": {"meal_type": "middag"},
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        if data.get("page") != "result":
+            self.skipTest("decide did not return result")
+        acc = self.client.post("/api/decision/accept", json={"open_execute": True})
+        self.assertEqual(acc.status_code, 200, acc.text)
+        exe = self.client.get("/api/decision/execute")
+        self.assertEqual(exe.status_code, 200, exe.text)
+        shopping = (exe.json().get("shopping") or {}).get("to_buy") or {}
+        flat = [i for items in shopping.values() for i in (items or [])]
+        if not flat:
+            self.skipTest("no shopping items to merge")
+        merged = self.client.post(
+            "/api/decision/execute/merge-list",
+            json={"item_names": []},
+        )
+        self.assertEqual(merged.status_code, 200, merged.text)
+        self.assertEqual(merged.json().get("added"), 0)
+
+    def test_history_open_keeps_favorite_and_execution(self) -> None:
+        self.client.post("/api/auth/guest")
+        r = self.client.post(
+            "/api/decide",
+            json={
+                "domain_hint": "food",
+                "context_extra": {"meal_type": "middag"},
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        if data.get("page") != "result":
+            self.skipTest("decide did not return result")
+        decision = data["decision"]
+        did = decision.get("decision_id")
+        if not did:
+            self.skipTest("no decision_id")
+        self.client.post("/api/decision/favorite")
+        opened = self.client.post(f"/api/history/{did}/open")
+        self.assertEqual(opened.status_code, 200, opened.text)
+        cur = opened.json().get("decision") or {}
+        self.assertIn("favorite", cur)
+        self.assertTrue(cur.get("favorite"))
+        # Food history open should land on execute page
+        self.assertEqual(opened.json().get("page"), "execute")
+
     def test_cta_and_logo_spark_layout(self) -> None:
         from pathlib import Path
 

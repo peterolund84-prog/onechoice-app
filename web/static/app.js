@@ -209,16 +209,35 @@ function skeletonHtml(domain) {
 
 function showDecideSkeleton(host, domain) {
   if (!host) return null;
-  const wrap = document.createElement("div");
-  wrap.id = "oc-decide-skel";
-  wrap.className = "oc-decide-skel-host";
+  // Hide existing children instead of wiping — keeps #err for error recovery.
+  Array.from(host.children).forEach((el) => {
+    if (el.id === "oc-decide-skel") return;
+    if (el.dataset.ocHiddenBySkel === "1") return;
+    el.dataset.ocPrevDisplay = el.style.display || "";
+    el.style.display = "none";
+    el.dataset.ocHiddenBySkel = "1";
+  });
+  let wrap = document.getElementById("oc-decide-skel");
+  if (!wrap) {
+    wrap = document.createElement("div");
+    wrap.id = "oc-decide-skel";
+    wrap.className = "oc-decide-skel-host";
+    host.appendChild(wrap);
+  }
   wrap.innerHTML = skeletonHtml(domain);
-  host.innerHTML = "";
-  host.appendChild(wrap);
+  wrap.style.display = "";
   return wrap;
 }
 
-function hideDecideSkeleton() {
+function hideDecideSkeleton(host) {
+  const root = host || document.getElementById("app");
+  if (root) {
+    root.querySelectorAll("[data-oc-hidden-by-skel]").forEach((el) => {
+      el.style.display = el.dataset.ocPrevDisplay || "";
+      delete el.dataset.ocPrevDisplay;
+      delete el.dataset.ocHiddenBySkel;
+    });
+  }
   const el = document.getElementById("oc-decide-skel");
   if (el) el.remove();
 }
@@ -232,7 +251,7 @@ async function withDecideLoading(host, domain, work) {
   try {
     const data = await work();
     clearTimeout(delay);
-    hideDecideSkeleton();
+    hideDecideSkeleton(host);
     if (shown && host) {
       host.classList.add("oc-card-arrive");
       setTimeout(() => host.classList.remove("oc-card-arrive"), 450);
@@ -240,15 +259,21 @@ async function withDecideLoading(host, domain, work) {
     return data;
   } catch (err) {
     clearTimeout(delay);
-    hideDecideSkeleton();
+    hideDecideSkeleton(host);
     throw err;
   }
 }
 
 async function ensureGuest() {
   try {
-    await api.post("/api/auth/guest", {});
+    const sess = await api.get("/api/auth/session");
+    if (sess && sess.authenticated) return sess;
   } catch (_) {}
+  try {
+    return await api.post("/api/auth/guest", {});
+  } catch (_) {
+    return null;
+  }
 }
 
 async function routeDecide(payload) {

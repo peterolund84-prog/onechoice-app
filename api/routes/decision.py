@@ -183,15 +183,14 @@ def merge_list(body: MergeBody, sess: SessionDep) -> dict:
     ctx = sess.current.get("context") or {}
     shopping = ctx.get("shopping") or {}
     to_buy = shopping.get("to_buy") or {}
-    # Optional filter by names
-    if body.item_names:
-        filtered: dict[str, list[str]] = {}
-        want = {n.lower() for n in body.item_names}
-        for sec, items in to_buy.items():
-            keep = [i for i in items if str(i).lower() in want]
-            if keep:
-                filtered[sec] = keep
-        to_buy = filtered
+    # Always filter by checked names. Empty list must add nothing (not everything).
+    want = {str(n).lower() for n in (body.item_names or [])}
+    filtered: dict[str, list[str]] = {}
+    for sec, items in to_buy.items():
+        keep = [i for i in items if str(i).lower() in want]
+        if keep:
+            filtered[sec] = keep
+    to_buy = filtered
     try:
         added = db.merge_shopping_from_decision(
             sess.user_id,
