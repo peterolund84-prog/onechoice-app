@@ -351,30 +351,78 @@ async function shareNative(title, text, url) {
   }
 }
 
+function closeShareSheet() {
+  const el = document.getElementById("oc-share-sheet");
+  if (el) el.remove();
+}
+
+function openShareSheet(text, url) {
+  closeShareSheet();
+  const full = url ? `${text}\n${url}` : text;
+  const encoded = encodeURIComponent(full);
+  const smsHref = isAppleTouch()
+    ? `sms:&body=${encoded}`
+    : `sms:?body=${encoded}`;
+  const waHref = `https://wa.me/?text=${encoded}`;
+  // Messenger deep link works when the app is installed; link-only is the reliable bit.
+  const msgHref = url
+    ? `fb-messenger://share/?link=${encodeURIComponent(url)}`
+    : `fb-messenger://`;
+
+  const sheet = document.createElement("div");
+  sheet.id = "oc-share-sheet";
+  sheet.className = "oc-share-sheet";
+  sheet.innerHTML = `
+    <button type="button" class="oc-share-backdrop" aria-label="Stäng"></button>
+    <div class="oc-share-panel" role="dialog" aria-label="Dela">
+      <p class="oc-share-title">Dela</p>
+      <a class="oc-share-opt" data-share="sms" href="${smsHref}">Meddelanden / SMS</a>
+      <a class="oc-share-opt" data-share="wa" href="${waHref}" target="_blank" rel="noopener">WhatsApp</a>
+      <a class="oc-share-opt" data-share="msg" href="${msgHref}">Messenger</a>
+      <button type="button" class="oc-share-opt" data-share="copy">Kopiera text</button>
+      <button type="button" class="oc-share-cancel" data-share="cancel">Avbryt</button>
+    </div>`;
+  document.body.appendChild(sheet);
+
+  const onDone = () => closeShareSheet();
+  sheet.querySelector(".oc-share-backdrop").onclick = onDone;
+  sheet.querySelector('[data-share="cancel"]').onclick = onDone;
+  sheet.querySelector('[data-share="copy"]').onclick = async () => {
+    await copyText(full);
+    onDone();
+  };
+  // SMS / WA / Messenger: let the <a> navigate; dismiss sheet shortly after.
+  sheet.querySelectorAll("a.oc-share-opt").forEach((a) => {
+    a.addEventListener("click", () => setTimeout(onDone, 300));
+  });
+}
+
 async function shareDecision(fallbackText) {
   const btn =
     typeof document !== "undefined" ? document.getElementById("shareBtn") : null;
   let title = "OneChoice";
-  // Prefer data already on the button so Web Share keeps the user gesture
-  // (awaiting /api/decision/share first → iOS falls back to "Kopierat").
+  // Prefer data already on the button so Web Share keeps the user gesture.
   let text = (btn && btn.dataset.shareText) || fallbackText || "";
   let url = absoluteUrl((btn && btn.dataset.shareUrl) || "");
 
-  if (await shareNative(title, text, url)) return;
+  // Warm payload if missing (common on first tap).
+  if (!url || !text) {
+    try {
+      const bundle = await api.get("/api/decision/share");
+      title = bundle.title || title;
+      text = bundle.text || text;
+      if (bundle.url) url = absoluteUrl(bundle.url);
+      if (btn) {
+        if (text) btn.dataset.shareText = text;
+        if (url) btn.dataset.shareUrl = url;
+      }
+    } catch (_) {}
+  }
 
-  try {
-    const bundle = await api.get("/api/decision/share");
-    title = bundle.title || title;
-    text = bundle.text || text;
-    if (bundle.url) url = absoluteUrl(bundle.url);
-    if (btn) {
-      if (text) btn.dataset.shareText = text;
-      if (url) btn.dataset.shareUrl = url;
-    }
-  } catch (_) {}
-
+  // Secure contexts (HTTPS / localhost) get the OS sheet.
+  // http://192.168.x.x has no navigator.share — show our own targets instead of only "Kopierat".
   if (await shareNative(title, text, url)) return;
-  await copyText(url ? `${text}\n${url}` : text);
+  openShareSheet(text || title, url);
 }
 
 /** Prefetch share token/url onto #shareBtn so the next tap can open the sheet. */
@@ -496,6 +544,8 @@ window.OC = {
   routeDecide,
   showToast,
   shareDecision,
+  openShareSheet,
+  closeShareSheet,
   warmShareButton,
   toggleFavorite,
   cardActionsHtml,

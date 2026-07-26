@@ -194,4 +194,24 @@ describe("OneChoice HTML core flow", () => {
     expect(arg.text).toContain("About Time");
     expect(arg.text).toContain("/share?token=abc");
   });
+
+  it("shareDecision opens SMS/WhatsApp sheet when Web Share is missing (HTTP LAN)", async () => {
+    document.body.innerHTML = `
+      <button id="shareBtn" data-share-text="🎬 About Time"
+        data-share-url="http://192.168.1.114:8080/share?token=abc"></button>`;
+    Object.defineProperty(navigator, "share", {
+      value: undefined,
+      configurable: true,
+    });
+    await OC.shareDecision("fallback");
+    const sheet = document.getElementById("oc-share-sheet");
+    expect(sheet).toBeTruthy();
+    const sms = sheet.querySelector('[data-share="sms"]');
+    const wa = sheet.querySelector('[data-share="wa"]');
+    expect(sms.getAttribute("href")).toMatch(/^sms:/);
+    expect(wa.getAttribute("href")).toContain("wa.me");
+    expect(sheet.textContent).toContain("Meddelanden");
+    expect(sheet.textContent).toContain("WhatsApp");
+    expect(sheet.textContent).toContain("Messenger");
+  });
 });
