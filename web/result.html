@@ -18,7 +18,9 @@
   <script src="/static/app.js"></script>
   <script>
     (async function () {
-      const { api, go, ensureGuest, esc } = window.OC;
+      const {
+        api, go, ensureGuest, esc, cardActionsHtml, bindCardActions, imgOrPh,
+      } = window.OC;
       await ensureGuest();
       const root = document.getElementById("app");
       const params = new URLSearchParams(location.search);
@@ -66,6 +68,10 @@
         ["middag", "Middag"],
         ["kvallsmal", "Kvällsmål"],
       ];
+      const actions = cardActionsHtml({
+        isFavorite: !!pres.is_favorite,
+        shareText: pres.share_text || "",
+      });
 
       const cardHtml = (() => {
         if (domain === "movie") {
@@ -74,12 +80,9 @@
           const rating = pres.movie_rating || "";
           return `
             <article class="panel decision-card movie-card">
+              ${actions}
               <div class="movie-row">
-                ${
-                  poster
-                    ? `<img class="movie-poster" src="${esc(poster)}" alt="" loading="lazy" />`
-                    : `<div class="movie-poster movie-poster-ph" aria-hidden="true"></div>`
-                }
+                ${imgOrPh(poster, "movie-poster")}
                 <div class="movie-col">
                   <div class="label">${esc(ctx.kind === "film" ? "Film" : "Serie")}</div>
                   <h1>${esc(d.suggestion || "—")}</h1>
@@ -95,11 +98,8 @@
           const meta = pres.food_meta || "";
           return `
             <article class="panel decision-card food-card">
-              ${
-                img
-                  ? `<img class="food-img" src="${esc(img)}" alt="" loading="lazy" />`
-                  : `<div class="food-img food-img-ph" aria-hidden="true"><div class="food-ph-circle"></div></div>`
-              }
+              ${actions}
+              ${imgOrPh(img, "food-img")}
               <div class="food-body">
                 <h1>${esc(d.suggestion || "—")}</h1>
                 <p>${esc(d.justification || "")}</p>
@@ -108,10 +108,13 @@
             </article>`;
         }
         return `
-          <article class="panel">
-            <div class="label">${esc(domain || "beslut")}</div>
-            <h1>${esc(d.suggestion || "—")}</h1>
-            <p>${esc(d.justification || "")}</p>
+          <article class="panel decision-card">
+            ${actions}
+            <div class="food-body">
+              <div class="label">${esc(domain || "beslut")}</div>
+              <h1>${esc(d.suggestion || "—")}</h1>
+              <p>${esc(d.justification || "")}</p>
+            </div>
           </article>`;
       })();
 
@@ -133,6 +136,7 @@
         <button class="btn btn-ghost" type="button" id="reroll">Nytt förslag</button>
         <p class="error" id="err" hidden></p>
       `;
+      bindCardActions();
 
       const showErr = (m) => {
         const el = document.getElementById("err");

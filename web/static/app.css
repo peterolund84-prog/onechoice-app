@@ -428,13 +428,78 @@ a { color: inherit; text-decoration: none; }
 
 /* Decision cards — food / movie */
 .decision-card {
+  position: relative;
   overflow: hidden;
   padding: 0;
   text-align: left;
 }
+.card-corner {
+  position: absolute;
+  top: 12px;
+  z-index: 4;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+.card-fav { left: 12px; }
+.card-share { right: 12px; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+}
+.fav-btn {
+  background: center / 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.92)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E");
+}
+.fav-btn.is-on {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%234F46E5' stroke='%234F46E5' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E");
+}
+.share-btn {
+  background: center / 20px no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.92)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E");
+}
+.movie-card .fav-btn,
+.movie-card .share-btn,
+.decision-card:not(.food-card) .fav-btn,
+.decision-card:not(.food-card) .share-btn {
+  /* Darker icons when not over a photo */
+  filter: none;
+}
+.movie-card .fav-btn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(26,26,26,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z'/%3E%3C/svg%3E");
+}
+.movie-card .share-btn {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(26,26,26,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 14V3'/%3E%3Cpath d='M8 7l4-4 4 4'/%3E%3Cpath d='M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9'/%3E%3C/svg%3E");
+}
+.oc-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  z-index: 99999;
+  background: #1a1a1a;
+  color: #fff;
+  padding: 0.65rem 1.15rem;
+  border-radius: 999px;
+  font: 600 0.9rem Inter, system-ui, sans-serif;
+  opacity: 1;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.oc-toast.fade { opacity: 0; }
+
 .food-card .food-img {
   display: block;
   width: 100%;
+  min-height: 180px;
   aspect-ratio: 16 / 10;
   object-fit: cover;
   background: #eee;

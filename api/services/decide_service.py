@@ -195,6 +195,6 @@ def run_decide(
     return {
         "ok": bool(data.get("ok", True)),
         "page": page,
-        "decision": enrich_decision(data),
+        "decision": enrich_decision(data, language=sess.language or "sv"),
         "session": sess.public(),
     }

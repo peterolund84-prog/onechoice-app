@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import auth, decide, decision, history, home, lista, profile
+from api.routes import auth, decide, decision, history, home, lista, media, profile, share
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
@@ -23,6 +23,8 @@ app.include_router(decide.router)
 app.include_router(decision.router)
 app.include_router(lista.router)
 app.include_router(history.router)
+app.include_router(media.router)
+app.include_router(share.router)
 app.include_router(profile.router)
 
 app.mount("/static", StaticFiles(directory=str(WEB / "static")), name="static")
@@ -70,6 +72,11 @@ def profile_page() -> FileResponse:
 @app.get("/auth")
 def auth_page() -> FileResponse:
     return _page("auth.html")
+
+
+@app.get("/share")
+def share_page() -> FileResponse:
+    return _page("share.html")
 
 
 @app.get("/health")

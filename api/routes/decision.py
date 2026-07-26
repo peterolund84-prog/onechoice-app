@@ -4,9 +4,11 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+import db
 import pipeline
+import share_domain as sd
 from api.deps import SessionDep, apply_auth
-from api.presentation import enrich_decision, nutrition_stats
+from api.presentation import enrich_decision, nutrition_stats, share_text_for
 from api.session_store import STORE
 
 router = APIRouter(prefix="/api/decision", tags=["decision"])
@@ -20,12 +22,16 @@ class MergeBody(BaseModel):
     item_names: list[str] = Field(default_factory=list)
 
 
+def _enriched(sess: SessionDep) -> dict | None:
+    return enrich_decision(sess.current, language=sess.language or "sv")
+
+
 @router.get("/current")
 def current(sess: SessionDep) -> dict:
     if not sess.current:
         raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")
     return {
-        "decision": enrich_decision(sess.current),
+        "decision": _enriched(sess),
         "accepted": sess.accepted,
         "session": sess.public(),
     }
@@ -57,8 +63,66 @@ def accept(body: AcceptBody, sess: SessionDep) -> dict:
         "ok": True,
         "accepted": True,
         "page": page,
-        "decision": enrich_decision(sess.current),
+        "decision": _enriched(sess),
         "session": sess.public(),
+    }
+
+
+@router.post("/favorite")
+def toggle_favorite(sess: SessionDep) -> dict:
+    apply_auth(sess)
+    if not sess.current:
+        raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")
+    did = sess.decision_id or sess.current.get("decision_id")
+    if not did:
+        raise HTTPException(status_code=400, detail="Saknar decision_id.")
+    currently = bool(sess.current.get("favorite"))
+    try:
+        row = db.set_decision_favorite(int(did), not currently)
+        fav = bool(row.get("favorite"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    cur = dict(sess.current)
+    cur["favorite"] = fav
+    sess.current = cur
+    STORE.save(sess)
+    return {
+        "ok": True,
+        "favorite": fav,
+        "decision_id": int(did),
+        "decision": _enriched(sess),
+    }
+
+
+@router.get("/share")
+def share_bundle(sess: SessionDep) -> dict:
+    """Native-share payload (text + absolute-ish URL) for the active decision."""
+    if not sess.current:
+        raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")
+    cur = dict(sess.current)
+    if cur.get("decision_id") is None and sess.decision_id is not None:
+        cur["decision_id"] = sess.decision_id
+    if cur.get("user_id") is None:
+        cur["user_id"] = sess.user_id
+    try:
+        share = db.ensure_public_share(cur, language=sess.language or "sv")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    token = str(share.get("token") or "")
+    did = share.get("decision_id")
+    text = share_text_for(cur, language=sess.language or "sv")
+    url = sd.share_path(token=token, decision_id=did)
+    # Prefer /share?token=… for the HTML stack landing page
+    if token:
+        url = f"/share?token={token}"
+        if did is not None:
+            url += f"&decision_id={did}"
+    return {
+        "ok": True,
+        "title": "OneChoice",
+        "text": text,
+        "url": url,
+        "token": token,
     }
 
 
@@ -83,7 +147,7 @@ def execute(sess: SessionDep) -> dict:
                 )
         except Exception:
             pass
-    enriched = enrich_decision(cur) or {}
+    enriched = _enriched(sess) or {}
     presentation = enriched.get("presentation") or {}
     nut = nutrition_stats(
         recipe if isinstance(recipe, dict) else None,
@@ -110,8 +174,6 @@ def execute(sess: SessionDep) -> dict:
 
 @router.post("/execute/merge-list")
 def merge_list(body: MergeBody, sess: SessionDep) -> dict:
-    import db
-
     apply_auth(sess)
     if not sess.current:
         raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")

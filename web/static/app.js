@@ -70,4 +70,148 @@ async function routeDecide(payload) {
   return data;
 }
 
-window.OC = { api, go, esc, navActive, ICONS, SPARK, TIP_ICO, ensureGuest, routeDecide };
+function showToast(message) {
+  try {
+    const existing = document.getElementById("oc-toast");
+    if (existing) existing.remove();
+    const el = document.createElement("div");
+    el.id = "oc-toast";
+    el.setAttribute("role", "status");
+    el.textContent = message || "Kopierat";
+    el.className = "oc-toast";
+    document.body.appendChild(el);
+    setTimeout(() => {
+      el.classList.add("fade");
+      setTimeout(() => el.remove(), 350);
+    }, 1500);
+  } catch (_) {}
+}
+
+async function copyText(text) {
+  const full = text || "";
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(full);
+      showToast("Kopierat");
+      return;
+    }
+  } catch (_) {}
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = full;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    ta.remove();
+    showToast("Kopierat");
+  } catch (_) {
+    showToast("Kunde inte kopiera");
+  }
+}
+
+async function shareDecision(fallbackText) {
+  let title = "OneChoice";
+  let text = fallbackText || "";
+  let url = "";
+  try {
+    const bundle = await api.get("/api/decision/share");
+    title = bundle.title || title;
+    text = bundle.text || text;
+    if (bundle.url) {
+      url = bundle.url.startsWith("http")
+        ? bundle.url
+        : `${window.location.origin}${bundle.url}`;
+    }
+  } catch (_) {}
+  const full = url ? `${text}\n${url}` : text;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title, text, url: url || undefined });
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+  }
+  await copyText(full);
+}
+
+async function toggleFavorite(btn) {
+  try {
+    const res = await api.post("/api/decision/favorite", {});
+    const on = !!res.favorite;
+    if (btn) {
+      btn.classList.toggle("is-on", on);
+      btn.setAttribute("aria-label", on ? "Ta bort favorit" : "Spara som favorit");
+    }
+    return on;
+  } catch (e) {
+    showToast(e.message || "Kunde inte spara favorit");
+    return null;
+  }
+}
+
+function cardActionsHtml({ isFavorite, shareText }) {
+  const on = isFavorite ? " is-on" : "";
+  return `
+    <span class="card-corner card-fav">
+      <button type="button" class="icon-btn fav-btn${on}" id="favBtn"
+        aria-label="${isFavorite ? "Ta bort favorit" : "Spara som favorit"}"></button>
+    </span>
+    <span class="card-corner card-share">
+      <button type="button" class="icon-btn share-btn" id="shareBtn"
+        data-share-text="${esc(shareText || "")}"
+        aria-label="Dela"></button>
+    </span>`;
+}
+
+function bindCardActions() {
+  const fav = document.getElementById("favBtn");
+  const share = document.getElementById("shareBtn");
+  if (fav) fav.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite(fav);
+  };
+  if (share) share.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    shareDecision(share.dataset.shareText || "");
+  };
+}
+
+function phImg(img) {
+  try {
+    const cls = (img.className || "food-img").split(/\s+/)[0];
+    const div = document.createElement("div");
+    div.className = `${cls} ${cls}-ph`;
+    div.setAttribute("aria-hidden", "true");
+    div.innerHTML = '<div class="food-ph-circle"></div>';
+    img.replaceWith(div);
+  } catch (_) {}
+}
+
+function imgOrPh(url, className) {
+  if (!url) {
+    return `<div class="${className} ${className}-ph" aria-hidden="true"><div class="food-ph-circle"></div></div>`;
+  }
+  return `<img class="${className}" src="${esc(url)}" alt="" loading="lazy" onerror="window.OC&&window.OC.phImg(this)" />`;
+}
+
+window.OC = {
+  api,
+  go,
+  esc,
+  navActive,
+  ICONS,
+  SPARK,
+  TIP_ICO,
+  ensureGuest,
+  routeDecide,
+  showToast,
+  shareDecision,
+  toggleFavorite,
+  cardActionsHtml,
+  bindCardActions,
+  imgOrPh,
+  phImg,
+};

@@ -99,13 +99,12 @@ def lookup_title(title: str, kind: str = "series") -> dict[str, Any] | None:
         row = _OFFLINE_TMDB.get(title_n)
         if not row:
             return None
-        poster_path = row.get("poster_path")
-        poster_url = f"{TMDB_IMAGE_BASE}{poster_path}" if poster_path else None
+        # Offline stubs have fake poster_path values — do not invent broken CDN URLs.
         return {
             "tmdb_id": row.get("tmdb_id"),
             "title": row.get("title") or title,
             "year": row.get("year"),
-            "poster_url": poster_url,
+            "poster_url": None,
             "vote_average": row.get("vote_average"),
         }
 

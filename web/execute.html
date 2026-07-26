@@ -18,7 +18,9 @@
   <script src="/static/app.js"></script>
   <script>
     (async function () {
-      const { api, go, ensureGuest, esc } = window.OC;
+      const {
+        api, go, ensureGuest, esc, cardActionsHtml, bindCardActions, imgOrPh,
+      } = window.OC;
       await ensureGuest();
       const root = document.getElementById("app");
       let data;
@@ -40,6 +42,10 @@
       const steps = recipe.steps || [];
       const img = pres.dish_image_url;
       const meta = pres.food_meta || "";
+      const actions = cardActionsHtml({
+        isFavorite: !!pres.is_favorite,
+        shareText: pres.share_text || "",
+      });
 
       const nutHtml = nut
         ? `<div class="nut-stats" role="group" aria-label="Näringsvärden per portion">
@@ -52,11 +58,8 @@
 
       root.innerHTML = `
         <article class="panel decision-card food-card">
-          ${
-            img
-              ? `<img class="food-img" src="${esc(img)}" alt="" loading="lazy" />`
-              : ""
-          }
+          ${actions}
+          ${imgOrPh(img, "food-img")}
           <div class="food-body">
             <div class="label">Att laga</div>
             <h1>${esc(data.suggestion || "—")}</h1>
@@ -90,6 +93,7 @@
         <button class="btn btn-ghost" type="button" id="home">Hem</button>
         <p class="error" id="err" hidden></p>
       `;
+      bindCardActions();
 
       const merge = document.getElementById("merge");
       if (merge) {

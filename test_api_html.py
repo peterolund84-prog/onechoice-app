@@ -93,6 +93,50 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertGreater(len(r.content), 100)
 
+    def test_media_api_and_share_favorite(self) -> None:
+        self.client.post("/api/auth/guest")
+        media = self.client.get(
+            "/api/media/dish",
+            params={"title": "Kycklingwok med ris"},
+        )
+        self.assertEqual(media.status_code, 200, media.text)
+        self.assertGreater(len(media.content), 100)
+        self.assertIn("image", media.headers.get("content-type", ""))
+
+        r = self.client.post(
+            "/api/decide",
+            json={
+                "domain_hint": "food",
+                "context_extra": {"meal_type": "middag"},
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        if data.get("page") != "result":
+            self.skipTest("decide did not return result")
+        decision = data["decision"]
+        pres = decision.get("presentation") or {}
+        self.assertTrue(pres.get("dish_image_url", "").startswith("/api/media/dish"))
+        img = self.client.get(pres["dish_image_url"])
+        self.assertEqual(img.status_code, 200)
+        self.assertIn("share_text", pres)
+
+        did = decision.get("decision_id") or (pres.get("decision_id"))
+        if did:
+            fav = self.client.post("/api/decision/favorite")
+            self.assertEqual(fav.status_code, 200, fav.text)
+            self.assertIn("favorite", fav.json())
+            share = self.client.get("/api/decision/share")
+            self.assertEqual(share.status_code, 200, share.text)
+            self.assertTrue(share.json().get("text"))
+            self.assertIn("/share", share.json().get("url", ""))
+            token = share.json().get("token")
+            if token:
+                pub = self.client.get(f"/api/share/{token}")
+                self.assertEqual(pub.status_code, 200)
+                landing = self.client.get("/share")
+                self.assertEqual(landing.status_code, 200)
+
     def test_cta_and_logo_spark_layout(self) -> None:
         from pathlib import Path
 
@@ -106,8 +150,14 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIn(".logo-i", css)
         self.assertIn('class="logo-i"', html)
         self.assertIn("cta-inner", html)
+        js = (root / "web" / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn("food-img", result)
         self.assertIn("movie-poster", result)
+        self.assertIn("cardActionsHtml", result)
+        self.assertIn("bindCardActions", result)
+        self.assertIn("cardActionsHtml", execute)
+        self.assertIn('id="favBtn"', js)
+        self.assertIn('id="shareBtn"', js)
         self.assertIn("nut-stats", execute)
         self.assertIn("presentation", result)
 
