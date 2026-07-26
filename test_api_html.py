@@ -70,6 +70,38 @@ class ApiHtmlSmokeTests(unittest.TestCase):
             self.assertEqual(ex.status_code, 200)
             self.assertIn("nutrition", ex.json())
 
+    def test_movie_accept_exposes_stream_cta(self) -> None:
+        from pathlib import Path
+
+        self.client.post("/api/auth/guest")
+        r = self.client.post(
+            "/api/decide",
+            json={
+                "domain_hint": "movie",
+                "context_extra": {
+                    "format": "film",
+                    "mood": "avkopplat",
+                    "mode": "mood",
+                },
+            },
+        )
+        self.assertEqual(r.status_code, 200, r.text)
+        data = r.json()
+        if data.get("page") != "result":
+            self.skipTest("decide did not return result")
+        decision = data["decision"]
+        self.assertTrue(decision.get("execution_url"))
+        self.assertTrue(decision.get("execution_label"))
+        pres = decision.get("presentation") or {}
+        self.assertTrue(pres.get("execution_url"))
+        root = Path(__file__).resolve().parent
+        result_html = (root / "web" / "result.html").read_text(encoding="utf-8")
+        self.assertIn("data-exec-url", result_html)
+        self.assertIn("Titta", result_html)
+        js = (root / "web" / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("shareNative", js)
+        self.assertIn("warmShareButton", js)
+
     def test_lista_and_profile(self) -> None:
         self.client.post("/api/auth/guest")
         lista = self.client.get("/api/lista")

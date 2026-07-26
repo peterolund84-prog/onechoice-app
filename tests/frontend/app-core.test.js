@@ -174,4 +174,24 @@ describe("OneChoice HTML core flow", () => {
       true
     );
   });
+
+  it("shareDecision uses button data and opens native share (no copy toast)", async () => {
+    document.body.innerHTML = `
+      <button id="shareBtn" data-share-text="🎬 About Time"
+        data-share-url="http://192.168.1.114:8080/share?token=abc"></button>`;
+    const shareMock = vi.fn(async () => {});
+    Object.defineProperty(navigator, "share", {
+      value: shareMock,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, "userAgent", {
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+      configurable: true,
+    });
+    await OC.shareDecision("fallback");
+    expect(shareMock).toHaveBeenCalled();
+    const arg = shareMock.mock.calls[0][0];
+    expect(arg.text).toContain("About Time");
+    expect(arg.text).toContain("/share?token=abc");
+  });
 });

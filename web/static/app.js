@@ -306,30 +306,86 @@ async function copyText(text) {
   }
 }
 
+function absoluteUrl(pathOrUrl) {
+  const s = String(pathOrUrl || "").trim();
+  if (!s) return "";
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  return `${window.location.origin}${s.startsWith("/") ? s : `/${s}`}`;
+}
+
+function isAppleTouch() {
+  try {
+    return (
+      /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+async function shareNative(title, text, url) {
+  if (!navigator.share) return false;
+  try {
+    // iOS often rejects {text, url} together and needs the call inside the tap.
+    if (isAppleTouch()) {
+      const combined = [text, url].filter(Boolean).join("\n");
+      await navigator.share({ text: combined || title || "OneChoice" });
+      return true;
+    }
+    const data = { title: title || "OneChoice" };
+    if (text) data.text = text;
+    if (url) data.url = url;
+    if (navigator.canShare && !navigator.canShare(data)) {
+      await navigator.share({
+        title: data.title,
+        text: [text, url].filter(Boolean).join("\n"),
+      });
+    } else {
+      await navigator.share(data);
+    }
+    return true;
+  } catch (err) {
+    if (err && err.name === "AbortError") return true;
+    return false;
+  }
+}
+
 async function shareDecision(fallbackText) {
+  const btn =
+    typeof document !== "undefined" ? document.getElementById("shareBtn") : null;
   let title = "OneChoice";
-  let text = fallbackText || "";
-  let url = "";
+  // Prefer data already on the button so Web Share keeps the user gesture
+  // (awaiting /api/decision/share first → iOS falls back to "Kopierat").
+  let text = (btn && btn.dataset.shareText) || fallbackText || "";
+  let url = absoluteUrl((btn && btn.dataset.shareUrl) || "");
+
+  if (await shareNative(title, text, url)) return;
+
   try {
     const bundle = await api.get("/api/decision/share");
     title = bundle.title || title;
     text = bundle.text || text;
-    if (bundle.url) {
-      url = bundle.url.startsWith("http")
-        ? bundle.url
-        : `${window.location.origin}${bundle.url}`;
+    if (bundle.url) url = absoluteUrl(bundle.url);
+    if (btn) {
+      if (text) btn.dataset.shareText = text;
+      if (url) btn.dataset.shareUrl = url;
     }
   } catch (_) {}
-  const full = url ? `${text}\n${url}` : text;
+
+  if (await shareNative(title, text, url)) return;
+  await copyText(url ? `${text}\n${url}` : text);
+}
+
+/** Prefetch share token/url onto #shareBtn so the next tap can open the sheet. */
+async function warmShareButton() {
   try {
-    if (navigator.share) {
-      await navigator.share({ title, text, url: url || undefined });
-      return;
-    }
-  } catch (err) {
-    if (err && err.name === "AbortError") return;
-  }
-  await copyText(full);
+    const btn = document.getElementById("shareBtn");
+    if (!btn) return;
+    const bundle = await api.get("/api/decision/share");
+    if (bundle.text) btn.dataset.shareText = bundle.text;
+    if (bundle.url) btn.dataset.shareUrl = absoluteUrl(bundle.url);
+  } catch (_) {}
 }
 
 async function toggleFavorite(btn) {
@@ -350,14 +406,15 @@ async function toggleFavorite(btn) {
 const HEART_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>`;
 const SHARE_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14V3"/><path d="M8 7l4-4 4 4"/><path d="M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9"/></svg>`;
 
-function cardActionsHtml({ isFavorite, shareText }) {
+function cardActionsHtml({ isFavorite, shareText, shareUrl }) {
   const on = isFavorite ? " is-on" : "";
+  const urlAttr = shareUrl ? ` data-share-url="${esc(shareUrl)}"` : "";
   return `
     <div class="card-actions-bar" aria-hidden="false">
       <button type="button" class="icon-btn fav-btn${on}" id="favBtn"
         aria-label="${isFavorite ? "Ta bort favorit" : "Spara som favorit"}">${HEART_SVG}</button>
       <button type="button" class="icon-btn share-btn" id="shareBtn"
-        data-share-text="${esc(shareText || "")}"
+        data-share-text="${esc(shareText || "")}"${urlAttr}
         aria-label="Dela">${SHARE_SVG}</button>
     </div>`;
 }
@@ -375,6 +432,7 @@ function bindCardActions() {
     e.stopPropagation();
     shareDecision(share.dataset.shareText || "");
   };
+  warmShareButton();
 }
 
 function posterPhHtml() {
@@ -438,6 +496,7 @@ window.OC = {
   routeDecide,
   showToast,
   shareDecision,
+  warmShareButton,
   toggleFavorite,
   cardActionsHtml,
   bindCardActions,

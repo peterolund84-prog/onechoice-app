@@ -93,6 +93,17 @@
       });
       const refused = !!(d.refused || d.trending_empty || ctx.trending_empty);
       const refusalMsg = d.refusal_message || "";
+      const execUrl = d.execution_url || pres.execution_url || "";
+      const acceptLabel =
+        d.execution_label ||
+        pres.execution_label ||
+        (domain === "movie"
+          ? "Titta"
+          : domain === "food"
+            ? "Välj"
+            : domain === "workout"
+              ? "Starta passet"
+              : "Gör det");
 
       const cardHtml = (() => {
         if (refused && domain === "movie") {
@@ -192,9 +203,9 @@
         ${
           refused
             ? `<button class="btn btn-primary" type="button" id="back-mood">Visa Humör-förslag</button>`
-            : `<button class="btn btn-primary" type="button" id="accept">${
-                domain === "food" ? "Välj" : "Gör det"
-              }</button>
+            : `<button class="btn btn-primary" type="button" id="accept"${
+                execUrl ? ` data-exec-url="${esc(execUrl)}"` : ""
+              }>${esc(acceptLabel)}</button>
         <button class="btn btn-ghost" type="button" id="reroll">Nytt förslag</button>`
         }
         <p class="error" id="err" hidden></p>
@@ -265,13 +276,34 @@
         acceptBtn.onclick = async () => {
           const btn = acceptBtn;
           const rerollBtn = document.getElementById("reroll");
+          const streamUrl = btn.dataset.execUrl || execUrl || "";
+          // Open stream/map URL in the same tap (before await) so mobile allows it.
+          if (streamUrl && domain !== "food") {
+            try {
+              window.open(streamUrl, "_blank", "noopener,noreferrer");
+            } catch (_) {
+              location.href = streamUrl;
+              return;
+            }
+          }
           btn.disabled = true;
           if (rerollBtn) rerollBtn.disabled = true;
           try {
             const data = await api.post("/api/decision/accept", {
-              open_execute: domain === "food",
+              open_execute: domain === "food" || domain === "workout",
             });
-            go(data.page === "execute" ? "/execute" : "/");
+            if (domain === "food" || domain === "workout") {
+              go(data.page === "execute" ? "/execute" : "/");
+              return;
+            }
+            // Movie/clothes/weekend: stream already opened; stay on card.
+            btn.textContent =
+              domain === "movie" ? "Öppnar…" : "Klart";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.textContent = acceptLabel;
+              if (rerollBtn) rerollBtn.disabled = false;
+            }, 800);
           } catch (e) {
             showErr(e.message);
             btn.disabled = false;

@@ -215,6 +215,9 @@ def enrich_decision(
         "is_favorite": bool(out.get("favorite")),
         "share_text": share_text_for(out, language=language),
         "decision_id": out.get("decision_id") or out.get("id"),
+        "execution_url": out.get("execution_url") or ctx.get("execution_url"),
+        "execution_label": out.get("execution_label") or ctx.get("execution_label"),
+        "execution_type": out.get("execution_type") or ctx.get("execution_type"),
     }
     if domain == "food":
         hint = ctx.get("dish_category") or ctx.get("category")
