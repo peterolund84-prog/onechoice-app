@@ -375,11 +375,32 @@ def decide(
         import movie_trending as mt
 
         movie_services = list((profile.get("movie") or {}).get("services") or [])
+        grok_key = (grok_api_key or "").strip()
+        # Trendar is Grok web-search ONLY — never TMDB charts or old catalog packs.
+        if not grok_key:
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=mt.empty_message(language, reason="no_key"),
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "format": movie_format or ctx.get("format"),
+                    "mood": movie_mood or ctx.get("mood"),
+                    "trending_empty": True,
+                    "trending_needs_grok": True,
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
         trend_cands = mt.build_trending_candidates(
             language=language,
             fmt=movie_format or ctx.get("format"),
             user_services=movie_services,
-            api_key=grok_api_key or "",
+            api_key=grok_key,
             use_cache=True,
         )
         pick = mt.pick_trending_candidate(trend_cands)
@@ -398,6 +419,7 @@ def decide(
                     "format": movie_format or ctx.get("format"),
                     "mood": movie_mood or ctx.get("mood"),
                     "trending_empty": True,
+                    "trending_needs_grok": False,
                 },
                 route=(route_meta or {}).get("route"),
                 route_log_id=(route_meta or {}).get("route_log_id"),

@@ -29,6 +29,8 @@ MAX_SOURCE_AGE_DAYS = 30
 
 EMPTY_SV = "Hittar inga tydliga trender just nu — testa Humör istället"
 EMPTY_EN = "No clear trends right now — try Mood instead"
+NO_KEY_SV = "Trendar kräver Grok-sök (web_search). Lägg GROK_API_KEY i .streamlit/secrets.toml — eller välj Humör."
+NO_KEY_EN = "Trending needs Grok web search. Add GROK_API_KEY in .streamlit/secrets.toml — or try Mood."
 
 # Optional test/runtime injection: (query: str) -> list[raw hit dict]
 _SEARCH_OVERRIDE: Callable[[str], list[dict[str, Any]]] | None = None
@@ -40,7 +42,9 @@ def set_search_override(fn: Callable[[str], list[dict[str, Any]]] | None) -> Non
     _SEARCH_OVERRIDE = fn
 
 
-def empty_message(language: str = "sv") -> str:
+def empty_message(language: str = "sv", *, reason: str | None = None) -> str:
+    if reason == "no_key":
+        return NO_KEY_SV if language == "sv" else NO_KEY_EN
     return EMPTY_SV if language == "sv" else EMPTY_EN
 
 
@@ -426,31 +430,41 @@ def build_trending_candidates(
     services = list(user_services or [])
     available: list[dict[str, Any]] = []
     paywalled: list[dict[str, Any]] = []
-    chart_fallback = False
 
-    def _append_cand(
-        *,
-        display: str,
-        kind: str,
-        why: str,
-        tmdb_row: dict[str, Any],
-        sources: list[Any] | None = None,
-        trending_source: str = "web",
-    ) -> None:
+    for hit in grounded:
+        title = str(hit["title"]).strip()
+        kind = str(hit.get("kind") or "series")
+        tmdb_row = verify_tmdb(title, kind=kind)
+        if not tmdb_row:
+            continue
+        display = str(tmdb_row.get("title") or title).strip()
+        why = str(hit.get("why") or "").strip()
+        if not why:
+            why = (
+                "Snackas överallt just nu — syns i listor och snack den här månaden."
+                if language == "sv"
+                else "Everyone’s talking about it — showing up in charts this month."
+            )
+        # Keep justification to one line
+        why = re.sub(r"\s+", " ", why).strip()
+        if len(why) > 160:
+            why = why[:157].rstrip() + "…"
+
         catalog_title = display.lower()
         meta: dict[str, Any] = {
             "title": catalog_title,
             "kind": kind,
             "trending": True,
-            "trending_source": trending_source,
+            "trending_source": "grok_web_search",
             "local_pack": False,
-            "sources": list(sources or []),
+            "sources": hit.get("sources") or [],
             "tmdb_id": tmdb_row.get("tmdb_id"),
             "poster_url": tmdb_row.get("poster_url"),
             "vote_average": tmdb_row.get("vote_average"),
             "year": tmdb_row.get("year"),
             "display_title": display,
         }
+        # Probe mock catalog for service affinity before feasibility
         try:
             import mocks
 
@@ -479,70 +493,8 @@ def build_trending_candidates(
             meta["paywalled"] = False
             available.append(cand)
 
-    for hit in grounded:
-        title = str(hit["title"]).strip()
-        kind = str(hit.get("kind") or "series")
-        tmdb_row = verify_tmdb(title, kind=kind)
-        if not tmdb_row:
-            continue
-        display = str(tmdb_row.get("title") or title).strip()
-        why = str(hit.get("why") or "").strip()
-        if not why:
-            why = (
-                "Snackas överallt just nu — syns i listor och snack den här månaden."
-                if language == "sv"
-                else "Everyone’s talking about it — showing up in charts this month."
-            )
-        why = re.sub(r"\s+", " ", why).strip()
-        if len(why) > 160:
-            why = why[:157].rstrip() + "…"
-        _append_cand(
-            display=display,
-            kind=kind,
-            why=why,
-            tmdb_row=tmdb_row,
-            sources=hit.get("sources") or [],
-            trending_source="web",
-        )
-
-    # No grounded web hits → honest TMDB week-chart fallback so Trendar still works.
-    if not available and not paywalled:
-        chart_fallback = True
-        try:
-            import tmdb as tmdb_mod
-
-            kinds = [kind_filter] if kind_filter in ("series", "film") else ["series", "film"]
-            seen: set[str] = set()
-            for k in kinds:
-                for row in tmdb_mod.trending_titles(kind=k, limit=8):
-                    display = str(row.get("title") or "").strip()
-                    if not display:
-                        continue
-                    key = display.lower()
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    why = (
-                        "Populärt just nu — syns i TMDB:s trendlista den här veckan."
-                        if language == "sv"
-                        else "Popular right now — on TMDB’s trending chart this week."
-                    )
-                    _append_cand(
-                        display=display,
-                        kind=str(row.get("kind") or k),
-                        why=why,
-                        tmdb_row=row,
-                        sources=[],
-                        trending_source="tmdb_chart",
-                    )
-        except Exception as exc:
-            log.warning("trending TMDB chart fallback failed: %s", exc)
-            chart_fallback = False
-
-    if chart_fallback:
-        log.info("trending using TMDB chart fallback (%d candidates)", len(available) + len(paywalled))
-
     # Available first — paywalled deprioritised (never preferred as the pick)
+    # No TMDB/catalog fallback: Trendar is Grok web-search only.
     return available + paywalled
 
 

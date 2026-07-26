@@ -142,8 +142,8 @@ class TrendingPipelineTests(unittest.TestCase):
         self.assertTrue(r.ok)
         self.assertNotEqual(str(r.suggestion).strip().lower(), "andor")
 
-    def test_empty_search_uses_tmdb_chart_fallback(self) -> None:
-        """No web hits → still pick from TMDB week chart (button must work)."""
+    def test_empty_search_honest_state(self) -> None:
+        """No Grok web hits → refuse. Never invent old catalog titles."""
         mt.set_search_override(lambda _q: [])
         r = pipeline.decide(
             self.user["id"],
@@ -152,30 +152,32 @@ class TrendingPipelineTests(unittest.TestCase):
             language="sv",
             db_path=self.path,
             context_extra={"mode": "trendar", "format": "avsnitt"},
+            grok_api_key="test-key",
         )
-        self.assertTrue(r.ok, msg=r.refusal_message)
-        self.assertFalse(r.refused)
-        self.assertEqual((r.context or {}).get("mode"), "trendar")
-        self.assertTrue(str(r.suggestion or "").strip())
-
-    def test_empty_search_and_empty_chart_honest_state(self) -> None:
-        mt.set_search_override(lambda _q: [])
-        with patch("tmdb.trending_titles", return_value=[]):
-            r = pipeline.decide(
-                self.user["id"],
-                "Vad ska jag titta på?",
-                domain_hint="movie",
-                language="sv",
-                db_path=self.path,
-                context_extra={"mode": "trendar", "format": "avsnitt"},
-            )
         self.assertFalse(r.ok)
         self.assertTrue(r.refused)
         self.assertIn("trender", (r.refusal_message or "").lower())
         self.assertIn("humör", (r.refusal_message or "").lower())
         self.assertTrue((r.context or {}).get("trending_empty"))
+        self.assertNotIn("tmdb", (r.justification or "").lower())
 
-    def test_source_less_falls_back_to_chart(self) -> None:
+    def test_no_grok_key_explains_requirement(self) -> None:
+        mt.set_search_override(None)
+        r = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            context_extra={"mode": "trendar", "format": "avsnitt"},
+            grok_api_key="",
+        )
+        self.assertFalse(r.ok)
+        self.assertTrue(r.refused)
+        self.assertIn("grok", (r.refusal_message or "").lower())
+        self.assertTrue((r.context or {}).get("trending_needs_grok"))
+
+    def test_source_less_not_picked(self) -> None:
         mt.set_search_override(lambda _q: [_hit("Wednesday", dated=False)])
         r = pipeline.decide(
             self.user["id"],
@@ -184,21 +186,21 @@ class TrendingPipelineTests(unittest.TestCase):
             language="sv",
             db_path=self.path,
             context_extra={"mode": "trendar", "format": "avsnitt"},
+            grok_api_key="test-key",
         )
-        self.assertTrue(r.ok, msg=r.refusal_message)
-        self.assertFalse(r.refused)
+        self.assertFalse(r.ok)
+        self.assertTrue(r.refused)
 
     def test_tmdb_miss_dropped(self) -> None:
         hits = [_hit("Totally Fake Show XYZ123", why="Fake buzz.")]
         mt.set_search_override(lambda _q: hits)
         with patch("movie_trending.verify_tmdb", return_value=None):
-            with patch("tmdb.trending_titles", return_value=[]):
-                cands = mt.build_trending_candidates(
-                    language="sv",
-                    search_hits=hits,
-                    user_services=["netflix"],
-                    use_cache=False,
-                )
+            cands = mt.build_trending_candidates(
+                language="sv",
+                search_hits=hits,
+                user_services=["netflix"],
+                use_cache=False,
+            )
         self.assertEqual(cands, [])
 
 
