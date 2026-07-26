@@ -1,28 +1,89 @@
 /* OneChoice HTML client */
+const DECIDE_SKELETON_MS = 400;
+const DECIDE_TIMEOUT_MS = 20000;
+
+const STATUS_LINES = {
+  food: [
+    "Kollar vad du åt senast…",
+    "Väljer efter tid och väder…",
+    "Sätter ihop receptet…",
+    "Nästan klart…",
+  ],
+  movie: [
+    "Kollar vad du sett senast…",
+    "Matchar format och läge…",
+    "Hittar något att titta på…",
+    "Nästan klart…",
+  ],
+  clothes: [
+    "Kollar vad du haft på dig…",
+    "Väger in väder och tillfälle…",
+    "Sätter ihop outfite…",
+    "Nästan klart…",
+  ],
+  workout: [
+    "Kollar senaste passen…",
+    "Väljer efter energi och tid…",
+    "Sätter ihop passet…",
+    "Nästan klart…",
+  ],
+  weekend: [
+    "Kollar helgläget…",
+    "Väger in väder och energi…",
+    "Väljer något att göra…",
+    "Nästan klart…",
+  ],
+  generic: [
+    "Tänker efter…",
+    "Väger alternativen…",
+    "Väljer åt dig…",
+    "Nästan klart…",
+  ],
+};
+
 const api = {
   async json(path, opts = {}) {
-    const res = await fetch(path, {
-      credentials: "include",
-      headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-      ...opts,
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      let msg = data.error || res.statusText || "Något gick fel";
-      if (typeof data.detail === "string") msg = data.detail;
-      else if (Array.isArray(data.detail)) {
-        msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
-      } else if (data.detail) msg = String(data.detail);
-      const err = new Error(msg);
-      err.status = res.status;
-      err.data = data;
+    const controller = opts.timeoutMs ? new AbortController() : null;
+    const timer =
+      controller && opts.timeoutMs
+        ? setTimeout(() => controller.abort(), opts.timeoutMs)
+        : null;
+    try {
+      const res = await fetch(path, {
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+        ...opts,
+        signal: controller ? controller.signal : opts.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        let msg = data.error || res.statusText || "Något gick fel";
+        if (typeof data.detail === "string") msg = data.detail;
+        else if (Array.isArray(data.detail)) {
+          msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+        } else if (data.detail) msg = String(data.detail);
+        const err = new Error(msg);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    } catch (err) {
+      if (err && err.name === "AbortError") {
+        const e = new Error("Det tog för lång tid — försök igen");
+        e.status = 408;
+        throw e;
+      }
       throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
-    return data;
   },
-  get: (p) => api.json(p),
-  post: (p, body) => api.json(p, { method: "POST", body: JSON.stringify(body || {}) }),
-  patch: (p, body) => api.json(p, { method: "PATCH", body: JSON.stringify(body || {}) }),
+  get: (p, opts) => api.json(p, opts),
+  post: (p, body, opts) =>
+    api.json(p, { method: "POST", body: JSON.stringify(body || {}), ...(opts || {}) }),
+  patch: (p, body, opts) =>
+    api.json(p, { method: "PATCH", body: JSON.stringify(body || {}), ...(opts || {}) }),
 };
 
 function go(page) {
@@ -57,6 +118,79 @@ const SPARK = `<svg class="cta-spark" viewBox="0 0 24 24" fill="none" stroke="#f
 
 const TIP_ICO = `<svg viewBox="0 0 24 24" fill="none" stroke="#3B3BC4" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M10 9.5v5l4.5-2.5z"/></svg>`;
 
+function statusLinesFor(domain) {
+  const key = (domain || "generic").toLowerCase();
+  return STATUS_LINES[key] || STATUS_LINES.generic;
+}
+
+function skeletonHtml(domain) {
+  const lines = statusLinesFor(domain);
+  const status = lines.map((m) => `<span>${esc(m)}</span>`).join("");
+  const d = (domain || "food").toLowerCase();
+  if (d === "movie") {
+    return `
+      <article class="panel decision-card movie-card oc-skel-card" aria-busy="true">
+        <div class="movie-row">
+          <div class="movie-poster oc-skel-shimmer" aria-hidden="true"></div>
+          <div class="movie-col">
+            <div class="oc-skel-bar is-title" style="width:70%"></div>
+            <div class="oc-skel-bar" style="width:50%"></div>
+            <div class="oc-skel-bar" style="width:40%"></div>
+            <div class="oc-skel-status" aria-live="polite">${status}</div>
+          </div>
+        </div>
+      </article>`;
+  }
+  return `
+    <article class="panel decision-card food-card oc-skel-card" aria-busy="true">
+      <div class="food-img oc-skel-shimmer" aria-hidden="true"></div>
+      <div class="food-body">
+        <div class="oc-skel-bar is-title" style="width:70%"></div>
+        <div class="oc-skel-bar" style="width:50%"></div>
+        <div class="oc-skel-bar" style="width:40%"></div>
+        <div class="oc-skel-status" aria-live="polite">${status}</div>
+      </div>
+    </article>`;
+}
+
+function showDecideSkeleton(host, domain) {
+  if (!host) return null;
+  const wrap = document.createElement("div");
+  wrap.id = "oc-decide-skel";
+  wrap.className = "oc-decide-skel-host";
+  wrap.innerHTML = skeletonHtml(domain);
+  host.innerHTML = "";
+  host.appendChild(wrap);
+  return wrap;
+}
+
+function hideDecideSkeleton() {
+  const el = document.getElementById("oc-decide-skel");
+  if (el) el.remove();
+}
+
+async function withDecideLoading(host, domain, work) {
+  let shown = false;
+  const delay = setTimeout(() => {
+    shown = true;
+    showDecideSkeleton(host, domain);
+  }, DECIDE_SKELETON_MS);
+  try {
+    const data = await work();
+    clearTimeout(delay);
+    hideDecideSkeleton();
+    if (shown && host) {
+      host.classList.add("oc-card-arrive");
+      setTimeout(() => host.classList.remove("oc-card-arrive"), 450);
+    }
+    return data;
+  } catch (err) {
+    clearTimeout(delay);
+    hideDecideSkeleton();
+    throw err;
+  }
+}
+
 async function ensureGuest() {
   try {
     await api.post("/api/auth/guest", {});
@@ -64,14 +198,19 @@ async function ensureGuest() {
 }
 
 async function routeDecide(payload) {
-  const data = await api.post("/api/decide", payload);
+  const domain = (payload && payload.domain_hint) || "food";
+  const host = document.getElementById("app");
+  const data = await withDecideLoading(host, domain, () =>
+    api.post("/api/decide", payload || {}, { timeoutMs: DECIDE_TIMEOUT_MS })
+  );
+  const nav = (typeof window !== "undefined" && window.OC && window.OC.go) || go;
   const page = data.page || "result";
-  if (page === "result" || page === "refused") go("/result");
+  if (page === "result" || page === "refused") nav("/result");
   else if (page === "clothes_occasion") {
     sessionStorage.setItem("oc_occasions", JSON.stringify(data.occasions || []));
-    go("/result?mode=occasion");
-  } else if (page === "execute") go("/execute");
-  else go("/result");
+    nav("/result?mode=occasion");
+  } else if (page === "execute") nav("/execute");
+  else nav("/result");
   return data;
 }
 
@@ -203,6 +342,17 @@ function imgOrPh(url, className) {
   return `<img class="${className}" src="${esc(url)}" alt="" loading="lazy" onerror="window.OC&&window.OC.phImg(this)" />`;
 }
 
+function registerServiceWorker() {
+  try {
+    if (!("serviceWorker" in navigator)) return;
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {});
+    });
+  } catch (_) {}
+}
+
+registerServiceWorker();
+
 window.OC = {
   api,
   go,
@@ -220,4 +370,17 @@ window.OC = {
   bindCardActions,
   imgOrPh,
   phImg,
+  skeletonHtml,
+  showDecideSkeleton,
+  hideDecideSkeleton,
+  withDecideLoading,
+  statusLinesFor,
+  DECIDE_SKELETON_MS,
+  DECIDE_TIMEOUT_MS,
+  STATUS_LINES,
 };
+
+// Node/vitest export
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = window.OC;
+}

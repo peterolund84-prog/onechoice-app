@@ -3,6 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f5f8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
   <title>Profil — OneChoice</title>
   <link rel="stylesheet" href="/static/app.css?v=v10-20260726" />
 </head>
@@ -40,7 +47,7 @@
         </div>
         <p class="muted"><strong>Build:</strong> ${esc(p.build)}</p>
         <p class="muted">Stack: ${esc(p.stack)}</p>
-        <p class="muted" style="font-size:12px">Build ska innehålla <code>html-trendar-nu-v12</code>. Film-poster ska synas utan nätverk till TMDB.</p>
+        <p class="muted" style="font-size:12px">Build ska innehålla <code>html-quality-pwa-v13</code>. Film-poster ska synas utan nätverk till TMDB.</p>
         <p style="margin-top:20px"><a class="linkish" href="/auth">Logga in</a></p>
       `;
     })();

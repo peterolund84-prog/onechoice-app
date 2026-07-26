@@ -8,7 +8,7 @@ from api.secrets import grok_api_key, secrets_status, supabase_configured, tmdb_
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
-BUILD_ID = "html-trendar-nu-v12-20260726"
+BUILD_ID = "html-quality-pwa-v13-20260726"
 
 
 @router.get("")

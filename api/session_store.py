@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Server-side session keyed by HttpOnly cookie (replaces st.session_state)."""
+"""Server-side session keyed by HttpOnly cookie (replaces st.session_state).
+
+Durable backend: SQLite ``api_sessions`` table (sid PK, session JSON,
+updated_at, expires_at). Survives process restarts. Rows past
+COOKIE_MAX_AGE are purged on read/write.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +12,8 @@ import secrets
 import threading
 import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 from typing import Any
 
 
@@ -57,42 +63,82 @@ class Session:
             "force_chooser": self.force_chooser,
         }
 
+    def to_payload(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_payload(cls, data: dict[str, Any]) -> Session:
+        known = {f.name for f in fields(cls)}
+        kwargs = {k: v for k, v in (data or {}).items() if k in known}
+        if "sid" not in kwargs or "user_id" not in kwargs:
+            raise ValueError("session payload missing sid/user_id")
+        return cls(**kwargs)
+
 
 class SessionStore:
-    def __init__(self) -> None:
+    """Durable session store — SQLite-backed, same get/create/save/delete API."""
+
+    def __init__(self, path: Path | str | None = None) -> None:
         self._lock = threading.Lock()
-        self._sessions: dict[str, Session] = {}
+        self._path = path
+        self._purge_counter = 0
 
     def create(self, *, language: str = "sv") -> Session:
         import db
 
         sid = secrets.token_urlsafe(24)
         uid = str(uuid.uuid4())
-        db.init_db()
+        db.init_db(self._path)
         db.clear_auth()
-        db.ensure_user(uid, language=language)
+        db.ensure_user(uid, language=language, path=self._path)
         sess = Session(sid=sid, user_id=uid, guest_mode=True, language=language)
-        with self._lock:
-            self._sessions[sid] = sess
+        self.save(sess)
         return sess
 
     def get(self, sid: str | None) -> Session | None:
         if not sid:
             return None
+        import db
+
         with self._lock:
-            sess = self._sessions.get(sid)
-            if sess:
-                sess.touch()
+            raw = db.api_session_get(sid, path=self._path)
+            if not raw:
+                return None
+            try:
+                sess = Session.from_payload(raw)
+            except Exception:
+                db.api_session_delete(sid, path=self._path)
+                return None
+            sess.touch()
+            # Refresh expiry window on access
+            db.api_session_upsert(
+                sess.sid,
+                sess.to_payload(),
+                max_age_sec=COOKIE_MAX_AGE,
+                path=self._path,
+            )
             return sess
 
     def save(self, sess: Session) -> None:
+        import db
+
         sess.touch()
         with self._lock:
-            self._sessions[sess.sid] = sess
+            db.api_session_upsert(
+                sess.sid,
+                sess.to_payload(),
+                max_age_sec=COOKIE_MAX_AGE,
+                path=self._path,
+            )
+            self._purge_counter += 1
+            if self._purge_counter % 25 == 0:
+                db.api_session_purge_expired(path=self._path)
 
     def delete(self, sid: str) -> None:
+        import db
+
         with self._lock:
-            self._sessions.pop(sid, None)
+            db.api_session_delete(sid, path=self._path)
 
 
 STORE = SessionStore()

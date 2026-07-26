@@ -94,6 +94,28 @@ def health() -> dict:
     return {"ok": True, "stack": "html+fastapi"}
 
 
+@app.get("/manifest.webmanifest")
+def manifest() -> FileResponse:
+    return FileResponse(
+        WEB / "manifest.webmanifest",
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
+
+
+@app.get("/sw.js")
+def service_worker() -> FileResponse:
+    # Service workers must be served from the site root scope.
+    return FileResponse(
+        WEB / "sw.js",
+        media_type="application/javascript",
+        headers={
+            "Cache-Control": "no-cache",
+            "Service-Worker-Allowed": "/",
+        },
+    )
+
+
 # Convenience: old Streamlit habit
 @app.get("/app")
 def app_redirect() -> RedirectResponse:
