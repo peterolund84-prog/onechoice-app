@@ -287,11 +287,17 @@ def decide(
                 history=early_history,
             )
         )
+        movie_mode = md.normalize_mode(
+            (context_extra or {}).get("mode")
+            or ctx.get("mode")
+            or "mood"
+        )
         ctx = md.apply_context(
             ctx,
             fmt=movie_format,
             mood=movie_mood,
             in_progress_series=in_progress_series,
+            mode=movie_mode,
         )
         # On "Nytt förslag", do not pin the in-progress series — otherwise
         # Avsnitt + history collapses to a single survivor and reroll no-ops.
@@ -360,17 +366,58 @@ def decide(
             fav_titles = db.list_favorite_suggestions(user_id, domain="food", path=db_path)
         except Exception as exc:
             log.warning("list_favorite_suggestions failed: %s", exc)
-    candidates = _generate_candidates(
-        question=q,
-        domain=domain,
-        context=ctx,
-        profile=profile,
-        history=history,
-        preferences=prefs,
-        recent=recent,
-        language=language,
-        grok_api_key="" if food_local_first else grok_api_key,
+    # Trendar nu: web-search grounded picks — bypass mood matching entirely.
+    trending_mode = domain == "movie" and bool(
+        ctx.get("mode") == "trendar"
+        or (context_extra or {}).get("mode") == "trendar"
     )
+    if trending_mode:
+        import movie_trending as mt
+
+        movie_services = list((profile.get("movie") or {}).get("services") or [])
+        trend_cands = mt.build_trending_candidates(
+            language=language,
+            fmt=movie_format or ctx.get("format"),
+            user_services=movie_services,
+            api_key=grok_api_key or "",
+            use_cache=True,
+        )
+        pick = mt.pick_trending_candidate(trend_cands)
+        if not pick:
+            msg = mt.empty_message(language)
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "format": movie_format or ctx.get("format"),
+                    "mood": movie_mood or ctx.get("mood"),
+                    "trending_empty": True,
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
+        # Seed pipeline with grounded picks (available first); skip mood/Grok pack.
+        candidates = [c for c in trend_cands if not (c.get("meta") or {}).get("paywalled")]
+        if not candidates:
+            candidates = [pick]
+    else:
+        candidates = _generate_candidates(
+            question=q,
+            domain=domain,
+            context=ctx,
+            profile=profile,
+            history=history,
+            preferences=prefs,
+            recent=recent,
+            language=language,
+            grok_api_key="" if food_local_first else grok_api_key,
+        )
 
     # Occasion is the primary clothes constraint — pin a matching outfit first
     if domain == "clothes":
@@ -515,6 +562,22 @@ def decide(
                 domain=domain,
                 profile=profile,
                 context=ctx,
+            )
+        # Trending mode must never fall back to mood/local comfort packs —
+        # empty grounded search → honest "no trends" state instead.
+        if trending_mode and not survivors:
+            import movie_trending as mt
+
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=mt.empty_message(language),
+                context={**ctx, "mode": "trendar", "trending_empty": True},
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
             )
         # CRITICAL: fridge mode must never fall through to supermarket / kvällsmål packs
         if not survivors and not fridge_mode:

@@ -36,6 +36,7 @@ class Session:
     clothes_occasion: str | None = None
     movie_format: str | None = None
     movie_mood: str | None = None
+    movie_mode: str | None = "mood"
     force_chooser: bool = False
     updated_at: float = field(default_factory=time.time)
 

@@ -394,6 +394,16 @@ a { color: inherit; text-decoration: none; }
   font-family: inherit;
 }
 .chip.active { border-color: var(--oc-ink); font-weight: 600; }
+.chip.dim { opacity: 0.45; }
+.section-label {
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--oc-muted);
+  font-weight: 600;
+  margin: 0.5rem 0 0.35rem;
+  text-align: center;
+}
 
 .list { list-style: none; margin: 0; padding: 0; }
 .list li {

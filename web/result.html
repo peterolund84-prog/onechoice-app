@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Beslut — OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v11-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v12-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
@@ -15,7 +15,7 @@
     <a href="/history" data-nav="history">Historik</a>
     <a href="/profile" data-nav="profile">Profil</a>
   </nav>
-  <script src="/static/app.js?v=v11-20260726"></script>
+  <script src="/static/app.js?v=v12-20260726"></script>
   <script>
     (async function () {
       const {
@@ -68,23 +68,53 @@
         ["middag", "Middag"],
         ["kvallsmal", "Kvällsmål"],
       ];
+      const movieFormats = [
+        ["avsnitt", "Avsnitt"],
+        ["film", "Film"],
+        ["ny_serie", "Ny serie"],
+      ];
+      const movieMoods = [
+        ["avkopplat", "Avkopplat"],
+        ["spanning", "Spänning"],
+        ["skratta", "Skratta"],
+        ["lar_mig", "Lär mig något"],
+        ["med_barnen", "Med barnen"],
+      ];
+      const movieModes = [
+        ["mood", "Humör"],
+        ["trendar", "Trendar nu"],
+      ];
       const actions = cardActionsHtml({
         isFavorite: !!pres.is_favorite,
         shareText: pres.share_text || "",
       });
+      const refused = !!(d.refused || d.trending_empty || ctx.trending_empty);
+      const refusalMsg = d.refusal_message || "";
 
       const cardHtml = (() => {
+        if (refused && domain === "movie") {
+          return `
+            <article class="panel decision-card">
+              <div class="food-body">
+                <div class="label">Film & serier</div>
+                <p>${esc(refusalMsg || "Hittar inga tydliga trender just nu — testa Humör istället")}</p>
+              </div>
+            </article>`;
+        }
         if (domain === "movie") {
           const poster = pres.movie_poster_url || ctx.movie_poster_url;
           const year = pres.movie_year || ctx.movie_tmdb_year;
           const rating = pres.movie_rating || "";
+          const kindLabel = ctx.mode === "trendar"
+            ? "Trendar"
+            : (ctx.kind === "film" ? "Film" : "Serie");
           return `
             <article class="panel decision-card movie-card">
               ${actions}
               <div class="movie-row">
                 ${imgOrPh(poster, "movie-poster")}
                 <div class="movie-col">
-                  <div class="label">${esc(ctx.kind === "film" ? "Film" : "Serie")}</div>
+                  <div class="label">${esc(kindLabel)}</div>
                   <h1>${esc(d.suggestion || "—")}</h1>
                   ${year ? `<div class="movie-year">${esc(String(year))}</div>` : ""}
                   <p>${esc(d.justification || "")}</p>
@@ -118,6 +148,31 @@
           </article>`;
       })();
 
+      const movieChipsHtml = domain === "movie"
+        ? `
+          <div class="section-label">Format</div>
+          <div class="chips" id="movie-formats">${movieFormats
+            .map(
+              ([k, lab]) =>
+                `<button class="chip ${k === ctx.format ? "active" : ""}" type="button" data-fmt="${k}">${lab}</button>`
+            )
+            .join("")}</div>
+          <div class="section-label">Läge</div>
+          <div class="chips" id="movie-moods">${movieMoods
+            .map(
+              ([k, lab]) =>
+                `<button class="chip ${k === ctx.mood && ctx.mode !== "trendar" ? "active" : ""} ${ctx.mode === "trendar" ? "dim" : ""}" type="button" data-mood="${k}">${lab}</button>`
+            )
+            .join("")}</div>
+          <div class="section-label">Upptäck</div>
+          <div class="chips" id="movie-modes">${movieModes
+            .map(
+              ([k, lab]) =>
+                `<button class="chip ${k === (ctx.mode || "mood") ? "active" : ""}" type="button" data-mode="${k}">${lab}</button>`
+            )
+            .join("")}</div>`
+        : "";
+
       root.innerHTML = `
         ${
           domain === "food"
@@ -129,11 +184,16 @@
                 .join("")}</div>`
             : ""
         }
+        ${movieChipsHtml}
         ${cardHtml}
-        <button class="btn btn-primary" type="button" id="accept">${
-          domain === "food" ? "Välj" : "Gör det"
-        }</button>
-        <button class="btn btn-ghost" type="button" id="reroll">Nytt förslag</button>
+        ${
+          refused
+            ? `<button class="btn btn-primary" type="button" id="back-mood">Visa Humör-förslag</button>`
+            : `<button class="btn btn-primary" type="button" id="accept">${
+                domain === "food" ? "Välj" : "Gör det"
+              }</button>
+        <button class="btn btn-ghost" type="button" id="reroll">Nytt förslag</button>`
+        }
         <p class="error" id="err" hidden></p>
       `;
       bindCardActions();
@@ -142,6 +202,19 @@
         const el = document.getElementById("err");
         el.hidden = !m;
         el.textContent = m || "";
+      };
+
+      const postMovieChips = async (payload) => {
+        try {
+          const data = await api.post("/api/decide/movie-chips", payload);
+          if (!data.ok && data.page === "refused") {
+            location.reload();
+            return;
+          }
+          location.reload();
+        } catch (e) {
+          showErr(e.message);
+        }
       };
 
       if (domain === "food") {
@@ -157,57 +230,79 @@
         });
       }
 
-      document.getElementById("accept").onclick = async () => {
-        const btn = document.getElementById("accept");
-        const rerollBtn = document.getElementById("reroll");
-        btn.disabled = true;
-        if (rerollBtn) rerollBtn.disabled = true;
-        try {
-          const data = await api.post("/api/decision/accept", {
-            open_execute: domain === "food",
-          });
-          go(data.page === "execute" ? "/execute" : "/");
-        } catch (e) {
-          showErr(e.message);
-          btn.disabled = false;
-          if (rerollBtn) rerollBtn.disabled = false;
-        }
-      };
-      document.getElementById("reroll").onclick = async () => {
-        const btn = document.getElementById("reroll");
-        const acceptBtn = document.getElementById("accept");
-        showErr("");
-        btn.disabled = true;
-        if (acceptBtn) acceptBtn.disabled = true;
-        const prevLabel = btn.textContent;
-        const prevSuggestion = (d.suggestion || "").trim().toLowerCase();
-        btn.textContent = "Hämtar…";
-        try {
-          const data = await api.post("/api/decide/reroll", {});
-          if (!data.ok && data.page === "refused") {
-            showErr((data.decision && data.decision.refusal_message) || "Kunde inte ge nytt förslag.");
+      if (domain === "movie") {
+        root.querySelectorAll("[data-fmt]").forEach((b) => {
+          b.onclick = () => postMovieChips({ format: b.dataset.fmt, mode: ctx.mode || "mood" });
+        });
+        root.querySelectorAll("[data-mood]").forEach((b) => {
+          b.onclick = () => postMovieChips({ mood: b.dataset.mood, mode: "mood" });
+        });
+        root.querySelectorAll("[data-mode]").forEach((b) => {
+          b.onclick = () => postMovieChips({ mode: b.dataset.mode });
+        });
+      }
+
+      const backMood = document.getElementById("back-mood");
+      if (backMood) {
+        backMood.onclick = () => postMovieChips({ mode: "mood" });
+      }
+
+      const acceptBtn = document.getElementById("accept");
+      if (acceptBtn) {
+        acceptBtn.onclick = async () => {
+          const btn = acceptBtn;
+          const rerollBtn = document.getElementById("reroll");
+          btn.disabled = true;
+          if (rerollBtn) rerollBtn.disabled = true;
+          try {
+            const data = await api.post("/api/decision/accept", {
+              open_execute: domain === "food",
+            });
+            go(data.page === "execute" ? "/execute" : "/");
+          } catch (e) {
+            showErr(e.message);
+            btn.disabled = false;
+            if (rerollBtn) rerollBtn.disabled = false;
+          }
+        };
+      }
+      const rerollEl = document.getElementById("reroll");
+      if (rerollEl) {
+        rerollEl.onclick = async () => {
+          const btn = rerollEl;
+          const accept = document.getElementById("accept");
+          showErr("");
+          btn.disabled = true;
+          if (accept) accept.disabled = true;
+          const prevLabel = btn.textContent;
+          const prevSuggestion = (d.suggestion || "").trim().toLowerCase();
+          btn.textContent = "Hämtar…";
+          try {
+            const data = await api.post("/api/decide/reroll", {});
+            if (!data.ok && data.page === "refused") {
+              showErr((data.decision && data.decision.refusal_message) || "Kunde inte ge nytt förslag.");
+              btn.disabled = false;
+              btn.textContent = prevLabel;
+              if (accept) accept.disabled = false;
+              return;
+            }
+            const next = ((data.decision && data.decision.suggestion) || "").trim().toLowerCase();
+            if (data.same_suggestion || (next && next === prevSuggestion)) {
+              showErr("Inget annat förslag just nu — prova ett annat format eller humör.");
+              btn.disabled = false;
+              btn.textContent = prevLabel;
+              if (accept) accept.disabled = false;
+              return;
+            }
+            location.reload();
+          } catch (e) {
+            showErr(e.message || "Kunde inte hämta nytt förslag.");
             btn.disabled = false;
             btn.textContent = prevLabel;
-            if (acceptBtn) acceptBtn.disabled = false;
-            return;
+            if (accept) accept.disabled = false;
           }
-          const next = ((data.decision && data.decision.suggestion) || "").trim().toLowerCase();
-          if (data.same_suggestion || (next && next === prevSuggestion)) {
-            showErr("Inget annat förslag just nu — prova ett annat format eller humör.");
-            btn.disabled = false;
-            btn.textContent = prevLabel;
-            if (acceptBtn) acceptBtn.disabled = false;
-            return;
-          }
-          // Full reload so poster/meta re-render from /api/decision/current
-          location.reload();
-        } catch (e) {
-          showErr(e.message || "Kunde inte hämta nytt förslag.");
-          btn.disabled = false;
-          btn.textContent = prevLabel;
-          if (acceptBtn) acceptBtn.disabled = false;
-        }
-      };
+        };
+      }
     })();
   </script>
 </body>

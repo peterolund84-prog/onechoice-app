@@ -71,6 +71,13 @@ MOODS: dict[str, dict[str, Any]] = {
 
 MOOD_ORDER = ("avkopplat", "spanning", "skratta", "lar_mig", "med_barnen")
 
+# Decision mode: mood-matching vs web-search grounded "Trendar nu"
+MODES: dict[str, dict[str, str]] = {
+    "mood": {"sv": "Humör", "en": "Mood"},
+    "trendar": {"sv": "Trendar nu", "en": "Trending"},
+}
+MODE_ORDER = ("mood", "trendar")
+
 # Local catalog hints keyed by mood (titles must exist in mocks.STREAMING_CATALOG
 # or be generic enough to pass feasibility without a named paywalled title).
 _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
@@ -292,6 +299,23 @@ def format_label(
 def mood_label(key: str, language: str = "sv") -> str:
     row = MOODS.get(key) or {}
     return str(row.get(language) or row.get("sv") or key)
+
+
+def mode_label(key: str, language: str = "sv") -> str:
+    row = MODES.get(normalize_mode(key)) or MODES["mood"]
+    return str(row.get(language) or row.get("sv") or key)
+
+
+def normalize_mode(value: Any) -> str:
+    """Return 'trendar' or 'mood'."""
+    key = str(value or "").strip().lower().replace(" ", "_")
+    if key in ("trendar", "trending", "trendar_nu", "trendar-nu"):
+        return "trendar"
+    return "mood"
+
+
+def is_trending_mode(value: Any) -> bool:
+    return normalize_mode(value) == "trendar"
 
 
 def max_minutes(fmt: str) -> int:
@@ -724,13 +748,16 @@ def apply_context(
     fmt: str,
     mood: str,
     in_progress_series: str | None = None,
+    mode: str | None = None,
 ) -> dict[str, Any]:
     """Write format+mood (+ derived minutes/kind) onto decision context."""
     fmt_n = normalize_format(fmt)
     mood_n = normalize_mood(mood)
+    mode_n = normalize_mode(mode if mode is not None else ctx.get("mode"))
     out = dict(ctx)
     out["format"] = fmt_n
     out["mood"] = mood_n
+    out["mode"] = mode_n
     out["kind"] = format_kind(fmt_n)
     out["available_minutes"] = max_minutes(fmt_n)
     if in_progress_series:

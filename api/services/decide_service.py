@@ -108,6 +108,8 @@ def run_decide(
             ctx.setdefault("format", sess.movie_format)
         if sess.movie_mood:
             ctx.setdefault("mood", sess.movie_mood)
+        if sess.movie_mode:
+            ctx.setdefault("mode", sess.movie_mode)
 
     if domain_hint == "gifts":
         domain_hint = "other"
@@ -151,6 +153,7 @@ def run_decide(
         if domain_hint == "movie":
             ctx.setdefault("format", cur_ctx.get("format") or sess.movie_format)
             ctx.setdefault("mood", cur_ctx.get("mood") or sess.movie_mood)
+            ctx.setdefault("mode", cur_ctx.get("mode") or sess.movie_mode or "mood")
         if domain_hint == "clothes":
             ctx.setdefault("occasion", cur_ctx.get("occasion") or sess.clothes_occasion)
     else:
@@ -216,6 +219,15 @@ def run_decide(
     sess.last_domain_hint = data.get("domain") or domain_hint
     sess.route_log_id = data.get("route_log_id")
     sess.force_chooser = False
+    # Persist movie chip selections from the decision context
+    ctx_final = data.get("context") if isinstance(data.get("context"), dict) else {}
+    if (data.get("domain") or domain_hint) == "movie":
+        if ctx_final.get("format"):
+            sess.movie_format = str(ctx_final.get("format"))
+        if ctx_final.get("mood"):
+            sess.movie_mood = str(ctx_final.get("mood"))
+        if ctx_final.get("mode"):
+            sess.movie_mode = str(ctx_final.get("mode"))
 
     same_as_prev = False
     if reroll and ctx.get("previous_suggestion"):

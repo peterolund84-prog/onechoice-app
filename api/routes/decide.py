@@ -30,6 +30,12 @@ class OccasionBody(BaseModel):
     question: str = ""
 
 
+class MovieChipsBody(BaseModel):
+    format: str | None = None
+    mood: str | None = None
+    mode: str | None = None
+
+
 @router.post("/decide")
 def decide(body: DecideBody, sess: SessionDep) -> dict:
     out = ds.run_decide(
@@ -85,6 +91,43 @@ def clothes_occasion(body: OccasionBody, sess: SessionDep) -> dict:
         via_router=False,
         reroll=False,
         context_extra={"occasion": body.occasion},
+    )
+    STORE.save(sess)
+    return out
+
+
+@router.post("/decide/movie-chips")
+def movie_chips(body: MovieChipsBody, sess: SessionDep) -> dict:
+    """Update format / mood / Trendar-nu mode and re-decide."""
+    import movie_domain as md
+
+    extra: dict[str, Any] = {}
+    if body.format:
+        sess.movie_format = md.normalize_format(body.format)
+        extra["format"] = sess.movie_format
+    if body.mood:
+        sess.movie_mood = md.normalize_mood(body.mood)
+        extra["mood"] = sess.movie_mood
+        # Picking a mood returns to mood-matching unless mode is explicitly set.
+        if body.mode is None:
+            sess.movie_mode = "mood"
+            extra["mode"] = "mood"
+    if body.mode is not None:
+        sess.movie_mode = md.normalize_mode(body.mode)
+        extra["mode"] = sess.movie_mode
+    if sess.movie_format and "format" not in extra:
+        extra["format"] = sess.movie_format
+    if sess.movie_mood and "mood" not in extra:
+        extra["mood"] = sess.movie_mood
+    if sess.movie_mode and "mode" not in extra:
+        extra["mode"] = sess.movie_mode
+    out = ds.run_decide(
+        sess,
+        question=sess.last_question or "",
+        domain_hint="movie",
+        via_router=False,
+        reroll=False,
+        context_extra=extra,
     )
     STORE.save(sess)
     return out

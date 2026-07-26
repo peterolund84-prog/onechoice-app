@@ -66,7 +66,7 @@ async function ensureGuest() {
 async function routeDecide(payload) {
   const data = await api.post("/api/decide", payload);
   const page = data.page || "result";
-  if (page === "result") go("/result");
+  if (page === "result" || page === "refused") go("/result");
   else if (page === "clothes_occasion") {
     sessionStorage.setItem("oc_occasions", JSON.stringify(data.occasions || []));
     go("/result?mode=occasion");
