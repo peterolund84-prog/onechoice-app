@@ -36,20 +36,34 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 
 ## Secrets
 
-Samma som tidigare — antingen miljövariabler eller `.streamlit/secrets.toml`
-(HTML/API läser filen **utan** Streamlit):
+HTML/API läser **lokal** `.streamlit/secrets.toml` (samma fil som lokal Streamlit).
+
+Viktigt: nycklar som bara ligger i **Streamlit Cloud → Secrets** syns **inte** i uvicorn.
+Då får du `Supabase är inte konfigurerad` och inga film-posters.
+
+```bat
+cd C:\Users\DELL\Projekt\onechoice
+dir .streamlit\secrets.toml
+```
+
+Om filen saknas:
 
 ```bat
 copy .streamlit\secrets.toml.example .streamlit\secrets.toml
+notepad .streamlit\secrets.toml
 ```
 
-Lägg in:
+Lägg in (samma värden som funkade i Streamlit):
 
-- `GROK_API_KEY` — AI-beslut (annars offline)
-- `SUPABASE_URL` / `SUPABASE_KEY` — login / konton
-- `TMDB_API_KEY` — film-/serieposter + betyg (utan nyckel: begränsad offline-katalog)
+```toml
+SUPABASE_URL = "https://xxxx.supabase.co"
+SUPABASE_KEY = "eyJ..."
+TMDB_API_KEY = "..."
+GROK_API_KEY = "xai-..."
+```
 
-Kontrollera status under **Profil → Integrationer** efter restart.
+Kontrollera **Profil → Integrationer** (och `Secrets-fil:`-raden).  
+`--reload` plockar upp ändringar i Python; efter edit av secrets.toml räcker oftast en page-refresh (vi re-läser filen).
 
 ## Struktur
 

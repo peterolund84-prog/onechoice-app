@@ -82,6 +82,11 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIn("supabase_configured", prof.json())
         self.assertIn("tmdb_configured", prof.json())
         self.assertIn("integrations", prof.json())
+        self.assertIn("secrets", prof.json())
+        self.assertIn("secrets_file_found", prof.json()["secrets"])
+        sess = self.client.get("/api/auth/session")
+        self.assertEqual(sess.status_code, 200)
+        self.assertIn("secrets", sess.json())
 
     def test_dish_assets_mounted(self) -> None:
         from pathlib import Path
