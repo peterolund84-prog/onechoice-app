@@ -4,14 +4,35 @@ Ny stack: **ren HTML/CSS/JS** mot **FastAPI**, samma `pipeline` / `db` / domäne
 
 Streamlit-appen (`streamlit run app.py`) finns kvar under övergången. Den nya UI:n är defaultvägen framåt.
 
-## Kör lokalt
+## Kör lokalt (låt den stå igång)
+
+Som med Streamlit: **starta en gång**, låt processen köra, gör `git pull`, uppdatera telefonen.
+`--reload` gör att Python-ändringar laddas om automatiskt (HTML/CSS/JS behöver bara refresh).
+
+**Windows (Dell):**
+
+```bat
+cd C:\Users\DELL\Projekt\onechoice
+run_html.bat
+```
+
+eller:
+
+```bat
+py -m uvicorn api.main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+Öppna `http://192.168.x.x:8080` på telefonen.  
+Efter `git pull`: hård-reloada (eller öppna Profil och kolla att Build-id bytts).
+
+Du behöver **inte** döda/starta om varje gång — bara om porten är låst eller processen kraschat.
+
+**macOS/Linux:**
 
 ```bash
 pip install -r requirements.txt
-uvicorn api.main:app --reload --port 8000
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
 ```
-
-Öppna [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
 ## Secrets
 
