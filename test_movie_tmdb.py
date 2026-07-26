@@ -32,13 +32,22 @@ class MovieTmdbValidationTests(unittest.TestCase):
             "justification": "Enkelt ikväll.",
             "meta": {"title": "seinfeld", "kind": "series"},
         }
-        with mock.patch("tmdb.lookup_title") as lookup:
+        with mock.patch("tmdb.lookup_title") as lookup, mock.patch(
+            "tmdb.watch_providers"
+        ) as providers:
             lookup.return_value = {
                 "tmdb_id": 123,
                 "title": "Seinfeld",
                 "year": 1989,
                 "poster_url": "https://example.com/poster.jpg",
                 "vote_average": 7.8,
+            }
+            providers.return_value = {
+                "region": "SE",
+                "services": ["netflix"],
+                "flatrate": [{"provider_id": 8, "provider_name": "Netflix"}],
+                "link": "https://www.themoviedb.org/tv/123/watch?locale=SE",
+                "source": "tmdb",
             }
             r = feasibility.feasibility_check(
                 candidate,
@@ -52,6 +61,8 @@ class MovieTmdbValidationTests(unittest.TestCase):
         self.assertEqual(meta.get("poster_url"), "https://example.com/poster.jpg")
         self.assertEqual(meta.get("vote_average"), 7.8)
         self.assertEqual(meta.get("year"), 1989)
+        self.assertEqual(meta.get("availability_source"), "tmdb_watch_providers")
+        self.assertEqual(meta.get("service"), "netflix")
 
     def test_tmdb_unmatched_rejects(self) -> None:
         profile = feasibility.parse_profile(

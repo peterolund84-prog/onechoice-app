@@ -1,24 +1,65 @@
 # -*- coding: utf-8 -*-
 """
-TMDB lookup for movie/series titles.
+TMDB lookup for movie/series titles + SE watch providers.
 
-The app primarily uses Streamlit + deterministic offline behavior for tests.
+Architecture: the LLM may invent titles freely; TMDB is the source of truth
+for whether a title exists and which Swedish streaming services carry it.
+`STREAMING_CATALOG` (mocks) is fallback-only for offline/local packs.
+
 When `TMDB_API_KEY` is present, we query TMDB; otherwise we fall back to a
-small offline mapping for known demo titles.
+small offline mapping for known demo titles (tests / local dev).
 """
 
 from __future__ import annotations
 
 import functools
+import json
+import logging
 import os
 import re
-from typing import Any
+import tempfile
+import time
+from pathlib import Path
+from typing import Any, Callable
 
 import requests
 
+log = logging.getLogger("onechoice.tmdb")
 
 TMDB_BASE = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w342"
+PROVIDERS_CACHE_TTL_SEC = 24 * 60 * 60
+DEFAULT_WATCH_REGION = "SE"
+
+# TMDB provider_id → OneChoice service id (Sweden-focused).
+TMDB_PROVIDER_TO_SERVICE: dict[int, str] = {
+    8: "netflix",
+    9: "prime",
+    119: "prime",
+    337: "disney_plus",
+    384: "hbo_max",  # legacy HBO Max
+    1899: "hbo_max",  # Max
+    76: "viaplay",
+    496: "svt_play",
+    283: "svt_play",
+    39: "tv4_play",
+    323: "tv4_play",
+}
+
+_PROVIDER_NAME_HINTS: tuple[tuple[str, str], ...] = (
+    ("netflix", "netflix"),
+    ("disney", "disney_plus"),
+    ("hbo", "hbo_max"),
+    ("max", "hbo_max"),
+    ("viaplay", "viaplay"),
+    ("prime", "prime"),
+    ("amazon", "prime"),
+    ("svt", "svt_play"),
+    ("tv4", "tv4_play"),
+)
+
+# Optional test injection: (tmdb_id, kind, region) -> provider result dict | None
+_PROVIDERS_OVERRIDE: Callable[[int, str, str], dict[str, Any] | None] | None = None
 
 
 def _norm_title(title: str) -> str:
@@ -168,5 +209,228 @@ def lookup_title(title: str, kind: str = "series") -> dict[str, Any] | None:
         "year": year,
         "poster_url": poster_url,
         "vote_average": vote_average,
+    }
+
+
+# Offline SE flatrate services keyed by offline stub tmdb_id (tests / no API key).
+_OFFLINE_SE_PROVIDERS: dict[int, list[str]] = {
+    1: ["netflix"],  # Wednesday
+    2: ["netflix"],  # Seinfeld
+    3: ["hbo_max", "tv4_play"],  # Friends / Vänner
+    4: ["netflix"],  # The Night Agent
+    5: ["disney_plus"],  # Andor
+    6: ["disney_plus"],  # The Bear
+    7: ["hbo_max"],  # Succession
+    8: ["netflix", "prime"],  # The Office
+    9: ["netflix", "disney_plus"],  # Brooklyn Nine-Nine
+    101: ["hbo_max", "prime"],  # Dune
+    102: ["svt_play"],  # Det sista kapitlet
+    103: [],  # Top Gun — rent-only in catalog; no flatrate offline
+    104: ["svt_play"],  # Bonusfamiljen
+    201: ["netflix"],  # Our Planet
+    202: ["netflix"],  # My Octopus Teacher
+    203: ["netflix"],  # Hilda
+    204: ["netflix"],  # Kung Fu Panda
+    205: ["netflix"],  # Explained
+    206: ["netflix"],  # The Intern
+    207: ["netflix"],  # Chef
+    208: ["netflix"],  # About Time
+    209: ["netflix"],  # Extraction
+    210: ["netflix"],  # The Gray Man
+    211: ["netflix"],  # Red Notice
+    212: ["netflix"],  # Murder Mystery
+    213: ["netflix"],  # The Nice Guys
+    214: ["netflix"],  # Crazy Rich Asians
+    215: ["netflix"],  # Free Solo
+    216: ["netflix"],  # 13th
+    217: ["netflix"],  # Luca
+    218: ["netflix"],  # Mitchells
+}
+
+
+def _providers_cache_path() -> Path:
+    return Path(tempfile.gettempdir()) / "onechoice_tmdb_providers_cache.json"
+
+
+def _load_providers_cache() -> dict[str, Any]:
+    path = _providers_cache_path()
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _save_providers_cache(data: dict[str, Any]) -> None:
+    try:
+        _providers_cache_path().write_text(
+            json.dumps(data, ensure_ascii=False, indent=0),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        log.debug("tmdb providers cache write failed: %s", exc)
+
+
+def map_provider_to_service(provider: dict[str, Any]) -> str | None:
+    """Map a TMDB provider row to an internal service id."""
+    try:
+        pid = int(provider.get("provider_id"))
+    except (TypeError, ValueError):
+        pid = 0
+    if pid and pid in TMDB_PROVIDER_TO_SERVICE:
+        return TMDB_PROVIDER_TO_SERVICE[pid]
+    name = str(provider.get("provider_name") or "").strip().lower()
+    if not name:
+        return None
+    for hint, svc in _PROVIDER_NAME_HINTS:
+        if hint in name:
+            # Avoid mapping plain "max" inside unrelated names without word sense —
+            # TMDB uses "Max" / "HBO Max" which contain these hints cleanly.
+            if hint == "max" and "hbo" not in name and name.strip() != "max":
+                continue
+            return svc
+    return None
+
+
+def _parse_region_providers(region_row: dict[str, Any] | None) -> dict[str, Any]:
+    row = region_row if isinstance(region_row, dict) else {}
+    flatrate = list(row.get("flatrate") or [])
+    services: list[str] = []
+    seen: set[str] = set()
+    for p in flatrate:
+        if not isinstance(p, dict):
+            continue
+        svc = map_provider_to_service(p)
+        if svc and svc not in seen:
+            seen.add(svc)
+            services.append(svc)
+    return {
+        "services": services,
+        "flatrate": flatrate,
+        "link": row.get("link"),
+        "rent": list(row.get("rent") or []),
+        "buy": list(row.get("buy") or []),
+    }
+
+
+def set_providers_override(
+    fn: Callable[[int, str, str], dict[str, Any] | None] | None,
+) -> None:
+    """Tests inject SE provider results; pass None to restore default."""
+    global _PROVIDERS_OVERRIDE
+    _PROVIDERS_OVERRIDE = fn
+    watch_providers.cache_clear()
+
+
+@functools.lru_cache(maxsize=512)
+def watch_providers(
+    tmdb_id: int,
+    kind: str = "series",
+    region: str = DEFAULT_WATCH_REGION,
+) -> dict[str, Any] | None:
+    """
+    SE (or other region) watch providers for a TMDB id.
+
+    Returns:
+        {region, services, flatrate, link, source} or None when unknown.
+    Cache: process lru + 24h file cache for live API responses.
+    """
+    try:
+        tid = int(tmdb_id)
+    except (TypeError, ValueError):
+        return None
+    if tid <= 0:
+        return None
+
+    kind_n = (kind or "series").strip().lower()
+    if kind_n not in ("series", "film"):
+        kind_n = "series"
+    region_n = (region or DEFAULT_WATCH_REGION).strip().upper() or DEFAULT_WATCH_REGION
+
+    if _PROVIDERS_OVERRIDE is not None:
+        try:
+            overr = _PROVIDERS_OVERRIDE(tid, kind_n, region_n)
+        except Exception as exc:
+            log.debug("providers override failed: %s", exc)
+            overr = None
+        if overr is None:
+            return None
+        out = dict(overr)
+        out.setdefault("region", region_n)
+        out.setdefault("source", "override")
+        out.setdefault("services", list(out.get("services") or []))
+        return out
+
+    cache_key = f"{kind_n}:{tid}:{region_n}"
+    cached = _load_providers_cache()
+    hit = cached.get(cache_key) if isinstance(cached, dict) else None
+    if isinstance(hit, dict) and (time.time() - float(hit.get("ts") or 0)) < PROVIDERS_CACHE_TTL_SEC:
+        body = hit.get("body")
+        if isinstance(body, dict):
+            return dict(body)
+
+    api_key = _get_api_key()
+    if not api_key:
+        services = list(_OFFLINE_SE_PROVIDERS.get(tid) or [])
+        return {
+            "region": region_n,
+            "services": services,
+            "flatrate": [],
+            "link": None,
+            "source": "offline",
+        }
+
+    media = "tv" if kind_n == "series" else "movie"
+    try:
+        resp = requests.get(
+            f"{TMDB_BASE}/{media}/{tid}/watch/providers",
+            params={"api_key": api_key},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        payload = resp.json() or {}
+    except Exception as exc:
+        log.debug("watch_providers fetch failed id=%s: %s", tid, exc)
+        return None
+
+    results = payload.get("results") if isinstance(payload, dict) else None
+    region_row = (results or {}).get(region_n) if isinstance(results, dict) else None
+    parsed = _parse_region_providers(region_row if isinstance(region_row, dict) else None)
+    out = {
+        "region": region_n,
+        "services": parsed["services"],
+        "flatrate": parsed["flatrate"],
+        "link": parsed.get("link"),
+        "rent": parsed.get("rent") or [],
+        "buy": parsed.get("buy") or [],
+        "source": "tmdb",
+    }
+    cached = cached if isinstance(cached, dict) else {}
+    cached[cache_key] = {"ts": time.time(), "body": out}
+    _save_providers_cache(cached)
+    return out
+
+
+def se_services_for_title(
+    title: str,
+    *,
+    kind: str = "series",
+    region: str = DEFAULT_WATCH_REGION,
+) -> dict[str, Any] | None:
+    """Lookup title on TMDB then return regional watch-provider summary."""
+    row = lookup_title(title, kind=kind)
+    if not row or not row.get("tmdb_id"):
+        return None
+    providers = watch_providers(int(row["tmdb_id"]), kind=kind, region=region)
+    if not providers:
+        return None
+    return {
+        **providers,
+        "tmdb_id": row.get("tmdb_id"),
+        "title": row.get("title"),
+        "year": row.get("year"),
+        "poster_url": row.get("poster_url"),
+        "vote_average": row.get("vote_average"),
     }
 

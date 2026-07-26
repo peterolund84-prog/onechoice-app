@@ -46,6 +46,7 @@ def seed_rng(seed: int = 1337) -> None:
 
 MAX_REROLLS = 3
 REPEAT_DAYS = 7
+MOVIE_REPEAT_DAYS = 14  # anti-repetition window for film/series
 SAFE_RATIO = 0.80  # bandit: 80% safe / 20% explore (wildcard)
 PREF_SCORE_MIN = -2.0
 PREF_SCORE_MAX = 3.0
@@ -336,12 +337,14 @@ def decide(
     else:
         history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
     prefs = db.get_preferences(user_id, domain, path=db_path)
-    # Repetition guard: per meal_type for food (porridge every morning is fine)
+    # Repetition guard: per meal_type for food; ~14 days for movies/series
     repeat_days = REPEAT_DAYS
     if domain == "food" and meal_type:
         import food_domain as fd
 
         repeat_days = fd.repeat_days(meal_type)
+    elif domain == "movie":
+        repeat_days = MOVIE_REPEAT_DAYS
     recent = db.recent_suggestions(
         user_id,
         domain,
@@ -349,6 +352,8 @@ def decide(
         meal_type=meal_type if domain == "food" else None,
         path=db_path,
     )
+    ctx["recent_suggestions"] = list(recent)
+    ctx["repeat_days"] = repeat_days
 
     explore = (not locked) and (_rng.random() > SAFE_RATIO)
     # Fast path ONLY for habit meals (frukost/kvällsmål) — lunch & middag
@@ -403,6 +408,8 @@ def decide(
             api_key=grok_key,
             use_cache=True,
         )
+        trend_funnel = mt.last_trending_funnel()
+        ctx["trending_funnel"] = trend_funnel
         pick = mt.pick_trending_candidate(trend_cands)
         if not pick:
             msg = mt.empty_message(language)
@@ -420,6 +427,7 @@ def decide(
                     "mood": movie_mood or ctx.get("mood"),
                     "trending_empty": True,
                     "trending_needs_grok": False,
+                    "trending_funnel": trend_funnel,
                 },
                 route=(route_meta or {}).get("route"),
                 route_log_id=(route_meta or {}).get("route_log_id"),
@@ -474,7 +482,14 @@ def decide(
             language,
             recent_dinner=ctx.get("recent_dinner_title"),
         )
-        if pinned:
+        # Lunch/middag: LLM is primary when a usable Grok key produced candidates.
+        # Local meal packs only pin when LLM is absent/empty (fallback path).
+        llm_primary_meal = (
+            meal_type in ("lunch", "middag")
+            and _usable_grok_key("" if food_local_first else grok_api_key)
+            and bool(candidates)
+        )
+        if pinned and not llm_primary_meal:
             import food_categories as fcat
 
             pinned = fcat.stamp_dish_categories(pinned)
@@ -597,20 +612,55 @@ def decide(
                 justification="",
                 refused=True,
                 refusal_message=mt.empty_message(language),
-                context={**ctx, "mode": "trendar", "trending_empty": True},
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "trending_empty": True,
+                    "trending_funnel": ctx.get("trending_funnel") or mt.last_trending_funnel(),
+                },
                 route=(route_meta or {}).get("route"),
                 route_log_id=(route_meta or {}).get("route_log_id"),
             )
         # CRITICAL: fridge mode must never fall through to supermarket / kvällsmål packs
+        # Local pack is fallback-only — never pretend it was a fresh AI pick.
         if not survivors and not fridge_mode:
+            local_pool = _local_candidates(domain, language, recent, ctx, profile)
+            for row in local_pool:
+                meta = row.setdefault("meta", {}) if isinstance(row, dict) else {}
+                if isinstance(meta, dict):
+                    meta["local_pack"] = True
+                    meta["fallback"] = True
             survivors = feasibility.filter_feasible(
-                _local_candidates(domain, language, recent, ctx, profile),
+                local_pool,
                 domain=domain,
                 profile=profile,
                 context=ctx,
             )
-        if not survivors and not fridge_mode:
+            if survivors:
+                ctx["fallback_local_pack"] = True
+        if not survivors and not fridge_mode and domain != "movie":
+            # Non-movie domains keep a last-resort guaranteed candidate.
             survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
+            if survivors:
+                ctx["fallback_local_pack"] = True
+        # Movies: never invent Seinfeld-on-repeat — honest refuse when nothing verifies.
+        if not survivors and not fridge_mode and domain == "movie":
+            msg = (
+                "Hittar inget som passar just nu — försök igen."
+                if language == "sv"
+                else "Nothing fits right now — try again."
+            )
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={**ctx, "movie_empty": True},
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
         if not survivors and fridge_mode:
             import fridge_domain as fr
 
@@ -776,6 +826,23 @@ def decide(
 
     justification = str(top.get("justification") or "")
     suggestion = str(top.get("suggestion") or "")
+    # Clearly mark local-pack fallback so it is never read as a fresh AI pick.
+    top_meta = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+    if ctx.get("fallback_local_pack") or top_meta.get("fallback"):
+        ctx["fallback_local_pack"] = True
+        prefix = (
+            "Lokalt förslag — "
+            if language == "sv"
+            else "Local fallback — "
+        )
+        if justification and not justification.lower().startswith("lokalt"):
+            justification = prefix + justification
+        elif not justification:
+            justification = (
+                "Lokalt förslag när AI/verifiering inte räckte."
+                if language == "sv"
+                else "Local fallback when AI/verification fell short."
+            )
     execution = top.get("execution") if isinstance(top.get("execution"), dict) else None
     if not execution:
         execution = _execution_for(domain, suggestion, language, user)
@@ -886,6 +953,9 @@ def decide(
             "candidates_n": len(candidates),
             "feasible_n": len(survivors),
             "skip_feasibility": skip_feasibility,
+            "fallback_local_pack": bool(ctx.get("fallback_local_pack")),
+            "repeat_days": ctx.get("repeat_days"),
+            "trending_funnel": ctx.get("trending_funnel"),
             "execution_detail": execution.get("detail"),
             "shopping": execution.get("shopping"),
             "recipe": execution.get("recipe")
@@ -893,6 +963,8 @@ def decide(
             "dish_category": dish_category,
             "workout": workout_payload or execution.get("workout"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
+            "availability_source": (top.get("meta") or {}).get("availability_source"),
+            "se_services": (top.get("meta") or {}).get("se_services"),
         },
         execution_type=execution.get("type"),
         execution_label=execution.get("label"),

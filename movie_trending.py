@@ -4,11 +4,13 @@
 Flow:
   1. Search (Grok web_search or injected fn) for titles talked about this month
   2. Keep only hits with ≥1 dated source from the last ~30 days
-  3. Verify each title on TMDB (same gate as normal movie picks)
-  4. Prefer titles available on the user's streaming services
-  5. Cache grounded hits ~24h
+  3. Verify each title on TMDB (exists + rating metadata)
+  4. Verify SE availability via TMDB /watch/providers (not mocks catalog)
+  5. Prefer titles on the user's streaming services; paywalled last
+  6. Cache grounded hits ~24h; expose funnel counters for drop-off diagnosis
 
-No fabricated trends: empty search / no grounded / no TMDB → empty list.
+No fabricated trends / no fixed list: empty search / no grounded / no TMDB /
+no SE provider → empty list.
 """
 
 from __future__ import annotations
@@ -367,6 +369,43 @@ def verify_tmdb(
         return None
 
 
+def verify_se_availability(
+    tmdb_id: Any,
+    *,
+    kind: str = "series",
+    user_services: list[str] | None = None,
+) -> dict[str, Any] | None:
+    """TMDB SE watch/providers — truth for Swedish streaming availability."""
+    try:
+        import mocks
+        import tmdb as tmdb_mod
+
+        tid = int(tmdb_id)
+    except Exception:
+        return None
+    try:
+        prov = tmdb_mod.watch_providers(tid, kind=kind, region="SE")
+    except Exception as exc:
+        log.debug("trending SE providers failed id=%s: %s", tid, exc)
+        return None
+    if not isinstance(prov, dict):
+        return None
+    se_services = [
+        mocks.normalize_service(s) for s in (prov.get("services") or []) if s
+    ]
+    user = {mocks.normalize_service(s) for s in (user_services or []) if s}
+    overlap = sorted(user & set(se_services)) if user else list(se_services)
+    return {
+        "se_services": se_services,
+        "overlap": overlap,
+        "service": overlap[0] if overlap else (se_services[0] if se_services else None),
+        "link": prov.get("link"),
+        "source": prov.get("source"),
+        "on_user_services": bool(overlap) if user else bool(se_services),
+        "available_se": bool(se_services),
+    }
+
+
 def _on_user_services(meta: dict[str, Any], user_services: list[str]) -> bool:
     services = {str(s).strip().lower() for s in user_services if s}
     if not services:
@@ -374,17 +413,16 @@ def _on_user_services(meta: dict[str, Any], user_services: list[str]) -> bool:
     svc = str(meta.get("service") or "").strip().lower()
     if svc and svc in services:
         return True
-    # Catalog overlap from mocks when present
-    try:
-        import mocks
+    se = {str(s).strip().lower() for s in (meta.get("se_services") or []) if s}
+    return bool(services & se)
 
-        title = str(meta.get("title") or "").strip().lower()
-        row = mocks.STREAMING_CATALOG.get(title)
-        if row and (services & set(row.get("services") or set())):
-            return True
-    except Exception:
-        pass
-    return False
+
+# Last funnel from build_trending_candidates (for pipeline context / tests).
+_LAST_FUNNEL: dict[str, Any] = {}
+
+
+def last_trending_funnel() -> dict[str, Any]:
+    return dict(_LAST_FUNNEL)
 
 
 def build_trending_candidates(
@@ -397,11 +435,13 @@ def build_trending_candidates(
     use_cache: bool = True,
     search_hits: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Grounded + TMDB-verified candidates, service-available first.
+    """Grounded + TMDB title + SE-provider verified candidates.
 
-    Paywalled / unavailable titles are kept only at the end and marked
-    ``meta.paywalled`` so the pipeline can refuse to pick them.
+    Paywalled / unavailable-on-user-services titles are kept only at the end
+    and marked ``meta.paywalled``. Titles with no SE providers are dropped.
+    Funnel counters are stored via ``last_trending_funnel()``.
     """
+    global _LAST_FUNNEL
     import movie_domain as md
 
     fmt_n = md.normalize_format(fmt) if fmt else None
@@ -430,13 +470,35 @@ def build_trending_candidates(
     services = list(user_services or [])
     available: list[dict[str, Any]] = []
     paywalled: list[dict[str, Any]] = []
+    funnel = {
+        "raw_n": len(raw),
+        "grounded_n": len(grounded),
+        "tmdb_ok_n": 0,
+        "se_available_n": 0,
+        "on_user_services_n": 0,
+        "paywalled_n": 0,
+        "dropped_no_tmdb": 0,
+        "dropped_no_se": 0,
+    }
 
     for hit in grounded:
         title = str(hit["title"]).strip()
         kind = str(hit.get("kind") or "series")
         tmdb_row = verify_tmdb(title, kind=kind)
         if not tmdb_row:
+            funnel["dropped_no_tmdb"] += 1
             continue
+        funnel["tmdb_ok_n"] += 1
+        se = verify_se_availability(
+            tmdb_row.get("tmdb_id"),
+            kind=kind,
+            user_services=services,
+        )
+        if not se or not se.get("available_se"):
+            funnel["dropped_no_se"] += 1
+            continue
+        funnel["se_available_n"] += 1
+
         display = str(tmdb_row.get("title") or title).strip()
         why = str(hit.get("why") or "").strip()
         if not why:
@@ -463,22 +525,13 @@ def build_trending_candidates(
             "vote_average": tmdb_row.get("vote_average"),
             "year": tmdb_row.get("year"),
             "display_title": display,
+            "se_services": se.get("se_services") or [],
+            "availability_source": "tmdb_watch_providers",
         }
-        # Probe mock catalog for service affinity before feasibility
-        try:
-            import mocks
-
-            match = mocks.streaming_availability(
-                catalog_title,
-                user_services=services or ["netflix", "svt_play"],
-                max_minutes=None,
-                allow_rentals=False,
-            )
-            if match:
-                meta["service"] = match.get("service")
-                meta["runtime_min"] = match.get("runtime_min")
-        except Exception:
-            pass
+        if se.get("service"):
+            meta["service"] = se.get("service")
+        if se.get("link"):
+            meta["providers_link"] = se.get("link")
 
         cand = {
             "suggestion": display,
@@ -486,15 +539,18 @@ def build_trending_candidates(
             "wildcard": False,
             "meta": meta,
         }
-        if services and not _on_user_services(meta, services):
+        if services and not se.get("on_user_services"):
             meta["paywalled"] = True
+            funnel["paywalled_n"] += 1
             paywalled.append(cand)
         else:
             meta["paywalled"] = False
+            funnel["on_user_services_n"] += 1
             available.append(cand)
 
+    _LAST_FUNNEL = funnel
     # Available first — paywalled deprioritised (never preferred as the pick)
-    # No TMDB/catalog fallback: Trendar is Grok web-search only.
+    # No TMDB/catalog invent: Trendar is Grok web-search only.
     return available + paywalled
 
 
