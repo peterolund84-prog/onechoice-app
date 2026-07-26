@@ -155,32 +155,95 @@ def reload_secrets() -> None:
     _TOML = _load_toml_secrets()
 
 
-def get_secret(name: str, default: str = "") -> str:
-    env = os.environ.get(name, "").strip()
-    if env:
-        return env
-    for alt in _ALIASES.get(name, ()):
-        if alt == name:
-            continue
-        env_alt = os.environ.get(alt, "").strip()
-        if env_alt:
-            return env_alt
+def _normalize_secret_value(value: str) -> str:
+    """Match Streamlit app.py: strip quotes / Bearer so pasted keys still work."""
+    k = (value or "").strip()
+    for _ in range(2):
+        if len(k) >= 2 and k[0] == k[-1] and k[0] in "\"'“”‘’":
+            k = k[1:-1].strip()
+    if k.lower().startswith("bearer "):
+        k = k[7:].strip()
+    return k
+
+
+def _toml_secret(name: str) -> str:
     if name in _TOML and str(_TOML[name]).strip():
-        return str(_TOML[name]).strip()
+        return _normalize_secret_value(str(_TOML[name]))
     for alt in _ALIASES.get(name, ()):
         if alt in _TOML and str(_TOML[alt]).strip():
-            return str(_TOML[alt]).strip()
-    # Case-insensitive fallback across flattened keys
+            return _normalize_secret_value(str(_TOML[alt]))
     want = name.lower()
     for k, v in _TOML.items():
         if str(k).lower() == want and str(v).strip():
-            return str(v).strip()
-    return str(default).strip()
+            return _normalize_secret_value(str(v))
+    return ""
+
+
+def _env_secret(name: str) -> str:
+    env = os.environ.get(name, "")
+    if str(env).strip():
+        return _normalize_secret_value(str(env))
+    for alt in _ALIASES.get(name, ()):
+        if alt == name:
+            continue
+        env_alt = os.environ.get(alt, "")
+        if str(env_alt).strip():
+            return _normalize_secret_value(str(env_alt))
+    return ""
+
+
+def get_secret(name: str, default: str = "") -> str:
+    """Read secret: secrets.toml first (like Streamlit), then process env.
+
+    Env used to win and could override a good local secrets.toml with a
+    stale Windows user variable — that looked like "Invalid API key" on HTML
+    while Streamlit (secrets-first) still worked.
+    """
+    reload_secrets()
+    from_toml = _toml_secret(name)
+    if from_toml and not _looks_placeholder(from_toml):
+        return from_toml
+    from_env = _env_secret(name)
+    if from_env and not _looks_placeholder(from_env):
+        return from_env
+    if from_toml:
+        return from_toml
+    if from_env:
+        return from_env
+    return _normalize_secret_value(str(default))
 
 
 def grok_api_key() -> str:
     reload_secrets()
     return get_secret("GROK_API_KEY") or get_secret("XAI_API_KEY")
+
+
+def grok_key_diagnostics() -> dict:
+    """Safe key diagnostics for Profile — never returns the secret value."""
+    reload_secrets()
+    toml_g = _toml_secret("GROK_API_KEY") or _toml_secret("XAI_API_KEY")
+    env_g = _env_secret("GROK_API_KEY") or _env_secret("XAI_API_KEY")
+    chosen = grok_api_key()
+    source = "none"
+    if chosen:
+        if toml_g and chosen == toml_g:
+            source = "secrets.toml"
+        elif env_g and chosen == env_g:
+            source = "env"
+        elif toml_g:
+            source = "secrets.toml"
+        elif env_g:
+            source = "env"
+    return {
+        "source": source,
+        "configured": bool(chosen) and not _looks_placeholder(chosen),
+        "len": len(chosen),
+        "prefix": chosen[:4] if chosen else "",
+        "startswith_xai": chosen.lower().startswith("xai-"),
+        "toml_present": bool(toml_g),
+        "env_present": bool(env_g),
+        "env_differs_from_toml": bool(env_g and toml_g and env_g != toml_g),
+    }
 
 
 def tmdb_api_key() -> str:

@@ -161,35 +161,57 @@ def health_assets() -> dict:
 def health_llm() -> dict:
     """Probe LLM reachability — same signal Streamlit showed as AI: … ✓."""
     import llm_config
-    from api.secrets import grok_api_key
+    from api.secrets import grok_api_key, grok_key_diagnostics
 
+    key_info = grok_key_diagnostics()
     key = (grok_api_key() or "").strip()
     if len(key) < 8:
-        return {"ok": False, "model": "", "detail": "API-nyckel saknas"}
+        return {
+            "ok": False,
+            "model": "",
+            "detail": "API-nyckel saknas",
+            "key": key_info,
+        }
 
     # Prefer a fresh probe so Profile reflects reality, not a stale key check.
     ok, detail = llm_config.llm_health_check(key, timeout=8)
     if ok:
         model = detail
         llm_config.DIAGNOSTICS.update(status="ok", model=model, detail="health_probe")
-        return {"ok": True, "model": model, "detail": "probed"}
+        return {"ok": True, "model": model, "detail": "probed", "key": key_info}
 
     # Fall back to candidate resolve (one probe) then report.
     try:
         model = llm_config.resolve_text_model(key, max_probes=1)
     except Exception as exc:
-        return {"ok": False, "model": "", "detail": f"resolve_error:{exc}"}
+        return {
+            "ok": False,
+            "model": "",
+            "detail": f"resolve_error:{exc}",
+            "key": key_info,
+        }
 
     d = llm_config.DIAGNOSTICS
     status = d.get("status") or ""
     if status in ("ok", "override") and d.get("model"):
-        return {"ok": True, "model": d["model"], "detail": d.get("detail") or status}
+        return {
+            "ok": True,
+            "model": d["model"],
+            "detail": d.get("detail") or status,
+            "key": key_info,
+        }
     if status == "no_key":
-        return {"ok": False, "model": "", "detail": "API-nyckel saknas"}
+        return {
+            "ok": False,
+            "model": "",
+            "detail": "API-nyckel saknas",
+            "key": key_info,
+        }
     return {
         "ok": False,
         "model": model or d.get("model") or "",
         "detail": detail or d.get("detail") or "ingen modell svarade",
+        "key": key_info,
     }
 
 
