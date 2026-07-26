@@ -1828,11 +1828,43 @@ def _guaranteed_feasible(
             if survivors:
                 picked = survivors[0]
                 break
-        c = picked or (pack[0] if pack else {
-            "suggestion": "Seinfeld",
-            "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
-            "meta": {"title": "seinfeld", "kind": "series", "format": fmt, "mood": mood},
-        })
+        if picked:
+            c = picked
+        elif pack:
+            c = pack[0]
+        else:
+            # Never invent a series when the user asked for Film (and vice versa).
+            want = md.format_kind(fmt)
+            if want == "film":
+                c = {
+                    "suggestion": "The Intern",
+                    "justification": (
+                        "Varm feelgood — lätt film utan krav."
+                        if sv
+                        else "Warm feel-good — an easy film night."
+                    ),
+                    "meta": {
+                        "title": "the intern",
+                        "kind": "film",
+                        "format": fmt,
+                        "mood": mood,
+                        "local_pack": True,
+                    },
+                }
+            else:
+                c = {
+                    "suggestion": "Seinfeld",
+                    "justification": (
+                        "Lätt efter en lång dag." if sv else "Easy after a long day."
+                    ),
+                    "meta": {
+                        "title": "seinfeld",
+                        "kind": "series",
+                        "format": fmt,
+                        "mood": mood,
+                        "local_pack": True,
+                    },
+                }
     elif domain == "workout":
         import workout_domain as wd
 

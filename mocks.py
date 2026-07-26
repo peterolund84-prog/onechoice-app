@@ -226,6 +226,86 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "kind": "series",
         "links": {"netflix": "https://www.netflix.com/search?q=Explained"},
     },
+    "the intern": {
+        "services": {"netflix"},
+        "runtime_min": 121,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=The%20Intern"},
+    },
+    "chef": {
+        "services": {"netflix"},
+        "runtime_min": 114,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Chef"},
+    },
+    "about time": {
+        "services": {"netflix"},
+        "runtime_min": 123,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=About%20Time"},
+    },
+    "extraction": {
+        "services": {"netflix"},
+        "runtime_min": 116,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Extraction"},
+    },
+    "the gray man": {
+        "services": {"netflix"},
+        "runtime_min": 129,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=The%20Gray%20Man"},
+    },
+    "red notice": {
+        "services": {"netflix"},
+        "runtime_min": 118,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Red%20Notice"},
+    },
+    "murder mystery": {
+        "services": {"netflix"},
+        "runtime_min": 97,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Murder%20Mystery"},
+    },
+    "the nice guys": {
+        "services": {"netflix"},
+        "runtime_min": 116,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=The%20Nice%20Guys"},
+    },
+    "crazy rich asians": {
+        "services": {"netflix", "hbo_max"},
+        "runtime_min": 120,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Crazy%20Rich%20Asians"},
+    },
+    "free solo": {
+        "services": {"netflix", "disney_plus"},
+        "runtime_min": 100,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Free%20Solo"},
+    },
+    "13th": {
+        "services": {"netflix"},
+        "runtime_min": 100,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=13th"},
+    },
+    "luca": {
+        "services": {"disney_plus", "netflix"},
+        "runtime_min": 95,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Luca"},
+    },
+    "the mitchells vs the machines": {
+        "services": {"netflix"},
+        "runtime_min": 113,
+        "kind": "film",
+        "links": {
+            "netflix": "https://www.netflix.com/search?q=The%20Mitchells%20vs%20the%20Machines"
+        },
+    },
 }
 
 SERVICE_ALIASES = {

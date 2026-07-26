@@ -673,7 +673,10 @@ def _check_movie(
 
         tmdb_row = tmdb_mod.lookup_title(title, kind=meta_kind)
         if not tmdb_row:
-            return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+            # Curated local packs must still be choosable offline / without TMDB.
+            if not local_pack:
+                return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+            tmdb_row = {}
 
         # Prefer curated candidate label over offline stub keys ("seinfeld").
         tmdb_title = str(tmdb_row.get("title") or "").strip()
@@ -701,6 +704,7 @@ def _check_movie(
             "vote_average": tmdb_row.get("vote_average"),
             "year": tmdb_row.get("year"),
         }
+        tmdb_meta = {k: v for k, v in tmdb_meta.items() if v is not None}
     except FeasibilityResult:
         raise
     except Exception:

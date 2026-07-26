@@ -73,6 +73,25 @@ _OFFLINE_TMDB: dict[str, dict[str, Any]] = {
     "hilda": {"tmdb_id": 203, "title": "Hilda", "year": 2018, "vote_average": 8.0, "poster_path": "/hilda.jpg"},
     "kung fu panda": {"tmdb_id": 204, "title": "Kung Fu Panda", "year": 2008, "vote_average": 7.6, "poster_path": "/kfp.jpg"},
     "explained": {"tmdb_id": 205, "title": "Explained", "year": 2018, "vote_average": 7.9, "poster_path": "/explained.jpg"},
+    "the intern": {"tmdb_id": 206, "title": "The Intern", "year": 2015, "vote_average": 7.1, "poster_path": "/the-intern.jpg"},
+    "chef": {"tmdb_id": 207, "title": "Chef", "year": 2014, "vote_average": 7.3, "poster_path": "/chef.jpg"},
+    "about time": {"tmdb_id": 208, "title": "About Time", "year": 2013, "vote_average": 7.8, "poster_path": "/about-time.jpg"},
+    "extraction": {"tmdb_id": 209, "title": "Extraction", "year": 2020, "vote_average": 6.8, "poster_path": "/extraction.jpg"},
+    "the gray man": {"tmdb_id": 210, "title": "The Gray Man", "year": 2022, "vote_average": 6.9, "poster_path": "/gray-man.jpg"},
+    "red notice": {"tmdb_id": 211, "title": "Red Notice", "year": 2021, "vote_average": 6.8, "poster_path": "/red-notice.jpg"},
+    "murder mystery": {"tmdb_id": 212, "title": "Murder Mystery", "year": 2019, "vote_average": 6.3, "poster_path": "/murder-mystery.jpg"},
+    "the nice guys": {"tmdb_id": 213, "title": "The Nice Guys", "year": 2016, "vote_average": 7.2, "poster_path": "/nice-guys.jpg"},
+    "crazy rich asians": {"tmdb_id": 214, "title": "Crazy Rich Asians", "year": 2018, "vote_average": 7.0, "poster_path": "/cra.jpg"},
+    "free solo": {"tmdb_id": 215, "title": "Free Solo", "year": 2018, "vote_average": 8.0, "poster_path": "/free-solo.jpg"},
+    "13th": {"tmdb_id": 216, "title": "13th", "year": 2016, "vote_average": 8.2, "poster_path": "/13th.jpg"},
+    "luca": {"tmdb_id": 217, "title": "Luca", "year": 2021, "vote_average": 7.5, "poster_path": "/luca.jpg"},
+    "the mitchells vs the machines": {
+        "tmdb_id": 218,
+        "title": "The Mitchells vs. the Machines",
+        "year": 2021,
+        "vote_average": 7.6,
+        "poster_path": "/mitchells.jpg",
+    },
 }
 
 

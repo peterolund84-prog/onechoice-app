@@ -208,6 +208,53 @@ class MovieDecideLoggingTests(unittest.TestCase):
         ctx = r.context or {}
         self.assertTrue(ctx.get("movie_poster_url") or ctx.get("movie_tmdb_vote_average"))
 
+    def test_film_avkopplat_local_pack_has_films(self) -> None:
+        import movie_domain as md
+
+        pack = md.local_candidates(
+            fmt="film", mood="avkopplat", language="sv", in_progress_series=None
+        )
+        self.assertGreaterEqual(len(pack), 3)
+        self.assertTrue(all((c.get("meta") or {}).get("kind") == "film" for c in pack))
+        titles = {str(c.get("suggestion") or "").strip().lower() for c in pack}
+        self.assertNotIn("seinfeld", titles)
+
+    def test_film_avkopplat_reroll_changes_suggestion(self) -> None:
+        first = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            context_extra={"format": "film", "mood": "avkopplat"},
+        )
+        self.assertTrue(first.ok)
+        self.assertNotEqual(
+            str(first.suggestion or "").strip().lower(),
+            "seinfeld",
+        )
+        self.assertEqual((first.context or {}).get("kind"), "film")
+        second = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            reroll=True,
+            reroll_index=1,
+            previous_decision_id=first.decision_id,
+            context_extra={
+                "format": "film",
+                "mood": "avkopplat",
+                "previous_suggestion": first.suggestion,
+            },
+        )
+        self.assertTrue(second.ok)
+        self.assertNotEqual(
+            str(second.suggestion or "").strip().lower(),
+            str(first.suggestion or "").strip().lower(),
+        )
+
     def test_lar_mig_reroll_changes_suggestion(self) -> None:
         first = pipeline.decide(
             self.user["id"],
