@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f5f8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <title>Beslut — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css?v=v20-20260726" />
+</head>
+<body>
+  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
+  <main class="app" id="app"><div class="loading">Laddar beslut…</div></main>
+  <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
+  <script src="/static/app.js?v=v20-20260726"></script>
+  <script>
+    (async function () {
+      const {
+        api, go, ensureGuest, esc, cardActionsHtml, bindCardActions, imgOrPh,
+        withDecideLoading, DECIDE_TIMEOUT_MS,
+      } = window.OC;
+      await ensureGuest();
+      const root = document.getElementById("app");
+      const params = new URLSearchParams(location.search);
+      const mode = params.get("mode");
+
+      if (mode === "occasion") {
+        const occasions = JSON.parse(sessionStorage.getItem("oc_occasions") || '["jobb","vardag","träning","dejt","fest"]');
+        const labels = { jobb: "Jobb", vardag: "Vardag", "träning": "Träning", dejt: "Dejt", fest: "Fest" };
+        root.innerHTML = `
+          <div class="section-label">Vart ska du?</div>
+          <div class="chips" id="chips">
+            ${occasions.map((o) => `<button class="chip" type="button" data-o="${o}">${labels[o] || o}</button>`).join("")}
+          </div>
+          <p class="error" id="err" hidden></p>
+        `;
+        root.querySelectorAll("[data-o]").forEach((b) => {
+          b.onclick = async () => {
+            try {
+              const data = await api.post("/api/decide/clothes-occasion", { occasion: b.dataset.o });
+              go(data.page === "result" ? "/result" : "/");
+            } catch (e) {
+              document.getElementById("err").hidden = false;
+              document.getElementById("err").textContent = e.message;
+            }
+          };
+        });
+        return;
+      }
+
+      let cur;
+      try {
+        cur = await api.get("/api/decision/current");
+      } catch (_) {
+        go("/");
+        return;
+      }
+      const d = cur.decision || {};
+      const ctx = d.context || {};
+      const pres = d.presentation || {};
+      const domain = d.domain || "";
+      const meal = ctx.meal_type;
+      const meals = [
+        ["frukost", "Frukost"],
+        ["lunch", "Lunch"],
+        ["middag", "Middag"],
+        ["kvallsmal", "Kvällsmål"],
+      ];
+      const movieFormats = [
+        ["avsnitt", "Avsnitt"],
+        ["film", "Film"],
+        ["ny_serie", "Ny serie"],
+      ];
+      const movieMoods = [
+        ["avkopplat", "Avkopplat"],
+        ["spanning", "Spänning"],
+        ["skratta", "Skratta"],
+        ["lar_mig", "Lär mig något"],
+        ["med_barnen", "Med barnen"],
+      ];
+      const movieModes = [
+        ["mood", "Humör"],
+        ["trendar", "Trendar nu"],
+      ];
+      const actions = cardActionsHtml({
+        isFavorite: !!pres.is_favorite,
+        shareText: pres.share_text || "",
+      });
+      const refused = !!(d.refused || d.trending_empty || ctx.trending_empty);
+      const refusalMsg = d.refusal_message || "";
+      const execUrl = d.execution_url || pres.execution_url || "";
+      const acceptLabel =
+        d.execution_label ||
+        pres.execution_label ||
+        (domain === "movie"
+          ? "Titta"
+          : domain === "food"
+            ? "Välj"
+            : domain === "workout"
+              ? "Starta passet"
+              : "Gör det");
+
+      const cardHtml = (() => {
+        if (refused && domain === "movie") {
+          return `
+            <article class="panel decision-card">
+              <div class="food-body">
+                <div class="label">Film & serier</div>
+                <p>${esc(refusalMsg || "Hittar inga tydliga trender just nu — testa Humör istället")}</p>
+              </div>
+            </article>`;
+        }
+        if (domain === "movie") {
+          const poster = pres.movie_poster_url || ctx.movie_poster_url;
+          const year = pres.movie_year || ctx.movie_tmdb_year;
+          const rating = pres.movie_rating || "";
+          const kindLabel = ctx.mode === "trendar"
+            ? "Trendar"
+            : (ctx.kind === "film" ? "Film" : "Serie");
+          return `
+            <article class="panel decision-card movie-card">
+              ${actions}
+              <div class="movie-row">
+                ${imgOrPh(poster, "movie-poster")}
+                <div class="movie-col">
+                  <div class="label">${esc(kindLabel)}</div>
+                  <h1>${esc(d.suggestion || "—")}</h1>
+                  ${year ? `<div class="movie-year">${esc(String(year))}</div>` : ""}
+                  <p>${esc(d.justification || "")}</p>
+                  ${rating ? `<p class="movie-rating">${esc(rating)}</p>` : ""}
+                </div>
+              </div>
+            </article>`;
+        }
+        if (domain === "food") {
+          const img = pres.dish_image_url;
+          const meta = pres.food_meta || "";
+          return `
+            <article class="panel decision-card food-card">
+              ${actions}
+              ${imgOrPh(img, "food-img")}
+              <div class="food-body">
+                <h1>${esc(d.suggestion || "—")}</h1>
+                <p>${esc(d.justification || "")}</p>
+                ${meta ? `<p class="food-meta">${esc(meta)}</p>` : ""}
+              </div>
+            </article>`;
+        }
+        return `
+          <article class="panel decision-card">
+            ${actions}
+            <div class="food-body">
+              <div class="label">${esc(domain || "beslut")}</div>
+              <h1>${esc(d.suggestion || "—")}</h1>
+              <p>${esc(d.justification || "")}</p>
+            </div>
+          </article>`;
+      })();
+
+      const movieChipsHtml = domain === "movie"
+        ? `
+          <div class="section-label">Format</div>
+          <div class="chips-scroll" id="movie-formats">${movieFormats
+            .map(
+              ([k, lab]) =>
+                `<button class="chip ${k === ctx.format ? "active" : ""}" type="button" data-fmt="${k}">${lab}</button>`
+            )
+            .join("")}</div>
+          <div class="section-label">Läge</div>
+          <div class="chips-scroll" id="movie-moods">${movieMoods
+            .map(
+              ([k, lab]) =>
+                `<button class="chip ${k === ctx.mood && ctx.mode !== "trendar" ? "active" : ""} ${ctx.mode === "trendar" ? "dim" : ""}" type="button" data-mood="${k}">${lab}</button>`
+            )
+            .join("")}</div>
+          <div class="section-label">Upptäck</div>
+          <div class="chips-scroll" id="movie-modes">${movieModes
+            .map(
+              ([k, lab]) =>
+                `<button class="chip ${k === (ctx.mode || "mood") ? "active" : ""}" type="button" data-mode="${k}">${lab}</button>`
+            )
+            .join("")}</div>`
+        : "";
+
+      root.innerHTML = `
+        ${
+          domain === "food"
+            ? `<div class="chips" id="meals">${meals
+                .map(
+                  ([k, lab]) =>
+                    `<button class="chip ${k === meal ? "active" : ""}" type="button" data-meal="${k}">${lab}</button>`
+                )
+                .join("")}</div>`
+            : ""
+        }
+        ${movieChipsHtml}
+        ${cardHtml}
+        ${
+          refused
+            ? `<button class="btn btn-primary" type="button" id="back-mood">Visa Humör-förslag</button>`
+            : `<button class="btn btn-primary" type="button" id="accept"${
+                execUrl ? ` data-exec-url="${esc(execUrl)}"` : ""
+              }>${esc(acceptLabel)}</button>
+        <button class="btn btn-ghost" type="button" id="reroll">Nytt förslag</button>`
+        }
+        <p class="error" id="err" hidden></p>
+      `;
+      bindCardActions();
+
+      const showErr = (m) => {
+        const el = document.getElementById("err");
+        if (!el) return;
+        el.hidden = !m;
+        el.textContent = m || "";
+      };
+
+      // A successful decision card and a red error must never share the screen.
+      const hasDecisionCard = !!root.querySelector(".decision-card") && !refused;
+      if (hasDecisionCard) showErr("");
+
+      const postMovieChips = async (payload) => {
+        try {
+          showErr("");
+          await withDecideLoading(root, "movie", () =>
+            api.post("/api/decide/movie-chips", payload, { timeoutMs: DECIDE_TIMEOUT_MS })
+          );
+          location.reload();
+        } catch (e) {
+          showErr(e.message);
+        }
+      };
+
+      if (domain === "food") {
+        root.querySelectorAll("[data-meal]").forEach((b) => {
+          b.onclick = async () => {
+            try {
+              await withDecideLoading(root, "food", () =>
+                api.post(
+                  "/api/decide/meal-type",
+                  { meal_type: b.dataset.meal },
+                  { timeoutMs: DECIDE_TIMEOUT_MS }
+                )
+              );
+              location.reload();
+            } catch (e) {
+              showErr(e.message);
+            }
+          };
+        });
+      }
+
+      if (domain === "movie") {
+        root.querySelectorAll("[data-fmt]").forEach((b) => {
+          b.onclick = () => postMovieChips({ format: b.dataset.fmt, mode: ctx.mode || "mood" });
+        });
+        root.querySelectorAll("[data-mood]").forEach((b) => {
+          b.onclick = () => postMovieChips({ mood: b.dataset.mood, mode: "mood" });
+        });
+        root.querySelectorAll("[data-mode]").forEach((b) => {
+          b.onclick = () => postMovieChips({ mode: b.dataset.mode });
+        });
+      }
+
+      const backMood = document.getElementById("back-mood");
+      if (backMood) {
+        backMood.onclick = () => postMovieChips({ mode: "mood" });
+      }
+
+      const acceptBtn = document.getElementById("accept");
+      if (acceptBtn) {
+        acceptBtn.onclick = async () => {
+          const btn = acceptBtn;
+          const rerollBtn = document.getElementById("reroll");
+          const streamUrl = btn.dataset.execUrl || execUrl || "";
+          // Open stream/map URL in the same tap (before await) so mobile allows it.
+          if (streamUrl && domain !== "food") {
+            try {
+              window.open(streamUrl, "_blank", "noopener,noreferrer");
+            } catch (_) {
+              location.href = streamUrl;
+              return;
+            }
+          }
+          btn.disabled = true;
+          if (rerollBtn) rerollBtn.disabled = true;
+          try {
+            const data = await api.post("/api/decision/accept", {
+              open_execute: domain === "food" || domain === "workout",
+            });
+            if (domain === "food" || domain === "workout") {
+              go(data.page === "execute" ? "/execute" : "/");
+              return;
+            }
+            // Movie/clothes/weekend: stream already opened; stay on card.
+            btn.textContent =
+              domain === "movie" ? "Öppnar…" : "Klart";
+            setTimeout(() => {
+              btn.disabled = false;
+              btn.textContent = acceptLabel;
+              if (rerollBtn) rerollBtn.disabled = false;
+            }, 800);
+          } catch (e) {
+            showErr(e.message);
+            btn.disabled = false;
+            if (rerollBtn) rerollBtn.disabled = false;
+          }
+        };
+      }
+      const rerollEl = document.getElementById("reroll");
+      if (rerollEl) {
+        rerollEl.onclick = async () => {
+          const btn = rerollEl;
+          const accept = document.getElementById("accept");
+          showErr("");
+          btn.disabled = true;
+          if (accept) accept.disabled = true;
+          const prevLabel = btn.textContent;
+          const prevSuggestion = (d.suggestion || "").trim().toLowerCase();
+          btn.textContent = "Hämtar…";
+          try {
+            // Keep the card on screen while rerolling — do not wipe #app.
+            const data = await api.post(
+              "/api/decide/reroll",
+              {},
+              { timeoutMs: DECIDE_TIMEOUT_MS }
+            );
+            if (!data.ok && data.page === "refused") {
+              // Truly no results: clear the successful card, then show the message.
+              const card = root.querySelector(".decision-card");
+              if (card) card.remove();
+              showErr(
+                (data.decision && data.decision.refusal_message) ||
+                  "Inget annat förslag just nu — prova ett annat format eller humör."
+              );
+              btn.disabled = false;
+              btn.textContent = prevLabel;
+              if (accept) accept.disabled = false;
+              return;
+            }
+            const next = ((data.decision && data.decision.suggestion) || "")
+              .trim()
+              .toLowerCase();
+            if (data.same_suggestion || (next && next === prevSuggestion)) {
+              // Keep the successful card — no toast/error under or over it.
+              showErr("");
+              btn.disabled = false;
+              btn.textContent = prevLabel;
+              if (accept) accept.disabled = false;
+              return;
+            }
+            location.reload();
+          } catch (e) {
+            showErr(e.message || "Kunde inte hämta nytt förslag.");
+            btn.disabled = false;
+            btn.textContent = prevLabel;
+            if (accept) accept.disabled = false;
+          }
+        };
+      }
+    })();
+  </script>
+</body>
+</html>
