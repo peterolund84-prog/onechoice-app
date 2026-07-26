@@ -8,7 +8,7 @@ from api.secrets import grok_api_key, secrets_status, supabase_configured, tmdb_
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
-BUILD_ID = "html-secrets-diag-v8-20260726"
+BUILD_ID = "html-movie-reroll-v10-20260726"
 
 
 @router.get("")
@@ -45,7 +45,7 @@ def profile(sess: SessionDep) -> dict:
             "tmdb": (
                 "ok"
                 if tmdb
-                else "saknas — lägg TMDB_API_KEY i secrets.toml (krävs för film-/serieposter)"
+                else "saknas — valfritt; posters funkar via TVMaze utan nyckel"
             ),
             "grok": ai,
             "secrets_file": st.get("secrets_file") or "ej hittad",

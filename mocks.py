@@ -160,6 +160,24 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "kind": "series",
         "links": {"netflix": "https://www.netflix.com/search?q=Seinfeld"},
     },
+    "the office": {
+        "services": {"netflix", "prime"},
+        "runtime_min": 22,
+        "kind": "series",
+        "links": {
+            "netflix": "https://www.netflix.com/search?q=The%20Office",
+            "prime": "https://www.primevideo.com/search/ref=atv_nb_sr?phrase=The%20Office",
+        },
+    },
+    "brooklyn nine-nine": {
+        "services": {"netflix", "disney_plus"},
+        "runtime_min": 22,
+        "kind": "series",
+        "links": {
+            "netflix": "https://www.netflix.com/search?q=Brooklyn%20Nine-Nine",
+            "disney_plus": "https://www.disneyplus.com/search?q=Brooklyn%20Nine-Nine",
+        },
+    },
     " Succession": {
         "services": {"hbo_max"},
         "runtime_min": 60,

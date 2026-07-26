@@ -8,7 +8,12 @@ const api = {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const err = new Error(data.detail || data.error || res.statusText);
+      let msg = data.error || res.statusText || "Något gick fel";
+      if (typeof data.detail === "string") msg = data.detail;
+      else if (Array.isArray(data.detail)) {
+        msg = data.detail.map((d) => d.msg || JSON.stringify(d)).join("; ");
+      } else if (data.detail) msg = String(data.detail);
+      const err = new Error(msg);
       err.status = res.status;
       err.data = data;
       throw err;

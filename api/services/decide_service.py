@@ -136,11 +136,25 @@ def run_decide(
 
     key = grok_api_key()
     prev_id = sess.decision_id if reroll else None
-    reroll_index = sess.reroll_index if reroll else 0
+    # Match Streamlit: bump reroll_index BEFORE calling pipeline, else same pick repeats.
     if reroll:
-        reroll_index = int(sess.reroll_index or 0)
+        reroll_index = int(sess.reroll_index or 0) + 1
         if sess.current and sess.current.get("suggestion"):
             ctx.setdefault("previous_suggestion", sess.current.get("suggestion"))
+        # Keep domain/meal/occasion from the active decision when client sends empty extra
+        cur = sess.current if isinstance(sess.current, dict) else {}
+        if not domain_hint:
+            domain_hint = sess.last_domain_hint or cur.get("domain")
+        cur_ctx = cur.get("context") if isinstance(cur.get("context"), dict) else {}
+        if domain_hint == "food":
+            ctx.setdefault("meal_type", cur_ctx.get("meal_type") or sess.food_meal_type)
+        if domain_hint == "movie":
+            ctx.setdefault("format", cur_ctx.get("format") or sess.movie_format)
+            ctx.setdefault("mood", cur_ctx.get("mood") or sess.movie_mood)
+        if domain_hint == "clothes":
+            ctx.setdefault("occasion", cur_ctx.get("occasion") or sess.clothes_occasion)
+    else:
+        reroll_index = 0
 
     skip_feasibility = domain_hint == "other"
 
@@ -183,6 +197,17 @@ def run_decide(
     else:
         page = "result"
 
+    enriched = enrich_decision(data, language=sess.language or "sv")
+    # Persist poster/meta from presentation so /api/decision/current stays consistent.
+    if isinstance(enriched, dict):
+        data = enriched
+        ctx_out = data.get("context") if isinstance(data.get("context"), dict) else {}
+        pres = data.get("presentation") if isinstance(data.get("presentation"), dict) else {}
+        if pres.get("movie_poster_url") and not ctx_out.get("movie_poster_url"):
+            ctx_out = dict(ctx_out)
+            ctx_out["movie_poster_url"] = pres["movie_poster_url"]
+            data["context"] = ctx_out
+
     sess.current = data
     sess.decision_id = data.get("decision_id")
     sess.accepted = False
@@ -192,9 +217,17 @@ def run_decide(
     sess.route_log_id = data.get("route_log_id")
     sess.force_chooser = False
 
+    same_as_prev = False
+    if reroll and ctx.get("previous_suggestion"):
+        same_as_prev = (
+            str(data.get("suggestion") or "").strip().lower()
+            == str(ctx.get("previous_suggestion") or "").strip().lower()
+        )
+
     return {
         "ok": bool(data.get("ok", True)),
         "page": page,
-        "decision": enrich_decision(data, language=sess.language or "sv"),
+        "decision": data,
+        "same_suggestion": same_as_prev,
         "session": sess.public(),
     }

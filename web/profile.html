@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Profil — OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v8-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v10-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
@@ -15,7 +15,7 @@
     <a href="/history" data-nav="history">Historik</a>
     <a href="/profile" data-nav="profile" class="active">Profil</a>
   </nav>
-  <script src="/static/app.js?v=v8-20260726"></script>
+  <script src="/static/app.js?v=v10-20260726"></script>
   <script>
     (async function () {
       const { api, ensureGuest, navActive, esc } = window.OC;
@@ -40,7 +40,7 @@
         </div>
         <p class="muted"><strong>Build:</strong> ${esc(p.build)}</p>
         <p class="muted">Stack: ${esc(p.stack)}</p>
-        <p class="muted" style="font-size:12px">Build ska innehålla <code>html-secrets-diag-v8</code>. Film-poster kräver TMDB = ok.</p>
+        <p class="muted" style="font-size:12px">Build ska innehålla <code>html-movie-reroll-v10</code>. Film-poster funkar även utan TMDB.</p>
         <p style="margin-top:20px"><a class="linkish" href="/auth">Logga in</a></p>
       `;
     })();

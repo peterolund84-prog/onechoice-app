@@ -86,6 +86,11 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Varm och lätt — ett avsnitt och du är klar.",
                 "meta": {"title": "vänner", "kind": "series"},
             },
+            {
+                "suggestion": "The Office",
+                "justification": "Lågmäld kontorshumor — ett avsnitt räcker.",
+                "meta": {"title": "the office", "kind": "series"},
+            },
         ],
         "en": [
             {
@@ -97,6 +102,11 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Friends",
                 "justification": "Warm and easy — one episode and you're done.",
                 "meta": {"title": "friends", "kind": "series"},
+            },
+            {
+                "suggestion": "The Office",
+                "justification": "Low-key comfort comedy — one episode is enough.",
+                "meta": {"title": "the office", "kind": "series"},
             },
         ],
     },
@@ -148,6 +158,11 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Klassiska skratt — lätt efter en lång dag.",
                 "meta": {"title": "vänner", "kind": "series"},
             },
+            {
+                "suggestion": "Brooklyn Nine-Nine",
+                "justification": "Snabb humor — ett avsnitt som piggar upp.",
+                "meta": {"title": "brooklyn nine-nine", "kind": "series"},
+            },
         ],
         "en": [
             {
@@ -159,6 +174,11 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Friends",
                 "justification": "Classic laughs — easy after a long day.",
                 "meta": {"title": "friends", "kind": "series"},
+            },
+            {
+                "suggestion": "Brooklyn Nine-Nine",
+                "justification": "Quick laughs — one episode that lifts the mood.",
+                "meta": {"title": "brooklyn nine-nine", "kind": "series"},
             },
         ],
     },

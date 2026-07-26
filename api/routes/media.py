@@ -17,7 +17,22 @@ router = APIRouter(prefix="/api/media", tags=["media"])
 _ALLOWED_POSTER_HOSTS = {
     "image.tmdb.org",
     "www.themoviedb.org",
+    "static.tvmaze.com",
+    "api.tvmaze.com",
+    "is1-ssl.mzstatic.com",
+    "is2-ssl.mzstatic.com",
+    "is3-ssl.mzstatic.com",
+    "is4-ssl.mzstatic.com",
+    "is5-ssl.mzstatic.com",
 }
+
+
+def _host_allowed(host: str) -> bool:
+    h = (host or "").lower()
+    if h in _ALLOWED_POSTER_HOSTS:
+        return True
+    # iTunes CDN uses isN-ssl.mzstatic.com
+    return h.endswith(".mzstatic.com")
 
 
 @router.get("/dish")
@@ -50,7 +65,7 @@ def poster_proxy(url: str = Query(..., max_length=500)) -> Response:
     if parsed.scheme not in ("http", "https"):
         raise HTTPException(status_code=400, detail="Ogiltig poster-URL.")
     host = (parsed.hostname or "").lower()
-    if host not in _ALLOWED_POSTER_HOSTS:
+    if not _host_allowed(host):
         raise HTTPException(status_code=400, detail="Poster-host ej tillåten.")
     try:
         resp = requests.get(url, timeout=12, headers={"User-Agent": "OneChoice/1.0"})

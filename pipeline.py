@@ -582,7 +582,16 @@ def decide(
             if str(c.get("suggestion") or "").strip().lower() != prev_l
         ]
         if alt:
-            top = alt[0]
+            # Rotate among alternatives so repeated "Nytt förslag" keeps moving.
+            pick = max(0, int(effective_reroll) - 1) % len(alt)
+            top = alt[pick]
+        elif len(ranked) == 1:
+            # Only one survivor — keep it but mark so UI can explain the stall.
+            top = ranked[0]
+            top = dict(top)
+            meta = dict(top.get("meta") or {})
+            meta["reroll_no_alt"] = True
+            top["meta"] = meta
 
     # Final leftover gate — catches LLM phrases that slipped through ranking
     if domain == "food" and not fridge_mode:

@@ -46,10 +46,12 @@ def decide(body: DecideBody, sess: SessionDep) -> dict:
 
 @router.post("/decide/reroll")
 def reroll(sess: SessionDep) -> dict:
+    cur = sess.current if isinstance(sess.current, dict) else {}
+    domain = sess.last_domain_hint or cur.get("domain")
     out = ds.run_decide(
         sess,
         question=sess.last_question or "",
-        domain_hint=sess.last_domain_hint,
+        domain_hint=domain,
         via_router=False,
         reroll=True,
         context_extra={},

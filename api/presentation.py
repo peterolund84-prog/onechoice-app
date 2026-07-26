@@ -143,64 +143,27 @@ def nutrition_stats(recipe: dict[str, Any] | None, *, suggestion: str = "") -> d
     }
 
 
-def _safe_movie_poster(url: Any) -> str | None:
-    """Keep real TMDB CDN URLs; drop offline placeholder paths that 404."""
-    if not url:
-        return None
-    s = str(url).strip()
-    if s.startswith("/api/media/poster"):
-        return s
-    if not s.startswith("http"):
-        return None
-    # Offline catalog used fake paths like /wednesday.jpg — not real TMDB assets.
-    if "image.tmdb.org" in s:
-        tail = s.rsplit("/", 1)[-1].lower()
-        stem = tail.split(".", 1)[0]
-        if stem.isalpha() and len(stem) < 24:
-            return None
-        return s
-    return None
-
-
-def proxied_poster_url(url: Any) -> str | None:
-    """Same-origin poster URL so LAN phones always load the image."""
-    from urllib.parse import urlencode
-
-    safe = _safe_movie_poster(url)
-    if not safe:
-        return None
-    if safe.startswith("/api/media/poster"):
-        return safe
-    return f"/api/media/poster?{urlencode({'url': safe})}"
-
-
 def _resolve_movie_poster(ctx: dict[str, Any], suggestion: str) -> str | None:
-    """Use context poster, or re-query TMDB when the key is available."""
-    poster = proxied_poster_url(ctx.get("movie_poster_url"))
-    if poster:
-        return poster
-    if not suggestion:
-        return None
-    try:
-        import tmdb as tmdb_mod
-        from api.secrets import tmdb_api_key
+    """TMDB (if keyed) → TVMaze/iTunes fallback → proxied same-origin URL."""
+    from api.movie_posters import resolve_poster_url
 
-        if not tmdb_api_key():
-            return None
-        kind = str(ctx.get("kind") or "series").strip().lower()
-        if kind not in ("series", "film"):
-            kind = "series"
-        # Bust stale offline cache entries from before the key was loaded
+    kind = str(ctx.get("kind") or "").strip().lower()
+    if kind not in ("series", "film"):
+        fmt = str(ctx.get("format") or "")
         try:
-            tmdb_mod.lookup_title.cache_clear()
+            import movie_domain as md
+
+            kind = md.format_kind(fmt) if fmt else "series"
         except Exception:
-            pass
-        meta = tmdb_mod.lookup_title(suggestion, kind=kind)
-        if isinstance(meta, dict):
-            return proxied_poster_url(meta.get("poster_url"))
-    except Exception:
-        return None
-    return None
+            kind = "series"
+    # Prefer catalog meta title for search (handles Swedish labels).
+    meta_title = str(ctx.get("series_title") or "").strip()
+    query = suggestion or meta_title
+    return resolve_poster_url(
+        query,
+        kind=kind,
+        existing=None,  # never reuse stale poster across titles
+    )
 
 
 def share_text_for(decision: dict[str, Any], *, language: str = "sv") -> str:
@@ -230,28 +193,10 @@ def enrich_decision(
     poster = None
     if domain == "movie":
         poster = _resolve_movie_poster(ctx, suggestion)
-        # Backfill rating/year from a live lookup when context is thin
-        if suggestion and (not movie_rating_line(ctx) or not ctx.get("movie_tmdb_year")):
-            try:
-                import tmdb as tmdb_mod
-                from api.secrets import tmdb_api_key
-
-                if tmdb_api_key():
-                    kind = str(ctx.get("kind") or "series").strip().lower()
-                    if kind not in ("series", "film"):
-                        kind = "series"
-                    meta = tmdb_mod.lookup_title(suggestion, kind=kind) or {}
-                    if isinstance(meta, dict):
-                        ctx = dict(ctx)
-                        if meta.get("vote_average") is not None:
-                            ctx.setdefault("movie_tmdb_vote_average", meta.get("vote_average"))
-                        if meta.get("year") is not None:
-                            ctx.setdefault("movie_tmdb_year", meta.get("year"))
-                        if meta.get("poster_url") and not poster:
-                            poster = proxied_poster_url(meta.get("poster_url"))
-                        out["context"] = ctx
-            except Exception:
-                pass
+        if poster:
+            ctx = dict(ctx)
+            ctx["movie_poster_url"] = poster
+            out["context"] = ctx
     presentation: dict[str, Any] = {
         "domain": domain,
         "dish_image_url": None,
