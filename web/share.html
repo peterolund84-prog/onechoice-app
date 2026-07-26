@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f5f8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <title>Delat beslut — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css?v=v21-20260726" />
+</head>
+<body>
+  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
+  <main class="app" id="app"><div class="loading">Laddar…</div></main>
+  <script src="/static/app.js?v=v21-20260726"></script>
+  <script>
+    (async function () {
+      const { api, go, esc, imgOrPh } = window.OC;
+      const token = new URLSearchParams(location.search).get("token")
+        || new URLSearchParams(location.search).get("share");
+      const root = document.getElementById("app");
+      if (!token) {
+        root.innerHTML = `<p class="muted">Ingen delning hittades.</p>
+          <button class="btn btn-primary" type="button" id="home">Öppna OneChoice</button>`;
+        document.getElementById("home").onclick = () => go("/");
+        return;
+      }
+      try {
+        const data = await api.get(`/api/share/${encodeURIComponent(token)}`);
+        const d = data.decision || {};
+        const pres = d.presentation || {};
+        const domain = d.domain || "";
+        let card = "";
+        if (domain === "food") {
+          card = `
+            <article class="panel decision-card food-card">
+              ${imgOrPh(pres.dish_image_url, "food-img")}
+              <div class="food-body">
+                <div class="label">OneChoice har bestämt</div>
+                <h1>${esc(d.suggestion || "—")}</h1>
+                <p>${esc(d.justification || "")}</p>
+              </div>
+            </article>`;
+        } else if (domain === "movie") {
+          card = `
+            <article class="panel decision-card movie-card">
+              <div class="movie-row">
+                ${imgOrPh(pres.movie_poster_url, "movie-poster")}
+                <div class="movie-col">
+                  <div class="label">OneChoice har bestämt</div>
+                  <h1>${esc(d.suggestion || "—")}</h1>
+                  <p>${esc(d.justification || "")}</p>
+                  ${pres.movie_rating ? `<p class="movie-rating">${esc(pres.movie_rating)}</p>` : ""}
+                </div>
+              </div>
+            </article>`;
+        } else {
+          card = `
+            <article class="panel">
+              <div class="label">OneChoice har bestämt</div>
+              <h1>${esc(d.suggestion || "—")}</h1>
+              <p>${esc(d.justification || "")}</p>
+            </article>`;
+        }
+        root.innerHTML = `${card}
+          <button class="btn btn-primary" type="button" id="home">Låt OneChoice bestämma åt dig</button>`;
+        document.getElementById("home").onclick = () => go("/");
+      } catch (e) {
+        root.innerHTML = `<p class="error">${esc(e.message || "Kunde inte öppna delningen.")}</p>
+          <button class="btn btn-primary" type="button" id="home">Hem</button>`;
+        document.getElementById("home").onclick = () => go("/");
+      }
+    })();
+  </script>
+</body>
+</html>

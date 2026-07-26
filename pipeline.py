@@ -287,12 +287,22 @@ def decide(
                 history=early_history,
             )
         )
+        movie_mode = md.normalize_mode(
+            (context_extra or {}).get("mode")
+            or ctx.get("mode")
+            or "mood"
+        )
         ctx = md.apply_context(
             ctx,
             fmt=movie_format,
             mood=movie_mood,
             in_progress_series=in_progress_series,
+            mode=movie_mode,
         )
+        # On "Nytt förslag", do not pin the in-progress series — otherwise
+        # Avsnitt + history collapses to a single survivor and reroll no-ops.
+        if reroll:
+            ctx["in_progress_series"] = None
 
     # Fridge photo → cook only from confirmed inventory (no shopping list)
     fridge_mode = False
@@ -356,17 +366,58 @@ def decide(
             fav_titles = db.list_favorite_suggestions(user_id, domain="food", path=db_path)
         except Exception as exc:
             log.warning("list_favorite_suggestions failed: %s", exc)
-    candidates = _generate_candidates(
-        question=q,
-        domain=domain,
-        context=ctx,
-        profile=profile,
-        history=history,
-        preferences=prefs,
-        recent=recent,
-        language=language,
-        grok_api_key="" if food_local_first else grok_api_key,
+    # Trendar nu: web-search grounded picks — bypass mood matching entirely.
+    trending_mode = domain == "movie" and bool(
+        ctx.get("mode") == "trendar"
+        or (context_extra or {}).get("mode") == "trendar"
     )
+    if trending_mode:
+        import movie_trending as mt
+
+        movie_services = list((profile.get("movie") or {}).get("services") or [])
+        trend_cands = mt.build_trending_candidates(
+            language=language,
+            fmt=movie_format or ctx.get("format"),
+            user_services=movie_services,
+            api_key=grok_api_key or "",
+            use_cache=True,
+        )
+        pick = mt.pick_trending_candidate(trend_cands)
+        if not pick:
+            msg = mt.empty_message(language)
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "format": movie_format or ctx.get("format"),
+                    "mood": movie_mood or ctx.get("mood"),
+                    "trending_empty": True,
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
+        # Seed pipeline with grounded picks (available first); skip mood/Grok pack.
+        candidates = [c for c in trend_cands if not (c.get("meta") or {}).get("paywalled")]
+        if not candidates:
+            candidates = [pick]
+    else:
+        candidates = _generate_candidates(
+            question=q,
+            domain=domain,
+            context=ctx,
+            profile=profile,
+            history=history,
+            preferences=prefs,
+            recent=recent,
+            language=language,
+            grok_api_key="" if food_local_first else grok_api_key,
+        )
 
     # Occasion is the primary clothes constraint — pin a matching outfit first
     if domain == "clothes":
@@ -512,6 +563,22 @@ def decide(
                 profile=profile,
                 context=ctx,
             )
+        # Trending mode must never fall back to mood/local comfort packs —
+        # empty grounded search → honest "no trends" state instead.
+        if trending_mode and not survivors:
+            import movie_trending as mt
+
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=mt.empty_message(language),
+                context={**ctx, "mode": "trendar", "trending_empty": True},
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
         # CRITICAL: fridge mode must never fall through to supermarket / kvällsmål packs
         if not survivors and not fridge_mode:
             survivors = feasibility.filter_feasible(
@@ -581,8 +648,36 @@ def decide(
             for c in ranked
             if str(c.get("suggestion") or "").strip().lower() != prev_l
         ]
+        if not alt and domain == "movie":
+            # Repetition guard + in-progress pin can collapse the pool.
+            # Rebuild a fresh local pack (no recent filter) for this reroll.
+            import movie_domain as md
+
+            fresh = md.local_candidates(
+                fmt=md.normalize_format(ctx.get("format") or movie_format),
+                mood=md.normalize_mood(ctx.get("mood") or movie_mood),
+                language=language,
+                in_progress_series=None,
+            )
+            fresh_ok = feasibility.filter_feasible(
+                fresh, domain=domain, profile=profile, context=ctx
+            )
+            alt = [
+                c
+                for c in (fresh_ok or fresh)
+                if str(c.get("suggestion") or "").strip().lower() != prev_l
+            ]
         if alt:
-            top = alt[0]
+            # Rotate among alternatives so repeated "Nytt förslag" keeps moving.
+            pick = max(0, int(effective_reroll) - 1) % len(alt)
+            top = alt[pick]
+        elif len(ranked) == 1:
+            # Only one survivor — keep it but mark so UI can explain the stall.
+            top = ranked[0]
+            top = dict(top)
+            meta = dict(top.get("meta") or {})
+            meta["reroll_no_alt"] = True
+            top["meta"] = meta
 
     # Final leftover gate — catches LLM phrases that slipped through ranking
     if domain == "food" and not fridge_mode:
@@ -1733,11 +1828,43 @@ def _guaranteed_feasible(
             if survivors:
                 picked = survivors[0]
                 break
-        c = picked or (pack[0] if pack else {
-            "suggestion": "Seinfeld",
-            "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
-            "meta": {"title": "seinfeld", "kind": "series", "format": fmt, "mood": mood},
-        })
+        if picked:
+            c = picked
+        elif pack:
+            c = pack[0]
+        else:
+            # Never invent a series when the user asked for Film (and vice versa).
+            want = md.format_kind(fmt)
+            if want == "film":
+                c = {
+                    "suggestion": "The Intern",
+                    "justification": (
+                        "Varm feelgood — lätt film utan krav."
+                        if sv
+                        else "Warm feel-good — an easy film night."
+                    ),
+                    "meta": {
+                        "title": "the intern",
+                        "kind": "film",
+                        "format": fmt,
+                        "mood": mood,
+                        "local_pack": True,
+                    },
+                }
+            else:
+                c = {
+                    "suggestion": "Seinfeld",
+                    "justification": (
+                        "Lätt efter en lång dag." if sv else "Easy after a long day."
+                    ),
+                    "meta": {
+                        "title": "seinfeld",
+                        "kind": "series",
+                        "format": fmt,
+                        "mood": mood,
+                        "local_pack": True,
+                    },
+                }
     elif domain == "workout":
         import workout_domain as wd
 

@@ -80,9 +80,11 @@ class MovieFormatMoodInferTests(unittest.TestCase):
         history[0]["context"]["series_completed"] = True
         self.assertIsNone(md.find_in_progress_series(history))
 
-    def test_two_chip_rows_only(self) -> None:
+    def test_chip_orders_no_genre_row(self) -> None:
         self.assertEqual(len(md.FORMAT_ORDER), 3)
         self.assertEqual(len(md.MOOD_ORDER), 5)
+        self.assertEqual(len(md.MODE_ORDER), 2)
+        self.assertIn("trendar", md.MODE_ORDER)
         # No genre row — moods are not genres
         self.assertNotIn("thriller", md.MOODS)
         self.assertNotIn("comedy", md.MOODS)
@@ -206,6 +208,53 @@ class MovieDecideLoggingTests(unittest.TestCase):
         ctx = r.context or {}
         self.assertTrue(ctx.get("movie_poster_url") or ctx.get("movie_tmdb_vote_average"))
 
+    def test_film_avkopplat_local_pack_has_films(self) -> None:
+        import movie_domain as md
+
+        pack = md.local_candidates(
+            fmt="film", mood="avkopplat", language="sv", in_progress_series=None
+        )
+        self.assertGreaterEqual(len(pack), 3)
+        self.assertTrue(all((c.get("meta") or {}).get("kind") == "film" for c in pack))
+        titles = {str(c.get("suggestion") or "").strip().lower() for c in pack}
+        self.assertNotIn("seinfeld", titles)
+
+    def test_film_avkopplat_reroll_changes_suggestion(self) -> None:
+        first = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            context_extra={"format": "film", "mood": "avkopplat"},
+        )
+        self.assertTrue(first.ok)
+        self.assertNotEqual(
+            str(first.suggestion or "").strip().lower(),
+            "seinfeld",
+        )
+        self.assertEqual((first.context or {}).get("kind"), "film")
+        second = pipeline.decide(
+            self.user["id"],
+            "Vad ska jag titta på?",
+            domain_hint="movie",
+            language="sv",
+            db_path=self.path,
+            reroll=True,
+            reroll_index=1,
+            previous_decision_id=first.decision_id,
+            context_extra={
+                "format": "film",
+                "mood": "avkopplat",
+                "previous_suggestion": first.suggestion,
+            },
+        )
+        self.assertTrue(second.ok)
+        self.assertNotEqual(
+            str(second.suggestion or "").strip().lower(),
+            str(first.suggestion or "").strip().lower(),
+        )
+
     def test_lar_mig_reroll_changes_suggestion(self) -> None:
         first = pipeline.decide(
             self.user["id"],
@@ -248,7 +297,9 @@ class MovieDecideLoggingTests(unittest.TestCase):
         chip_src = inspect.getsource(app_mod.render_movie_format_mood_chips)
         self.assertIn("movie_format_pills", chip_src)
         self.assertIn("movie_mood_pills", chip_src)
-        # Two rows only — no genre pills
+        self.assertIn("movie_mode_pills", chip_src)
+        self.assertIn("Trendar nu", chip_src)
+        # No genre pills
         self.assertNotIn("genre", chip_src.lower())
 
 
@@ -266,6 +317,7 @@ class MovieUiChipTests(unittest.TestCase):
         body = " ".join(str(m.value or "") for m in at.markdown)
         self.assertIn("Format", body)
         self.assertIn("Läge", body)
+        self.assertIn("Upptäck", body)
         # Never paint "Sök Title · Netflix" under the card — CTA is enough
         self.assertNotRegex(body, r"Sök\s+.+\s*[·•-]\s*Netflix")
         self.assertNotIn("Sök ", body)
