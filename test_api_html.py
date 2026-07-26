@@ -23,6 +23,9 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIn("OneChoice", home.text)
         self.assertIn("Vad vill du bestämma?", home.text)
         self.assertNotIn('id="heroCta"', home.text)
+        self.assertIn("suggestBox", home.text)
+        self.assertIn("/api/home/suggestion", home.text)
+        self.assertNotIn("via_router: true", home.text)
         self.assertIn("/static/app.css", home.text)
         api_home = self.client.get("/api/home")
         self.assertEqual(api_home.status_code, 200)
@@ -41,6 +44,26 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIn("hero", body)
         self.assertEqual(len(body["domains"]), 6)
         self.assertEqual(body["domains"][0]["id"], "food")
+        self.assertIn("tip", body)
+        tip = body["tip"]
+        self.assertIn("förslagslåda", tip.get("text", "").lower())
+
+    def test_home_suggestion_box_saves_not_decide(self) -> None:
+        self.client.post("/api/auth/guest")
+        bad = self.client.post("/api/home/suggestion", json={"text": "x"})
+        self.assertEqual(bad.status_code, 400)
+        ok = self.client.post(
+            "/api/home/suggestion",
+            json={"text": "Podcast som ny kategori"},
+        )
+        self.assertEqual(ok.status_code, 200, ok.text)
+        data = ok.json()
+        self.assertTrue(data.get("ok"))
+        self.assertTrue(data.get("saved"))
+        self.assertIn("Tack", data.get("message", ""))
+        # Must not create a decision / navigate into decide flow
+        self.assertNotIn("decision", data)
+        self.assertNotIn("page", data)
 
     def test_decide_food_returns_result(self) -> None:
         self.client.post("/api/auth/guest")

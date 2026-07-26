@@ -390,6 +390,43 @@ def init_db(path: Path | str | None = None) -> None:
                 ON api_sessions(expires_at)
             """
         )
+        # Home "förslagslåda" — product ideas / new categories (not decisions)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS product_suggestions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+
+
+def save_product_suggestion(
+    body: str,
+    *,
+    user_id: str | None = None,
+    path: Path | str | None = None,
+) -> dict[str, Any]:
+    """Persist a home suggestion-box tip (category idea / product feedback)."""
+    text = str(body or "").strip()
+    if len(text) < 2:
+        raise ValueError("empty_suggestion")
+    if len(text) > 500:
+        text = text[:500]
+    init_db(path)
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO product_suggestions (user_id, body, created_at)
+            VALUES (?, ?, ?)
+            """,
+            (str(user_id or "") or None, text, now),
+        )
+        row_id = int(cur.lastrowid or 0)
+    return {"id": row_id, "body": text, "created_at": now}
 
 
 def api_session_upsert(

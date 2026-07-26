@@ -11,7 +11,7 @@
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
   <title>OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v20-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v21-20260726" />
 </head>
 <body>
   <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
@@ -19,14 +19,15 @@
     <div class="loading">Laddar…</div>
   </main>
   <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
-  <script src="/static/app.js?v=v20-20260726"></script>
+  <script src="/static/app.js?v=v21-20260726"></script>
   <script>
     (async function () {
-      const { api, routeDecide, ICONS, TIP_ICO, ensureGuest } = window.OC;
+      const { api, routeDecide, ICONS, TIP_ICO, ensureGuest, showToast } = window.OC;
       await ensureGuest();
       await api.post("/api/home/chooser", {});
       const home = await api.get("/api/home");
       const root = document.getElementById("app");
+      const tip = home.tip || {};
 
       const cards = (home.domains || [])
         .map(
@@ -39,7 +40,6 @@
         )
         .join("");
 
-      // No hero "Bestäm åt mig" — it lied (always food). Home is choose a domain.
       root.innerHTML = `
         <section class="hero">
           <div class="hero-orb" aria-hidden="true"></div>
@@ -48,25 +48,37 @@
         </section>
         <div class="section-label">Vad vill du bestämma?</div>
         <div class="grid">${cards}</div>
-        <button class="tip" type="button" id="tipBtn">
+        <button class="tip" type="button" id="tipBtn" aria-expanded="false">
           <span class="tip-ico">${TIP_ICO}</span>
-          <span class="tip-text">${home.tip.text}</span>
+          <span class="tip-text">${tip.text || "Saknar du en kategori? Tipsa oss."}</span>
         </button>
-        <div class="free" id="freeBox">
-          <input id="freeInput" placeholder="Vad ska du bestämma?" maxlength="200" />
-          <button class="btn btn-primary" type="button" id="freeSubmit">Bestäm</button>
-          <button class="linkish" type="button" id="fridgeBtn">${home.fridge_label || "Fota kylen"}</button>
+        <div class="free suggest-box" id="suggestBox" hidden>
+          <label class="suggest-label" for="suggestInput">Förslagslåda</label>
+          <p class="suggest-help">Här samlar vi idéer till nya kategorier — det startar inget beslut.</p>
+          <textarea id="suggestInput" rows="3" maxlength="500"
+            placeholder="${tip.placeholder || "T.ex. podcast, inredning, spelkväll…"}"></textarea>
+          <button class="btn btn-primary" type="button" id="suggestSubmit">${
+            tip.submit_label || "Skicka förslag"
+          }</button>
         </div>
         <p class="error" id="err" hidden></p>
+        <p class="muted" id="suggestOk" hidden></p>
       `;
 
       const err = document.getElementById("err");
+      const ok = document.getElementById("suggestOk");
       const setBusy = (busy) => {
         document.querySelectorAll("button").forEach((b) => (b.disabled = busy));
       };
       const showErr = (m) => {
         err.hidden = !m;
         err.textContent = m || "";
+        if (m) ok.hidden = true;
+      };
+      const showOk = (m) => {
+        ok.hidden = !m;
+        ok.textContent = m || "";
+        if (m) err.hidden = true;
       };
 
       root.querySelectorAll("[data-domain]").forEach((btn) => {
@@ -82,23 +94,32 @@
         };
       });
 
-      document.getElementById("tipBtn").onclick = () => {
-        document.getElementById("freeBox").classList.toggle("open");
+      const tipBtn = document.getElementById("tipBtn");
+      const box = document.getElementById("suggestBox");
+      tipBtn.onclick = () => {
+        const open = box.hidden;
+        box.hidden = !open;
+        tipBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        tipBtn.classList.toggle("open", open);
+        if (open) document.getElementById("suggestInput").focus();
       };
-      document.getElementById("freeSubmit").onclick = async () => {
-        const q = document.getElementById("freeInput").value.trim();
-        if (!q) return showErr("Skriv en fråga eller välj en kategori.");
+
+      document.getElementById("suggestSubmit").onclick = async () => {
+        const text = document.getElementById("suggestInput").value.trim();
+        if (text.length < 2) return showErr("Skriv ett kort förslag först.");
         showErr("");
+        showOk("");
         setBusy(true);
         try {
-          await routeDecide({ question: q, via_router: true });
+          const res = await api.post("/api/home/suggestion", { text });
+          document.getElementById("suggestInput").value = "";
+          showOk(res.message || "Tack för förslaget!");
+          if (typeof showToast === "function") showToast("Förslag skickat");
         } catch (e) {
-          showErr(e.message || "Kunde inte bestämma.");
+          showErr(e.message || "Kunde inte skicka förslaget.");
+        } finally {
           setBusy(false);
         }
-      };
-      document.getElementById("fridgeBtn").onclick = () => {
-        showErr("Kylskåpsflödet kommer i HTML-MVP steg 2 — använd Mat just nu.");
       };
     })();
   </script>

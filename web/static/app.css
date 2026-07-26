@@ -264,13 +264,32 @@ a { color: inherit; text-decoration: none; }
   transform: translateY(-50%) rotate(45deg);
   border-top: 1.5px solid var(--oc-muted);
   border-right: 1.5px solid var(--oc-muted);
+  transition: transform 0.15s ease;
+}
+.tip.open::after {
+  transform: translateY(-30%) rotate(135deg);
 }
 
-.free {
-  display: none;
-  margin-bottom: 16px;
+.free,
+.suggest-box {
+  margin: 0 0 16px;
 }
-.free.open { display: block; }
+.suggest-label {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--oc-muted);
+  margin: 0 0 6px;
+}
+.suggest-help {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: var(--oc-muted);
+  line-height: 1.4;
+}
+.suggest-box textarea,
 .free input {
   width: 100%;
   padding: 14px 16px;
@@ -279,6 +298,12 @@ a { color: inherit; text-decoration: none; }
   font-size: 1rem;
   margin-bottom: 10px;
   font-family: inherit;
+  resize: vertical;
+  background: #fff;
+}
+.suggest-box textarea:focus {
+  outline: 2px solid rgba(59, 59, 196, 0.25);
+  border-color: var(--oc-accent);
 }
 .linkish {
   display: block;
