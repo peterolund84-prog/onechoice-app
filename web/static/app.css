@@ -887,70 +887,92 @@ a { color: inherit; text-decoration: none; }
   color: var(--oc-muted);
 }
 
-/* Decide loading skeleton */
-@keyframes oc-skel-shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
+/* Decide wait — cardless, ambient (no opaque skeleton box) */
+.oc-decide-skel-host {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: min(52vh, 420px);
+  padding: 48px 20px 72px;
+  animation: oc-wait-host-in 0.45s ease both;
 }
-.oc-skel-card { pointer-events: none; }
-.oc-skel-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0.04) 0%,
-    rgba(255,255,255,0.1) 45%,
-    rgba(255,255,255,0.04) 90%
-  );
-  background-size: 200% 100%;
-  animation: oc-skel-shimmer 1.6s ease-in-out infinite;
+@keyframes oc-wait-host-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
-.movie-poster.oc-skel-shimmer,
-.food-img.oc-skel-shimmer {
-  min-height: 168px;
-  border-radius: 14px;
+.oc-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: min(100%, 280px);
+  pointer-events: none;
+  text-align: center;
 }
-.food-img.oc-skel-shimmer { min-height: 200px; border-radius: 0; }
-.oc-skel-bar {
-  height: 12px;
-  border-radius: 8px;
-  margin: 0 0 12px;
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0.05) 0%,
-    rgba(255,255,255,0.12) 45%,
-    rgba(255,255,255,0.05) 90%
-  );
-  background-size: 200% 100%;
-  animation: oc-skel-shimmer 1.6s ease-in-out infinite;
-}
-.oc-skel-bar.is-title { height: 22px; margin-bottom: 16px; }
-.oc-skel-status {
+.oc-wait-mark {
   position: relative;
-  margin-top: 14px;
-  min-height: 1.35em;
-  font-size: 0.92rem;
-  color: var(--oc-muted);
-  text-align: left;
+  width: 56px;
+  height: 56px;
 }
-.oc-skel-status span {
+.oc-wait-ring {
   position: absolute;
-  left: 0; right: 0;
-  opacity: 0;
-  animation: oc-skel-status-fade 8.8s linear infinite;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(247, 243, 236, 0.22);
+  box-shadow:
+    0 0 0 10px rgba(247, 243, 236, 0.03),
+    inset 0 0 18px rgba(247, 243, 236, 0.06);
+  animation: oc-wait-breathe 2.4s ease-in-out infinite;
 }
-.oc-skel-status span:nth-child(1) { animation-delay: 0s; }
-.oc-skel-status span:nth-child(2) { animation-delay: 2.2s; }
-.oc-skel-status span:nth-child(3) { animation-delay: 4.4s; }
-.oc-skel-status span:nth-child(4) { animation-delay: 6.6s; }
-@keyframes oc-skel-status-fade {
-  0%, 5% { opacity: 0; }
-  10%, 22% { opacity: 1; }
-  27%, 100% { opacity: 0; }
+.oc-wait-core {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 40% 35%, rgba(255, 248, 235, 0.95), rgba(232, 210, 170, 0.55) 55%, rgba(180, 140, 90, 0.15) 100%);
+  box-shadow: 0 0 28px rgba(232, 200, 150, 0.28);
+  animation: oc-wait-core 2.4s ease-in-out infinite;
+}
+@keyframes oc-wait-breathe {
+  0%, 100% { transform: scale(0.94); opacity: 0.65; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+@keyframes oc-wait-core {
+  0%, 100% { transform: scale(0.88); opacity: 0.75; }
+  50% { transform: scale(1); opacity: 1; }
+}
+.oc-wait-status {
+  position: relative;
+  width: 100%;
+  min-height: 1.5em;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(247, 243, 236, 0.88);
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.45);
+}
+.oc-wait-status span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  opacity: 0;
+  animation: oc-wait-status-fade 8.8s linear infinite;
+}
+.oc-wait-status span:nth-child(1) { animation-delay: 0s; }
+.oc-wait-status span:nth-child(2) { animation-delay: 2.2s; }
+.oc-wait-status span:nth-child(3) { animation-delay: 4.4s; }
+.oc-wait-status span:nth-child(4) { animation-delay: 6.6s; }
+@keyframes oc-wait-status-fade {
+  0%, 5% { opacity: 0; transform: translateY(4px); }
+  10%, 22% { opacity: 1; transform: none; }
+  27%, 100% { opacity: 0; transform: translateY(-3px); }
 }
 .oc-card-arrive {
-  animation: oc-card-fade-in 0.4s ease both;
+  animation: oc-card-fade-in 0.45s ease both;
 }
 @keyframes oc-card-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
 }
 

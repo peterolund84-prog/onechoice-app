@@ -42,9 +42,10 @@ describe("OneChoice HTML core flow", () => {
     OC = await loadOc();
   });
 
-  it("builds skeleton with rotating food status lines", () => {
+  it("builds cardless wait with rotating food status lines", () => {
     const html = OC.skeletonHtml("food");
-    expect(html).toContain("oc-skel-card");
+    expect(html).toContain("oc-wait");
+    expect(html).not.toContain("oc-skel-card");
     expect(html).toContain("Kollar vad du åt senast…");
     expect(html).toContain("Sätter ihop receptet…");
   });

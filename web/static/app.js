@@ -180,31 +180,15 @@ function statusLinesFor(domain) {
 function skeletonHtml(domain) {
   const lines = statusLinesFor(domain);
   const status = lines.map((m) => `<span>${esc(m)}</span>`).join("");
-  const d = (domain || "food").toLowerCase();
-  if (d === "movie") {
-    return `
-      <article class="panel decision-card movie-card oc-skel-card" aria-busy="true">
-        <div class="movie-row">
-          <div class="movie-poster oc-skel-shimmer" aria-hidden="true"></div>
-          <div class="movie-col">
-            <div class="oc-skel-bar is-title" style="width:70%"></div>
-            <div class="oc-skel-bar" style="width:50%"></div>
-            <div class="oc-skel-bar" style="width:40%"></div>
-            <div class="oc-skel-status" aria-live="polite">${status}</div>
-          </div>
-        </div>
-      </article>`;
-  }
+  const d = (domain || "generic").toLowerCase();
   return `
-    <article class="panel decision-card food-card oc-skel-card" aria-busy="true">
-      <div class="food-img oc-skel-shimmer" aria-hidden="true"></div>
-      <div class="food-body">
-        <div class="oc-skel-bar is-title" style="width:70%"></div>
-        <div class="oc-skel-bar" style="width:50%"></div>
-        <div class="oc-skel-bar" style="width:40%"></div>
-        <div class="oc-skel-status" aria-live="polite">${status}</div>
+    <div class="oc-wait" data-domain="${esc(d)}" aria-busy="true">
+      <div class="oc-wait-mark" aria-hidden="true">
+        <span class="oc-wait-ring"></span>
+        <span class="oc-wait-core"></span>
       </div>
-    </article>`;
+      <div class="oc-wait-status" aria-live="polite">${status}</div>
+    </div>`;
 }
 
 function showDecideSkeleton(host, domain) {
