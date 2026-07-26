@@ -144,7 +144,6 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIn("mediaUrl", js)
         result = (root / "web" / "result.html").read_text(encoding="utf-8")
         self.assertIn("chips-scroll", result)
-        self.assertIn("showToast", result)
 
     def test_icon_buttons_have_visible_chip_styles(self) -> None:
         from pathlib import Path

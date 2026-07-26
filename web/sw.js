@@ -1,5 +1,5 @@
 /* OneChoice service worker — shell offline; media always network-first */
-const CACHE = "onechoice-shell-v14";
+const CACHE = "onechoice-shell-v15";
 const SHELL = [
   "/",
   "/result",
