@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 import pipeline
 from api.deps import SessionDep, apply_auth
+from api.presentation import enrich_decision, nutrition_stats
 from api.session_store import STORE
 
 router = APIRouter(prefix="/api/decision", tags=["decision"])
@@ -24,7 +25,7 @@ def current(sess: SessionDep) -> dict:
     if not sess.current:
         raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")
     return {
-        "decision": sess.current,
+        "decision": enrich_decision(sess.current),
         "accepted": sess.accepted,
         "session": sess.public(),
     }
@@ -56,7 +57,7 @@ def accept(body: AcceptBody, sess: SessionDep) -> dict:
         "ok": True,
         "accepted": True,
         "page": page,
-        "decision": sess.current,
+        "decision": enrich_decision(sess.current),
         "session": sess.public(),
     }
 
@@ -69,6 +70,28 @@ def execute(sess: SessionDep) -> dict:
     ctx = cur.get("context") or {}
     shopping = ctx.get("shopping") or {}
     recipe = ctx.get("recipe") or shopping.get("recipe") or {}
+    if isinstance(recipe, dict):
+        try:
+            import shopping as shopping_mod
+
+            ensure = getattr(shopping_mod, "ensure_recipe_nutrition", None)
+            if callable(ensure):
+                recipe = ensure(
+                    recipe,
+                    suggestion=str(cur.get("suggestion") or recipe.get("title") or ""),
+                    allow_estimate=True,
+                )
+        except Exception:
+            pass
+    enriched = enrich_decision(cur) or {}
+    presentation = enriched.get("presentation") or {}
+    nut = nutrition_stats(
+        recipe if isinstance(recipe, dict) else None,
+        suggestion=str(cur.get("suggestion") or ""),
+    )
+    if nut:
+        presentation = dict(presentation)
+        presentation["nutrition"] = nut
     return {
         "suggestion": cur.get("suggestion"),
         "justification": cur.get("justification"),
@@ -78,6 +101,8 @@ def execute(sess: SessionDep) -> dict:
         "fridge_mode": ctx.get("source") == "fridge_photo",
         "shopping": shopping,
         "recipe": recipe,
+        "presentation": presentation,
+        "nutrition": nut,
         "accepted": sess.accepted,
         "session": sess.public(),
     }

@@ -15,10 +15,20 @@ uvicorn api.main:app --reload --port 8000
 
 ## Secrets
 
-Samma som tidigare — antingen miljövariabler eller `.streamlit/secrets.toml`:
+Samma som tidigare — antingen miljövariabler eller `.streamlit/secrets.toml`
+(HTML/API läser filen **utan** Streamlit):
 
-- `GROK_API_KEY`
-- `SUPABASE_URL` / `SUPABASE_KEY` (för login)
+```bat
+copy .streamlit\secrets.toml.example .streamlit\secrets.toml
+```
+
+Lägg in:
+
+- `GROK_API_KEY` — AI-beslut (annars offline)
+- `SUPABASE_URL` / `SUPABASE_KEY` — login / konton
+- `TMDB_API_KEY` — film-/serieposter + betyg (utan nyckel: begränsad offline-katalog)
+
+Kontrollera status under **Profil → Integrationer** efter restart.
 
 ## Struktur
 

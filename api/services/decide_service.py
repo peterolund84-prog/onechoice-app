@@ -7,6 +7,7 @@ from typing import Any
 
 import food_domain as fd
 import pipeline
+from api.presentation import enrich_decision
 from api.secrets import grok_api_key
 from api.session_store import Session
 
@@ -194,6 +195,6 @@ def run_decide(
     return {
         "ok": bool(data.get("ok", True)),
         "page": page,
-        "decision": data,
+        "decision": enrich_decision(data),
         "session": sess.public(),
     }

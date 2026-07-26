@@ -18,7 +18,7 @@
   <script src="/static/app.js"></script>
   <script>
     (async function () {
-      const { api, go, ensureGuest } = window.OC;
+      const { api, go, ensureGuest, esc } = window.OC;
       await ensureGuest();
       const root = document.getElementById("app");
       const params = new URLSearchParams(location.search);
@@ -56,14 +56,64 @@
         return;
       }
       const d = cur.decision || {};
+      const ctx = d.context || {};
+      const pres = d.presentation || {};
       const domain = d.domain || "";
-      const meal = (d.context || {}).meal_type;
+      const meal = ctx.meal_type;
       const meals = [
         ["frukost", "Frukost"],
         ["lunch", "Lunch"],
         ["middag", "Middag"],
         ["kvallsmal", "Kvällsmål"],
       ];
+
+      const cardHtml = (() => {
+        if (domain === "movie") {
+          const poster = pres.movie_poster_url || ctx.movie_poster_url;
+          const year = pres.movie_year || ctx.movie_tmdb_year;
+          const rating = pres.movie_rating || "";
+          return `
+            <article class="panel decision-card movie-card">
+              <div class="movie-row">
+                ${
+                  poster
+                    ? `<img class="movie-poster" src="${esc(poster)}" alt="" loading="lazy" />`
+                    : `<div class="movie-poster movie-poster-ph" aria-hidden="true"></div>`
+                }
+                <div class="movie-col">
+                  <div class="label">${esc(ctx.kind === "film" ? "Film" : "Serie")}</div>
+                  <h1>${esc(d.suggestion || "—")}</h1>
+                  ${year ? `<div class="movie-year">${esc(String(year))}</div>` : ""}
+                  <p>${esc(d.justification || "")}</p>
+                  ${rating ? `<p class="movie-rating">${esc(rating)}</p>` : ""}
+                </div>
+              </div>
+            </article>`;
+        }
+        if (domain === "food") {
+          const img = pres.dish_image_url;
+          const meta = pres.food_meta || "";
+          return `
+            <article class="panel decision-card food-card">
+              ${
+                img
+                  ? `<img class="food-img" src="${esc(img)}" alt="" loading="lazy" />`
+                  : `<div class="food-img food-img-ph" aria-hidden="true"><div class="food-ph-circle"></div></div>`
+              }
+              <div class="food-body">
+                <h1>${esc(d.suggestion || "—")}</h1>
+                <p>${esc(d.justification || "")}</p>
+                ${meta ? `<p class="food-meta">${esc(meta)}</p>` : ""}
+              </div>
+            </article>`;
+        }
+        return `
+          <article class="panel">
+            <div class="label">${esc(domain || "beslut")}</div>
+            <h1>${esc(d.suggestion || "—")}</h1>
+            <p>${esc(d.justification || "")}</p>
+          </article>`;
+      })();
 
       root.innerHTML = `
         ${
@@ -76,11 +126,7 @@
                 .join("")}</div>`
             : ""
         }
-        <article class="panel">
-          <div class="label">${domain || "beslut"}</div>
-          <h1>${d.suggestion || "—"}</h1>
-          <p>${d.justification || ""}</p>
-        </article>
+        ${cardHtml}
         <button class="btn btn-primary" type="button" id="accept">${
           domain === "food" ? "Välj" : "Gör det"
         }</button>

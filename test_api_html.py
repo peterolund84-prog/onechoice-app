@@ -56,6 +56,9 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertIsNotNone(data.get("decision"))
         if data["page"] == "result":
             self.assertTrue(data["decision"].get("suggestion"))
+            pres = data["decision"].get("presentation") or {}
+            self.assertIn("dish_image_url", pres)
+            self.assertIn("food_meta", pres)
             cur = self.client.get("/api/decision/current")
             self.assertEqual(cur.status_code, 200)
             acc = self.client.post(
@@ -65,6 +68,7 @@ class ApiHtmlSmokeTests(unittest.TestCase):
             self.assertEqual(acc.json()["page"], "execute")
             ex = self.client.get("/api/decision/execute")
             self.assertEqual(ex.status_code, 200)
+            self.assertIn("nutrition", ex.json())
 
     def test_lista_and_profile(self) -> None:
         self.client.post("/api/auth/guest")
@@ -75,6 +79,19 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertEqual(prof.status_code, 200)
         self.assertIn("html+fastapi", prof.json()["stack"])
         self.assertIn("ai_status", prof.json())
+        self.assertIn("supabase_configured", prof.json())
+        self.assertIn("tmdb_configured", prof.json())
+        self.assertIn("integrations", prof.json())
+
+    def test_dish_assets_mounted(self) -> None:
+        from pathlib import Path
+
+        dishes = Path(__file__).resolve().parent / "assets" / "dishes"
+        sample = next(dishes.glob("*.jpg"), None)
+        self.assertIsNotNone(sample)
+        r = self.client.get(f"/assets/dishes/{sample.name}")
+        self.assertEqual(r.status_code, 200)
+        self.assertGreater(len(r.content), 100)
 
     def test_cta_and_logo_spark_layout(self) -> None:
         from pathlib import Path
@@ -82,15 +99,17 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         root = Path(__file__).resolve().parent
         css = (root / "web" / "static" / "app.css").read_text(encoding="utf-8")
         html = (root / "web" / "index.html").read_text(encoding="utf-8")
+        result = (root / "web" / "result.html").read_text(encoding="utf-8")
+        execute = (root / "web" / "execute.html").read_text(encoding="utf-8")
         self.assertIn(".cta-inner", css)
         self.assertIn("flex-direction: row", css)
         self.assertIn(".logo-i", css)
         self.assertIn('class="logo-i"', html)
         self.assertIn("cta-inner", html)
-        self.assertIn("cta-copy", html)
-        self.assertIn("cta-spark-wrap", html)
-        self.assertIn("cta-title", html)
-        self.assertIn("cta-sub", html)
+        self.assertIn("food-img", result)
+        self.assertIn("movie-poster", result)
+        self.assertIn("nut-stats", execute)
+        self.assertIn("presentation", result)
 
 
 if __name__ == "__main__":

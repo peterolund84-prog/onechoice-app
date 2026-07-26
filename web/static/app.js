@@ -24,6 +24,15 @@ function go(page) {
   window.location.href = page;
 }
 
+function esc(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function navActive(name) {
   document.querySelectorAll(".nav a").forEach((a) => {
     a.classList.toggle("active", a.dataset.nav === name);
@@ -61,4 +70,4 @@ async function routeDecide(payload) {
   return data;
 }
 
-window.OC = { api, go, navActive, ICONS, SPARK, TIP_ICO, ensureGuest, routeDecide };
+window.OC = { api, go, esc, navActive, ICONS, SPARK, TIP_ICO, ensureGuest, routeDecide };

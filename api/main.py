@@ -13,6 +13,7 @@ from api.routes import auth, decide, decision, history, home, lista, profile
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB = ROOT / "web"
+DISHES = ROOT / "assets" / "dishes"
 
 app = FastAPI(title="OneChoice", version="html-mvp-1")
 
@@ -25,6 +26,8 @@ app.include_router(history.router)
 app.include_router(profile.router)
 
 app.mount("/static", StaticFiles(directory=str(WEB / "static")), name="static")
+if DISHES.is_dir():
+    app.mount("/assets/dishes", StaticFiles(directory=str(DISHES)), name="dishes")
 
 
 def _page(name: str) -> FileResponse:

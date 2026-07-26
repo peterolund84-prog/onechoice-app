@@ -18,7 +18,7 @@
   <script src="/static/app.js"></script>
   <script>
     (async function () {
-      const { api, go, ensureGuest } = window.OC;
+      const { api, go, ensureGuest, esc } = window.OC;
       await ensureGuest();
       const root = document.getElementById("app");
       let data;
@@ -31,17 +31,39 @@
       const recipe = data.recipe || {};
       const shopping = data.shopping || {};
       const toBuy = shopping.to_buy || {};
+      const pres = data.presentation || {};
+      const nut = data.nutrition || pres.nutrition || null;
       const items = [];
       Object.entries(toBuy).forEach(([sec, arr]) => {
         (arr || []).forEach((name) => items.push({ name, sec }));
       });
       const steps = recipe.steps || [];
+      const img = pres.dish_image_url;
+      const meta = pres.food_meta || "";
+
+      const nutHtml = nut
+        ? `<div class="nut-stats" role="group" aria-label="Näringsvärden per portion">
+            <div class="nut-stat"><span class="nut-val">${esc(nut.kcal)}</span><span class="nut-lab">KCAL</span></div>
+            <div class="nut-stat"><span class="nut-val">${esc(nut.protein_g)} g</span><span class="nut-lab">PROTEIN</span></div>
+            <div class="nut-stat"><span class="nut-val">${esc(nut.fat_g)} g</span><span class="nut-lab">FETT</span></div>
+            <div class="nut-stat"><span class="nut-val">${esc(nut.carbs_g)} g</span><span class="nut-lab">KOLH</span></div>
+          </div>`
+        : "";
 
       root.innerHTML = `
-        <article class="panel">
-          <div class="label">Att laga</div>
-          <h1>${data.suggestion || "—"}</h1>
-          <p>${data.justification || ""}</p>
+        <article class="panel decision-card food-card">
+          ${
+            img
+              ? `<img class="food-img" src="${esc(img)}" alt="" loading="lazy" />`
+              : ""
+          }
+          <div class="food-body">
+            <div class="label">Att laga</div>
+            <h1>${esc(data.suggestion || "—")}</h1>
+            <p>${esc(data.justification || "")}</p>
+            ${meta ? `<p class="food-meta">${esc(meta)}</p>` : ""}
+            ${nutHtml}
+          </div>
         </article>
         ${
           items.length
@@ -50,7 +72,7 @@
                  ${items
                    .map(
                      (it, i) =>
-                       `<li><input type="checkbox" data-i="${i}" checked /> <span>${it.name}</span></li>`
+                       `<li><input type="checkbox" data-i="${i}" checked /> <span>${esc(it.name)}</span></li>`
                    )
                    .join("")}
                </ul>
@@ -61,7 +83,7 @@
           steps.length
             ? `<div class="section-label">Recept</div>
                <ol class="list" style="list-style:decimal;padding-left:1.2rem">
-                 ${steps.map((s) => `<li style="display:list-item;border:0">${s}</li>`).join("")}
+                 ${steps.map((s) => `<li style="display:list-item;border:0">${esc(s)}</li>`).join("")}
                </ol>`
             : ""
         }

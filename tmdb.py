@@ -28,7 +28,7 @@ def _norm_title(title: str) -> str:
 
 
 def _get_api_key() -> str | None:
-    # Prefer Streamlit secrets, but keep it test-friendly.
+    # Prefer Streamlit secrets, then api.secrets / env (uvicorn-friendly).
     try:
         import streamlit as st  # type: ignore
 
@@ -37,7 +37,15 @@ def _get_api_key() -> str | None:
             return str(key)
     except Exception:
         pass
-    return os.environ.get("TMDB_API_KEY")
+    try:
+        from api.secrets import tmdb_api_key
+
+        key = tmdb_api_key()
+        if key:
+            return key
+    except Exception:
+        pass
+    return os.environ.get("TMDB_API_KEY") or None
 
 
 # Minimal offline mapping for unit tests and local dev.
