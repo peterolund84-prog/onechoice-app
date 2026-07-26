@@ -190,6 +190,13 @@ def enrich_decision(
     ctx = out.get("context") if isinstance(out.get("context"), dict) else {}
     domain = str(out.get("domain") or "")
     suggestion = str(out.get("suggestion") or "")
+    if domain == "movie" and suggestion:
+        from api.movie_posters import display_title as _movie_display
+
+        pretty = _movie_display(suggestion)
+        if pretty and pretty != suggestion:
+            suggestion = pretty
+            out["suggestion"] = pretty
     poster = None
     if domain == "movie":
         poster = _resolve_movie_poster(ctx, suggestion)

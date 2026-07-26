@@ -293,6 +293,10 @@ def decide(
             mood=movie_mood,
             in_progress_series=in_progress_series,
         )
+        # On "Nytt förslag", do not pin the in-progress series — otherwise
+        # Avsnitt + history collapses to a single survivor and reroll no-ops.
+        if reroll:
+            ctx["in_progress_series"] = None
 
     # Fridge photo → cook only from confirmed inventory (no shopping list)
     fridge_mode = False
@@ -581,6 +585,25 @@ def decide(
             for c in ranked
             if str(c.get("suggestion") or "").strip().lower() != prev_l
         ]
+        if not alt and domain == "movie":
+            # Repetition guard + in-progress pin can collapse the pool.
+            # Rebuild a fresh local pack (no recent filter) for this reroll.
+            import movie_domain as md
+
+            fresh = md.local_candidates(
+                fmt=md.normalize_format(ctx.get("format") or movie_format),
+                mood=md.normalize_mood(ctx.get("mood") or movie_mood),
+                language=language,
+                in_progress_series=None,
+            )
+            fresh_ok = feasibility.filter_feasible(
+                fresh, domain=domain, profile=profile, context=ctx
+            )
+            alt = [
+                c
+                for c in (fresh_ok or fresh)
+                if str(c.get("suggestion") or "").strip().lower() != prev_l
+            ]
         if alt:
             # Rotate among alternatives so repeated "Nytt förslag" keeps moving.
             pick = max(0, int(effective_reroll) - 1) % len(alt)

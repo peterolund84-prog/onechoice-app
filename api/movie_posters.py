@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Resolve movie/series poster URLs (TMDB when keyed, free fallbacks — no key)."""
+"""Resolve movie/series poster URLs.
+
+Order: local bundled JPEG → TMDB (if keyed) → TVMaze → iTunes.
+Local files make phone/LAN work even when the PC cannot reach TMDB/TVMaze.
+"""
 
 from __future__ import annotations
 
 import logging
 import re
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
@@ -12,10 +17,13 @@ import requests
 
 log = logging.getLogger("onechoice.movie_posters")
 
+ROOT = Path(__file__).resolve().parent.parent
+POSTERS_DIR = ROOT / "assets" / "posters"
+
 _TVMAZE_HOSTS = ("static.tvmaze.com", "api.tvmaze.com")
 _ITUNES_HOSTS = ("mzstatic.com",)
 
-# Swedish / alternate catalog titles → search-friendly names
+# Swedish / alternate catalog titles → search-friendly names + local slug
 _TITLE_ALIASES: dict[str, str] = {
     "vänner": "Friends",
     "vanner": "Friends",
@@ -31,6 +39,34 @@ _TITLE_ALIASES: dict[str, str] = {
     "the office": "The Office",
     "brooklyn nine-nine": "Brooklyn Nine-Nine",
     "brooklyn 99": "Brooklyn Nine-Nine",
+    "andor": "Andor",
+    "wednesday": "Wednesday",
+    "succession": "Succession",
+    "dune": "Dune",
+    "hilda": "Hilda",
+    "explained": "Explained",
+}
+
+# Local file slugs (assets/posters/<slug>.jpg)
+_LOCAL_SLUGS: dict[str, str] = {
+    "seinfeld": "seinfeld",
+    "vänner": "vanner",
+    "vanner": "vanner",
+    "friends": "friends",
+    "the office": "the-office",
+    "brooklyn nine-nine": "brooklyn-nine-nine",
+    "brooklyn 99": "brooklyn-nine-nine",
+    "the night agent": "the-night-agent",
+    "andor": "andor",
+    "the bear": "the-bear",
+    "succession": "succession",
+    "wednesday": "wednesday",
+    "our planet": "our-planet",
+    "hilda": "hilda",
+    "explained": "explained",
+    "dune": "dune",
+    "kung fu panda": "kung-fu-panda",
+    "bonusfamiljen": "bonusfamiljen",
 }
 
 
@@ -46,19 +82,35 @@ def _norm(title: str) -> str:
     return re.sub(r"\s+", " ", t)
 
 
+def _norm_key(title: str) -> str:
+    """Normalize for alias/slug lookup (keep ä for vänner key)."""
+    return re.sub(r"\s+", " ", (title or "").strip().lower())
+
+
+def display_title(title: str) -> str:
+    """Pretty label for stub keys like 'seinfeld'."""
+    raw = (title or "").strip()
+    if not raw:
+        return raw
+    alias = _TITLE_ALIASES.get(_norm_key(raw)) or _TITLE_ALIASES.get(_norm(raw))
+    if alias:
+        return alias
+    if raw.islower():
+        return raw.title()
+    return raw
+
+
 def _search_names(title: str) -> list[str]:
     raw = (title or "").strip()
     if not raw:
         return []
     names: list[str] = []
-    alias = _TITLE_ALIASES.get(_norm(raw)) or _TITLE_ALIASES.get(raw.lower())
+    alias = _TITLE_ALIASES.get(_norm_key(raw)) or _TITLE_ALIASES.get(_norm(raw))
     if alias:
         names.append(alias)
     names.append(raw)
-    # Capitalize bare offline stubs like "seinfeld"
     if raw.islower() and " " not in raw:
         names.append(raw.title())
-    # de-dupe preserve order
     out: list[str] = []
     seen: set[str] = set()
     for n in names:
@@ -67,6 +119,24 @@ def _search_names(title: str) -> list[str]:
             seen.add(k)
             out.append(n.strip())
     return out
+
+
+def _local_poster(title: str) -> str | None:
+    if not POSTERS_DIR.is_dir():
+        return None
+    keys = [_norm_key(title), _norm(title)]
+    for q in _search_names(title):
+        keys.append(_norm_key(q))
+        keys.append(_norm(q))
+    for key in keys:
+        slug = _LOCAL_SLUGS.get(key)
+        if not slug:
+            # heuristic: spaces → dashes, strip accents already in _norm
+            slug = re.sub(r"[^a-z0-9]+", "-", key).strip("-")
+        path = POSTERS_DIR / f"{slug}.jpg"
+        if path.is_file() and path.stat().st_size > 500:
+            return f"/assets/posters/{slug}.jpg"
+    return None
 
 
 def _tmdb_poster(title: str, kind: str) -> str | None:
@@ -86,7 +156,7 @@ def _tmdb_poster(title: str, kind: str) -> str | None:
             if url and "image.tmdb.org" in str(url):
                 stem = str(url).rsplit("/", 1)[-1].split(".", 1)[0]
                 if stem.isalpha() and len(stem) < 24:
-                    continue  # offline stub path
+                    continue
                 return _proxy(str(url))
     except Exception as exc:
         log.debug("tmdb poster failed: %s", exc)
@@ -109,7 +179,6 @@ def _tvmaze_poster(title: str) -> str | None:
                     url = image.get("medium") or image.get("original")
                     if url and any(h in str(url) for h in _TVMAZE_HOSTS):
                         return _proxy(str(url))
-            # Broader search
             resp2 = requests.get(
                 "https://api.tvmaze.com/search/shows",
                 params={"q": q},
@@ -169,7 +238,6 @@ def _itunes_poster(title: str) -> str | None:
                     continue
                 if q_l.split()[0] not in name and q_l not in name:
                     continue
-                # Bump thumbnail to a usable poster size
                 url = re.sub(r"/\d+x\d+bb\.", "/600x600bb.", str(art))
                 if any(h in url for h in _ITUNES_HOSTS):
                     return _proxy(url)
@@ -184,14 +252,14 @@ def resolve_poster_url(
     kind: str = "series",
     existing: Any = None,
 ) -> str | None:
-    """Return a same-origin proxied poster URL, or None.
-
-    Always resolve by *title* first so rerolls never keep a stale poster.
-    ``existing`` is only a last-resort fallback when every lookup fails.
-    """
+    """Return a same-origin poster URL, or None."""
     kind_n = (kind or "series").strip().lower()
     if kind_n not in ("series", "film"):
         kind_n = "series"
+
+    local = _local_poster(title)
+    if local:
+        return local
 
     via_tmdb = _tmdb_poster(title, kind_n)
     if via_tmdb:
@@ -203,7 +271,7 @@ def resolve_poster_url(
     if via_itunes:
         return via_itunes
 
-    if existing and str(existing).startswith("/api/media/poster"):
+    if existing and str(existing).startswith(("/api/media/poster", "/assets/posters/")):
         return str(existing)
     if existing and str(existing).startswith("http") and "image.tmdb.org" in str(existing):
         stem = str(existing).rsplit("/", 1)[-1].split(".", 1)[0]

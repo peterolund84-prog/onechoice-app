@@ -639,7 +639,20 @@ def local_candidates(
 
     # Grounded next-episode suggestion when format is avsnitt + series in progress
     if fmt_n == "avsnitt" and in_progress_series:
-        name = str(in_progress_series).strip()
+        raw_name = str(in_progress_series).strip()
+        # Keep catalog key lowercase, but show a proper title on the card.
+        _pretty = {
+            "seinfeld": "Seinfeld",
+            "vänner": "Vänner",
+            "vanner": "Vänner",
+            "friends": "Friends",
+            "the office": "The Office",
+            "brooklyn nine-nine": "Brooklyn Nine-Nine",
+        }
+        name = _pretty.get(raw_name.lower()) or (
+            raw_name.title() if raw_name.islower() else raw_name
+        )
+        catalog_key = raw_name.lower()
         if lang == "sv":
             pack.insert(
                 0,
@@ -647,7 +660,7 @@ def local_candidates(
                     "suggestion": name,
                     "justification": f"Nästa avsnitt av {name} — du är mitt i det.",
                     "meta": {
-                        "title": name.lower(),
+                        "title": catalog_key,
                         "kind": "series",
                         "series_title": name,
                         "in_progress": True,
@@ -662,7 +675,7 @@ def local_candidates(
                     "suggestion": name,
                     "justification": f"Next episode of {name} — you're in the middle of it.",
                     "meta": {
-                        "title": name.lower(),
+                        "title": catalog_key,
                         "kind": "series",
                         "series_title": name,
                         "in_progress": True,
