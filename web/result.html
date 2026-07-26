@@ -80,12 +80,12 @@
         ["avkopplat", "Avkopplat"],
         ["spanning", "Spänning"],
         ["skratta", "Skratta"],
-        ["lar_mig", "Lär mig något"],
+        ["lar_mig", "Lär mig"],
         ["med_barnen", "Med barnen"],
       ];
       const movieModes = [
         ["mood", "Humör"],
-        ["trendar", "Trendar nu"],
+        ["trendar", "Trendar"],
       ];
       const actions = cardActionsHtml({
         isFavorite: !!pres.is_favorite,
@@ -162,29 +162,35 @@
           </article>`;
       })();
 
+      const movieMode = ctx.mode || "mood";
       const movieChipsHtml = domain === "movie"
         ? `
-          <div class="section-label">Format</div>
-          <div class="chips-scroll" id="movie-formats">${movieFormats
-            .map(
-              ([k, lab]) =>
-                `<button class="chip ${k === ctx.format ? "active" : ""}" type="button" data-fmt="${k}">${lab}</button>`
-            )
-            .join("")}</div>
-          <div class="section-label">Läge</div>
-          <div class="chips-scroll" id="movie-moods">${movieMoods
-            .map(
-              ([k, lab]) =>
-                `<button class="chip ${k === ctx.mood && ctx.mode !== "trendar" ? "active" : ""} ${ctx.mode === "trendar" ? "dim" : ""}" type="button" data-mood="${k}">${lab}</button>`
-            )
-            .join("")}</div>
-          <div class="section-label">Upptäck</div>
-          <div class="chips-scroll" id="movie-modes">${movieModes
-            .map(
-              ([k, lab]) =>
-                `<button class="chip ${k === (ctx.mode || "mood") ? "active" : ""}" type="button" data-mode="${k}">${lab}</button>`
-            )
-            .join("")}</div>`
+          <div class="movie-toolbar">
+            <div class="movie-seg" id="movie-modes" role="tablist" aria-label="Upptäck">
+              ${movieModes
+                .map(
+                  ([k, lab]) =>
+                    `<button class="movie-seg-btn ${k === movieMode ? "active" : ""}" type="button" data-mode="${k}" role="tab" aria-selected="${k === movieMode ? "true" : "false"}">${lab}</button>`
+                )
+                .join("")}
+            </div>
+            <div class="chips-scroll movie-formats" id="movie-formats" aria-label="Format">${movieFormats
+              .map(
+                ([k, lab]) =>
+                  `<button class="chip ${k === ctx.format ? "active" : ""}" type="button" data-fmt="${k}">${lab}</button>`
+              )
+              .join("")}</div>
+            ${
+              movieMode === "trendar"
+                ? ""
+                : `<div class="chips-scroll movie-moods" id="movie-moods" aria-label="Läge">${movieMoods
+                    .map(
+                      ([k, lab]) =>
+                        `<button class="chip ${k === ctx.mood ? "active" : ""}" type="button" data-mood="${k}">${lab}</button>`
+                    )
+                    .join("")}</div>`
+            }
+          </div>`
         : "";
 
       root.innerHTML = `

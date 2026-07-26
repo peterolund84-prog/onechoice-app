@@ -95,6 +95,103 @@ _OFFLINE_TMDB: dict[str, dict[str, Any]] = {
 }
 
 
+# Offline chart used when TMDB_API_KEY is missing (tests / LAN without key).
+_OFFLINE_TRENDING_SERIES = (
+    "Wednesday",
+    "The Bear",
+    "Andor",
+    "Seinfeld",
+    "The Office",
+    "Succession",
+)
+_OFFLINE_TRENDING_FILM = (
+    "Dune",
+    "Top Gun Maverick",
+    "Extraction",
+    "Red Notice",
+    "The Gray Man",
+    "About Time",
+)
+
+
+def trending_titles(*, kind: str = "series", limit: int = 8) -> list[dict[str, Any]]:
+    """Popular/trending titles from TMDB week chart (or offline stubs).
+
+    Returns list of ``{tmdb_id, title, year, poster_url, vote_average, kind}``.
+    """
+    kind_n = (kind or "").strip().lower()
+    if kind_n not in ("series", "film"):
+        kind_n = "series"
+    lim = max(1, min(int(limit or 8), 20))
+
+    api_key = _get_api_key()
+    if not api_key:
+        names = (
+            _OFFLINE_TRENDING_SERIES if kind_n == "series" else _OFFLINE_TRENDING_FILM
+        )
+        out: list[dict[str, Any]] = []
+        for name in names:
+            row = lookup_title(name, kind=kind_n)
+            if not row:
+                continue
+            item = dict(row)
+            item["kind"] = kind_n
+            out.append(item)
+            if len(out) >= lim:
+                break
+        return out
+
+    media = "tv" if kind_n == "series" else "movie"
+    try:
+        resp = requests.get(
+            f"{TMDB_BASE}/trending/{media}/week",
+            params={"api_key": api_key},
+            timeout=12,
+        )
+        resp.raise_for_status()
+        results = (resp.json() or {}).get("results") or []
+    except Exception:
+        results = []
+
+    out: list[dict[str, Any]] = []
+    for r in results:
+        if not isinstance(r, dict):
+            continue
+        title = str(r.get("name") or r.get("title") or "").strip()
+        if not title:
+            continue
+        poster_path = r.get("poster_path")
+        poster_url = f"{TMDB_IMAGE_BASE}{poster_path}" if poster_path else None
+        date_s = str(r.get("first_air_date") or r.get("release_date") or "")
+        year = int(date_s[:4]) if len(date_s) >= 4 and date_s[:4].isdigit() else None
+        out.append(
+            {
+                "tmdb_id": r.get("id"),
+                "title": title,
+                "year": year,
+                "poster_url": poster_url,
+                "vote_average": r.get("vote_average"),
+                "kind": kind_n,
+            }
+        )
+        if len(out) >= lim:
+            break
+    if out:
+        return out
+    # API failed or empty — same offline chart as no-key path
+    names = _OFFLINE_TRENDING_SERIES if kind_n == "series" else _OFFLINE_TRENDING_FILM
+    for name in names:
+        row = lookup_title(name, kind=kind_n)
+        if not row:
+            continue
+        item = dict(row)
+        item["kind"] = kind_n
+        out.append(item)
+        if len(out) >= lim:
+            break
+    return out
+
+
 @functools.lru_cache(maxsize=512)
 def lookup_title(title: str, kind: str = "series") -> dict[str, Any] | None:
     """

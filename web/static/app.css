@@ -757,6 +757,50 @@ a { color: inherit; text-decoration: none; }
   font-weight: 500;
 }
 
+/* Movie result — compact toolbar (mode + format + moods) */
+.movie-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 14px;
+}
+.movie-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  padding: 3px;
+  border-radius: 14px;
+  border: 1px solid var(--oc-border);
+  background: rgba(8, 6, 5, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.movie-seg-btn {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--oc-muted);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.movie-seg-btn.active {
+  background: rgba(80, 95, 200, 0.28);
+  color: var(--oc-cream);
+  box-shadow: inset 0 0 0 1px rgba(123, 140, 255, 0.35);
+}
+.movie-toolbar .chips-scroll {
+  margin: 0;
+  padding: 0;
+}
+.movie-toolbar .chip {
+  padding: 8px 12px;
+  font-size: 0.84rem;
+}
+
 .movie-card { padding: 20px; }
 .movie-row {
   display: flex;
