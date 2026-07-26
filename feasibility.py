@@ -673,9 +673,18 @@ def _check_movie(
 
         tmdb_row = tmdb_mod.lookup_title(title, kind=meta_kind)
         if not tmdb_row:
-            return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+            # Curated local packs must still be choosable offline / without TMDB.
+            if not local_pack:
+                return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+            tmdb_row = {}
 
-        display_title = str(tmdb_row.get("title") or suggestion).strip()
+        # Prefer curated candidate label over offline stub keys ("seinfeld").
+        tmdb_title = str(tmdb_row.get("title") or "").strip()
+        display_title = suggestion or tmdb_title or title
+        if tmdb_title and not tmdb_title.islower():
+            display_title = tmdb_title
+        elif suggestion:
+            display_title = suggestion
 
         vote_raw = tmdb_row.get("vote_average")
         vote_f: float | None = None
@@ -695,6 +704,7 @@ def _check_movie(
             "vote_average": tmdb_row.get("vote_average"),
             "year": tmdb_row.get("year"),
         }
+        tmdb_meta = {k: v for k, v in tmdb_meta.items() if v is not None}
     except FeasibilityResult:
         raise
     except Exception:
@@ -743,7 +753,9 @@ def _check_movie(
     if any(x in low for x in ("hyr för", "rent for", "49 kr", "pay-per-view")) and not allow_rent:
         return FeasibilityResult(ok=False, reasons=["rental_not_allowed"])
 
-    # Known catalog title that failed availability → reject (wrong service or too long).
+    # Known catalog title that failed availability → reject LLM picks
+    # (wrong service / too long). Local mood packs still pass via JustWatch
+    # so offline rerolls are not stuck on a single Netflix title.
     key = title.strip().lower()
     catalog_row = mocks.STREAMING_CATALOG.get(key)
     if not catalog_row:
@@ -751,13 +763,24 @@ def _check_movie(
             if k in key or key in k:
                 catalog_row = v
                 break
-    if catalog_row:
+    meta_flags = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    is_local_pack = bool(meta_flags.get("local_pack") or local_pack)
+    if catalog_row and not is_local_pack:
         return FeasibilityResult(ok=False, reasons=["unavailable_on_services"])
 
     import movie_domain as md
 
     svc = services[0] if services else "netflix"
-    search_q = display_title or title
+    # Prefer a nicer display name than offline stub keys ("seinfeld").
+    nice = str(
+        (candidate.get("meta") or {}).get("display_title")
+        or candidate.get("suggestion")
+        or display_title
+        or title
+    ).strip()
+    if nice.islower() and len(nice) < 40:
+        nice = nice.title()
+    search_q = nice or display_title or title
     return FeasibilityResult(
         ok=True,
         execution={
@@ -767,14 +790,14 @@ def _check_movie(
             "detail": f"Sök {search_q} · {_service_label(svc)}",
         },
         enriched={
-            "suggestion": display_title,
+            "suggestion": nice,
             "meta": {
                 **(candidate.get("meta") or {}),
                 **tmdb_meta,
                 "title": title,
-                "display_title": display_title,
+                "display_title": nice,
                 "service": svc,
-                "runtime_min": None,
+                "runtime_min": (catalog_row or {}).get("runtime_min"),
                 "kind": md.format_kind(fmt or "avsnitt") if fmt else None,
             },
         },
