@@ -3,26 +3,28 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#f4f5f8" />
+  <meta name="theme-color" content="#1a1814" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="OneChoice" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
   <title>OneChoice</title>
-  <link rel="stylesheet" href="/static/app.css?v=v21-20260726" />
+  <link rel="stylesheet" href="/static/app.css?v=v31-20260726" />
 </head>
-<body>
-  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
-  <main class="app" id="app">
-    <div class="loading">Laddar…</div>
+<body class="page-home">
+  <div class="home-bg" aria-hidden="true"></div>
+  <div class="home-scrim" aria-hidden="true"></div>
+  <main class="app home-app" id="app">
+    <div class="loading home-loading">Laddar…</div>
   </main>
   <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
-  <script src="/static/app.js?v=v21-20260726"></script>
+  <script src="/static/app.js?v=v31-20260726"></script>
   <script>
     (async function () {
-      const { api, routeDecide, ICONS, TIP_ICO, ensureGuest, showToast } = window.OC;
+      const { api, routeDecide, ICONS, ensureGuest, showToast, esc, mountNav } = window.OC;
+      mountNav("home");
       await ensureGuest();
       await api.post("/api/home/chooser", {});
       const home = await api.get("/api/home");
@@ -32,43 +34,46 @@
       const cards = (home.domains || [])
         .map(
           (d) => `
-        <button class="card" type="button" data-domain="${d.id}">
-          <span class="card-ico">${ICONS[d.icon] || ""}</span>
-          <span class="card-title">${d.label}</span>
-          <span class="card-sub">${d.sub}</span>
+        <button class="home-tile" type="button" data-domain="${esc(d.id)}">
+          <span class="home-tile-ico" aria-hidden="true">${ICONS[d.icon] || ""}</span>
+          <span class="home-tile-title">${esc(d.label)}</span>
+          <span class="home-tile-sub">${esc(d.sub)}</span>
         </button>`
         )
         .join("");
 
       root.innerHTML = `
-        <section class="hero">
-          <div class="hero-orb" aria-hidden="true"></div>
-          <h1 class="hero-title">${home.hero.headline}</h1>
-          <p class="hero-sub">Välj vad du vill ha hjälp med.</p>
-        </section>
-        <div class="section-label">Vad vill du bestämma?</div>
-        <div class="grid">${cards}</div>
-        <button class="tip" type="button" id="tipBtn" aria-expanded="false">
-          <span class="tip-ico">${TIP_ICO}</span>
-          <span class="tip-text">${tip.text || "Saknar du en kategori? Tipsa oss."}</span>
-        </button>
-        <div class="free suggest-box" id="suggestBox" hidden>
-          <label class="suggest-label" for="suggestInput">Förslagslåda</label>
-          <p class="suggest-help">Här samlar vi idéer till nya kategorier — det startar inget beslut.</p>
-          <textarea id="suggestInput" rows="3" maxlength="500"
-            placeholder="${tip.placeholder || "T.ex. podcast, inredning, spelkväll…"}"></textarea>
-          <button class="btn btn-primary" type="button" id="suggestSubmit">${
-            tip.submit_label || "Skicka förslag"
-          }</button>
+        <header class="home-brand">
+          <p class="home-logo">OneChoice</p>
+          <h1 class="home-headline">Vad ska vi bestämma idag?</h1>
+          <p class="home-sub">Välj vad du vill ha hjälp med.</p>
+        </header>
+        <div class="home-main">
+          <p class="home-section-label">Vad vill du bestämma?</p>
+          <div class="home-grid">${cards}</div>
+          <button class="home-tip" type="button" id="tipBtn" aria-expanded="false">
+            <span class="home-tip-text">${esc(tip.text || "Saknar du en kategori? Tipsa oss")}</span>
+            <span class="home-tip-chev" aria-hidden="true"></span>
+          </button>
+          <div class="home-suggest" id="suggestBox" hidden>
+            <p class="home-suggest-help">${esc(
+              tip.help || "Här samlar vi idéer till nya kategorier — det startar inget beslut."
+            )}</p>
+            <textarea id="suggestInput" rows="3" maxlength="500"
+              placeholder="${esc(tip.placeholder || "T.ex. podcast, inredning, spelkväll…")}"></textarea>
+            <button class="home-suggest-submit" type="button" id="suggestSubmit">${esc(
+              tip.submit_label || "Skicka förslag"
+            )}</button>
+          </div>
+          <p class="home-msg home-msg-err" id="err" hidden></p>
+          <p class="home-msg home-msg-ok" id="suggestOk" hidden></p>
         </div>
-        <p class="error" id="err" hidden></p>
-        <p class="muted" id="suggestOk" hidden></p>
       `;
 
       const err = document.getElementById("err");
       const ok = document.getElementById("suggestOk");
       const setBusy = (busy) => {
-        document.querySelectorAll("button").forEach((b) => (b.disabled = busy));
+        root.querySelectorAll("button").forEach((b) => (b.disabled = busy));
       };
       const showErr = (m) => {
         err.hidden = !m;
@@ -100,7 +105,7 @@
         const open = box.hidden;
         box.hidden = !open;
         tipBtn.setAttribute("aria-expanded", open ? "true" : "false");
-        tipBtn.classList.toggle("open", open);
+        tipBtn.classList.toggle("is-open", open);
         if (open) document.getElementById("suggestInput").focus();
       };
 

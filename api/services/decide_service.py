@@ -39,37 +39,37 @@ DOMAIN_CARDS = [
     {
         "id": "food",
         "label": "Mat",
-        "sub": "Frukost, lunch, middag & mer",
+        "sub": "Middagar, restauranger eller något nytt.",
         "icon": "utensils",
     },
     {
         "id": "clothes",
         "label": "Kläder",
-        "sub": "Outfit, skor & accessoarer",
+        "sub": "Outfits, stil eller vad som passar.",
         "icon": "hanger",
     },
     {
         "id": "movie",
         "label": "Film & serier",
-        "sub": "Hitta något värt att se",
+        "sub": "Något att se ikväll, utan att vela.",
         "icon": "clapper",
     },
     {
         "id": "workout",
         "label": "Träning",
-        "sub": "Pass, övningar & motivation",
+        "sub": "Pass, aktivitet eller något som peppar.",
         "icon": "dumbbell",
     },
     {
         "id": "weekend",
         "label": "Resor",
-        "sub": "Weekend, destination & aktiviteter",
+        "sub": "Weekend, äventyr eller bara komma bort.",
         "icon": "suitcase",
     },
     {
         "id": "gifts",
         "label": "Presenter",
-        "sub": "Till någon du bryr dig om",
+        "sub": "Födelsedag, tillfälle eller bara för att.",
         "icon": "gift",
     },
 ]

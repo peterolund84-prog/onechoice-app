@@ -46,7 +46,8 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertEqual(body["domains"][0]["id"], "food")
         self.assertIn("tip", body)
         tip = body["tip"]
-        self.assertIn("förslagslåda", tip.get("text", "").lower())
+        self.assertIn("saknar du en kategori", tip.get("text", "").lower())
+        self.assertIn("tipsa oss", tip.get("text", "").lower())
 
     def test_home_suggestion_box_saves_not_decide(self) -> None:
         self.client.post("/api/auth/guest")
@@ -269,10 +270,15 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         execute = (root / "web" / "execute.html").read_text(encoding="utf-8")
         self.assertIn(".cta-inner", css)
         self.assertIn("flex-direction: row", css)
-        self.assertIn(".logo-i", css)
-        self.assertIn('class="logo-i"', html)
+        self.assertIn("body.page-home", css)
+        self.assertIn(".home-logo", css)
+        self.assertIn(".home-tile", css)
+        self.assertIn('class="page-home"', html)
+        self.assertIn("home-logo", html)
+        self.assertIn("home-hero.jpg", css)
         self.assertNotIn('id="heroCta"', html)
         self.assertIn("Välj vad du vill ha hjälp med.", html)
+        self.assertIn("Saknar du en kategori? Tipsa oss", html)
         js = (root / "web" / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn("food-img", result)
         self.assertIn("movie-poster", result)

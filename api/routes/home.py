@@ -32,9 +32,10 @@ def home(sess: SessionDep) -> dict:
         "hero": hero,
         "domains": ds.DOMAIN_CARDS,
         "tip": {
-            "text": "Saknar du en kategori? Tipsa oss — det här är en förslagslåda, inte ett beslut.",
+            "text": "Saknar du en kategori? Tipsa oss",
             "placeholder": "T.ex. podcast, inredning, spelkväll…",
             "submit_label": "Skicka förslag",
+            "help": "Här samlar vi idéer till nya kategorier — det startar inget beslut.",
         },
         "session": sess.public(),
         "resume": resume,
