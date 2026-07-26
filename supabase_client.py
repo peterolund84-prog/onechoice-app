@@ -18,6 +18,15 @@ def _secret(name: str, default: str = "") -> str:
     env = os.environ.get(name, "")
     if env:
         return env
+    # FastAPI / uvicorn path — read .streamlit/secrets.toml without Streamlit.
+    try:
+        from api.secrets import get_secret
+
+        via_api = get_secret(name, "")
+        if via_api:
+            return via_api
+    except Exception:
+        pass
     try:
         import streamlit as st
 

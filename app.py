@@ -1052,6 +1052,7 @@ def init_state() -> None:
         "food_meal_type": None,  # frukost|lunch|middag|kvallsmal — inferred, confirmable
         "movie_format": None,  # avsnitt|film|ny_serie
         "movie_mood": None,  # avkopplat|spanning|skratta|lar_mig|med_barnen
+        "movie_mode": "mood",  # mood|trendar
         "movie_in_progress_series": None,  # grounded series name for Nästa avsnitt
         "pending_db_accept": False,
         "pending_open_execute": False,
@@ -2442,6 +2443,7 @@ def run_decision(*, question: str, domain_hint: str | None, reroll: bool, via_ro
 
         context_extra["format"] = md.normalize_format(st.session_state.get("movie_format"))
         context_extra["mood"] = md.normalize_mood(st.session_state.get("movie_mood"))
+        context_extra["mode"] = md.normalize_mode(st.session_state.get("movie_mode") or "mood")
         if st.session_state.get("movie_in_progress_series"):
             context_extra["in_progress_series"] = st.session_state.movie_in_progress_series
     if reroll and isinstance(cur, dict) and cur.get("suggestion"):
@@ -5082,6 +5084,8 @@ def _ensure_movie_chips_defaults() -> None:
         st.session_state.movie_format = md.default_format(in_progress_series=in_prog)
     if st.session_state.get("movie_mood") not in md.MOODS:
         st.session_state.movie_mood = md.default_mood(history=history)
+    if st.session_state.get("movie_mode") not in md.MODES:
+        st.session_state.movie_mode = "mood"
 
 
 def render_meal_type_chips(cur: dict[str, Any]) -> None:
@@ -5138,7 +5142,7 @@ def render_meal_type_chips(cur: dict[str, Any]) -> None:
 
 
 def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
-    """Two pill rows above the movie decision: Format + Läge (mood)."""
+    """Format + Läge (mood) + Trendar nu mode chip above the movie decision."""
     import movie_domain as md
 
     language = st.session_state.get("language", "sv")
@@ -5157,13 +5161,19 @@ def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
     current_mood = md.normalize_mood(
         ctx.get("mood") or st.session_state.get("movie_mood")
     )
+    current_mode = md.normalize_mode(
+        ctx.get("mode") or st.session_state.get("movie_mode") or "mood"
+    )
     st.session_state.movie_format = current_fmt
     st.session_state.movie_mood = current_mood
+    st.session_state.movie_mode = current_mode
 
     if st.session_state.get("movie_format_pills") not in md.FORMATS:
         st.session_state.movie_format_pills = current_fmt
     if st.session_state.get("movie_mood_pills") not in md.MOODS:
         st.session_state.movie_mood_pills = current_mood
+    if st.session_state.get("movie_mode_pills") not in md.MODES:
+        st.session_state.movie_mode_pills = current_mode
 
     with st.container(key="movie_chips"):
         st.markdown(
@@ -5193,13 +5203,33 @@ def render_movie_format_mood_chips(cur: dict[str, Any]) -> None:
             key="movie_mood_pills",
             label_visibility="collapsed",
             width="stretch",
+            disabled=current_mode == "trendar",
+        )
+        st.markdown(
+            f'<p class="oc-sec-label">{html.escape("Upptäck" if language == "sv" else "Discover")}</p>',
+            unsafe_allow_html=True,
+        )
+        mode_choice = st.pills(
+            " ",
+            options=list(md.MODE_ORDER),
+            format_func=lambda k: md.mode_label(k, language),
+            selection_mode="single",
+            key="movie_mode_pills",
+            label_visibility="collapsed",
+            width="stretch",
         )
 
     fmt_choice = current_fmt if fmt_choice is None else fmt_choice
     mood_choice = current_mood if mood_choice is None else mood_choice
-    if fmt_choice != current_fmt or mood_choice != current_mood:
+    mode_choice = current_mode if mode_choice is None else mode_choice
+    if (
+        fmt_choice != current_fmt
+        or mood_choice != current_mood
+        or md.normalize_mode(mode_choice) != current_mode
+    ):
         st.session_state.movie_format = md.normalize_format(fmt_choice)
         st.session_state.movie_mood = md.normalize_mood(mood_choice)
+        st.session_state.movie_mode = md.normalize_mode(mode_choice)
         st.session_state.accepted = False
         pending = (
             st.session_state.get("last_question")
@@ -5407,7 +5437,7 @@ def page_result() -> None:
     # Food: meal-type chips ABOVE the decision (not for fridge — inventory is the constraint)
     if domain == "food" and not accepted and not fridge_mode:
         render_meal_type_chips(cur)
-    # Movie: format + mood chips ABOVE the decision (two rows max — never a third)
+    # Movie: format + mood + Trendar nu chips ABOVE the decision
     if domain == "movie" and not accepted:
         render_movie_format_mood_chips(cur)
 

@@ -71,8 +71,17 @@ MOODS: dict[str, dict[str, Any]] = {
 
 MOOD_ORDER = ("avkopplat", "spanning", "skratta", "lar_mig", "med_barnen")
 
+# Decision mode: mood-matching vs web-search grounded "Trendar nu"
+MODES: dict[str, dict[str, str]] = {
+    "mood": {"sv": "Humör", "en": "Mood"},
+    "trendar": {"sv": "Trendar nu", "en": "Trending"},
+}
+MODE_ORDER = ("mood", "trendar")
+
 # Local catalog hints keyed by mood (titles must exist in mocks.STREAMING_CATALOG
 # or be generic enough to pass feasibility without a named paywalled title).
+# IMPORTANT: every mood needs BOTH series and film rows — otherwise Film-format
+# local_candidates() returns [] and pipeline falls back to Seinfeld forever.
 _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
     "avkopplat": {
         "sv": [
@@ -86,6 +95,26 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Varm och lätt — ett avsnitt och du är klar.",
                 "meta": {"title": "vänner", "kind": "series"},
             },
+            {
+                "suggestion": "The Office",
+                "justification": "Lågmäld kontorshumor — ett avsnitt räcker.",
+                "meta": {"title": "the office", "kind": "series"},
+            },
+            {
+                "suggestion": "The Intern",
+                "justification": "Varm feelgood — lätt film utan krav.",
+                "meta": {"title": "the intern", "kind": "film"},
+            },
+            {
+                "suggestion": "Chef",
+                "justification": "Mysig matfilm — låg energi, gott humör.",
+                "meta": {"title": "chef", "kind": "film"},
+            },
+            {
+                "suggestion": "About Time",
+                "justification": "Mjuk och varm — en filmkväll som andas ut.",
+                "meta": {"title": "about time", "kind": "film"},
+            },
         ],
         "en": [
             {
@@ -97,6 +126,26 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Friends",
                 "justification": "Warm and easy — one episode and you're done.",
                 "meta": {"title": "friends", "kind": "series"},
+            },
+            {
+                "suggestion": "The Office",
+                "justification": "Low-key comfort comedy — one episode is enough.",
+                "meta": {"title": "the office", "kind": "series"},
+            },
+            {
+                "suggestion": "The Intern",
+                "justification": "Warm feel-good — an easy film night.",
+                "meta": {"title": "the intern", "kind": "film"},
+            },
+            {
+                "suggestion": "Chef",
+                "justification": "Cozy food film — low energy, good mood.",
+                "meta": {"title": "chef", "kind": "film"},
+            },
+            {
+                "suggestion": "About Time",
+                "justification": "Soft and warm — a film night that exhales.",
+                "meta": {"title": "about time", "kind": "film"},
             },
         ],
     },
@@ -117,6 +166,21 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Episk spänning — en filmkväll som tar dig någonstans.",
                 "meta": {"title": "dune", "kind": "film"},
             },
+            {
+                "suggestion": "Extraction",
+                "justification": "Hög oktans action — du är klar på under två timmar.",
+                "meta": {"title": "extraction", "kind": "film"},
+            },
+            {
+                "suggestion": "The Gray Man",
+                "justification": "Spionjakt i högt tempo — filmkväll med driv.",
+                "meta": {"title": "the gray man", "kind": "film"},
+            },
+            {
+                "suggestion": "Red Notice",
+                "justification": "Lekfull action — spänning utan tungt efterspel.",
+                "meta": {"title": "red notice", "kind": "film"},
+            },
         ],
         "en": [
             {
@@ -134,6 +198,21 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Epic thrills — a film night that takes you somewhere.",
                 "meta": {"title": "dune", "kind": "film"},
             },
+            {
+                "suggestion": "Extraction",
+                "justification": "High-octane action — done in under two hours.",
+                "meta": {"title": "extraction", "kind": "film"},
+            },
+            {
+                "suggestion": "The Gray Man",
+                "justification": "Spy chase at full pace — a driven film night.",
+                "meta": {"title": "the gray man", "kind": "film"},
+            },
+            {
+                "suggestion": "Red Notice",
+                "justification": "Playful action — thrills without a heavy hangover.",
+                "meta": {"title": "red notice", "kind": "film"},
+            },
         ],
     },
     "skratta": {
@@ -148,6 +227,26 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Klassiska skratt — lätt efter en lång dag.",
                 "meta": {"title": "vänner", "kind": "series"},
             },
+            {
+                "suggestion": "Brooklyn Nine-Nine",
+                "justification": "Snabb humor — ett avsnitt som piggar upp.",
+                "meta": {"title": "brooklyn nine-nine", "kind": "series"},
+            },
+            {
+                "suggestion": "Murder Mystery",
+                "justification": "Lätt komedi — skratt utan att tänka för mycket.",
+                "meta": {"title": "murder mystery", "kind": "film"},
+            },
+            {
+                "suggestion": "The Nice Guys",
+                "justification": "Knasig buddy-komedi — bra skrattkväll.",
+                "meta": {"title": "the nice guys", "kind": "film"},
+            },
+            {
+                "suggestion": "Crazy Rich Asians",
+                "justification": "Glitter och skratt — feelgood-film.",
+                "meta": {"title": "crazy rich asians", "kind": "film"},
+            },
         ],
         "en": [
             {
@@ -159,6 +258,26 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Friends",
                 "justification": "Classic laughs — easy after a long day.",
                 "meta": {"title": "friends", "kind": "series"},
+            },
+            {
+                "suggestion": "Brooklyn Nine-Nine",
+                "justification": "Quick laughs — one episode that lifts the mood.",
+                "meta": {"title": "brooklyn nine-nine", "kind": "series"},
+            },
+            {
+                "suggestion": "Murder Mystery",
+                "justification": "Easy comedy — laughs without heavy thinking.",
+                "meta": {"title": "murder mystery", "kind": "film"},
+            },
+            {
+                "suggestion": "The Nice Guys",
+                "justification": "Goofy buddy comedy — a proper laugh night.",
+                "meta": {"title": "the nice guys", "kind": "film"},
+            },
+            {
+                "suggestion": "Crazy Rich Asians",
+                "justification": "Glitter and laughs — feel-good film.",
+                "meta": {"title": "crazy rich asians", "kind": "film"},
             },
         ],
     },
@@ -184,6 +303,16 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "En film som lär och stillar — under 90 minuter.",
                 "meta": {"title": "my octopus teacher", "kind": "film", "genres": ["documentary", "nature"]},
             },
+            {
+                "suggestion": "Free Solo",
+                "justification": "Dokumentärfilm som fascinerar — spänning och lärande.",
+                "meta": {"title": "free solo", "kind": "film", "genres": ["documentary"]},
+            },
+            {
+                "suggestion": "13th",
+                "justification": "Skarp dokumentärfilm — du lär dig något på riktigt.",
+                "meta": {"title": "13th", "kind": "film", "genres": ["documentary"]},
+            },
         ],
         "en": [
             {
@@ -206,6 +335,16 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "A film that teaches and calms — under 90 minutes.",
                 "meta": {"title": "my octopus teacher", "kind": "film", "genres": ["documentary", "nature"]},
             },
+            {
+                "suggestion": "Free Solo",
+                "justification": "Documentary film that grips — thrills and learning.",
+                "meta": {"title": "free solo", "kind": "film", "genres": ["documentary"]},
+            },
+            {
+                "suggestion": "13th",
+                "justification": "Sharp documentary film — you learn something real.",
+                "meta": {"title": "13th", "kind": "film", "genres": ["documentary"]},
+            },
         ],
     },
     "med_barnen": {
@@ -220,6 +359,21 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "justification": "Familjefilm med hjärta — alla skrattar i soffan.",
                 "meta": {"title": "kung fu panda", "kind": "film", "kids_ok": True, "max_age_rating": 7},
             },
+            {
+                "suggestion": "Luca",
+                "justification": "Varm familjefilm — lagom äventyr för hela soffan.",
+                "meta": {"title": "luca", "kind": "film", "kids_ok": True, "max_age_rating": 7},
+            },
+            {
+                "suggestion": "The Mitchells vs. the Machines",
+                "justification": "Tokig familjeanimation — skratt för stora och små.",
+                "meta": {
+                    "title": "the mitchells vs the machines",
+                    "kind": "film",
+                    "kids_ok": True,
+                    "max_age_rating": 9,
+                },
+            },
         ],
         "en": [
             {
@@ -231,6 +385,21 @@ _MOOD_LOCAL: dict[str, dict[str, list[dict[str, Any]]]] = {
                 "suggestion": "Kung Fu Panda",
                 "justification": "Family film with heart — everyone laughs on the couch.",
                 "meta": {"title": "kung fu panda", "kind": "film", "kids_ok": True, "max_age_rating": 7},
+            },
+            {
+                "suggestion": "Luca",
+                "justification": "Warm family film — right-sized adventure for the whole sofa.",
+                "meta": {"title": "luca", "kind": "film", "kids_ok": True, "max_age_rating": 7},
+            },
+            {
+                "suggestion": "The Mitchells vs. the Machines",
+                "justification": "Wild family animation — laughs for kids and adults.",
+                "meta": {
+                    "title": "the mitchells vs the machines",
+                    "kind": "film",
+                    "kids_ok": True,
+                    "max_age_rating": 9,
+                },
             },
         ],
     },
@@ -272,6 +441,23 @@ def format_label(
 def mood_label(key: str, language: str = "sv") -> str:
     row = MOODS.get(key) or {}
     return str(row.get(language) or row.get("sv") or key)
+
+
+def mode_label(key: str, language: str = "sv") -> str:
+    row = MODES.get(normalize_mode(key)) or MODES["mood"]
+    return str(row.get(language) or row.get("sv") or key)
+
+
+def normalize_mode(value: Any) -> str:
+    """Return 'trendar' or 'mood'."""
+    key = str(value or "").strip().lower().replace(" ", "_")
+    if key in ("trendar", "trending", "trendar_nu", "trendar-nu"):
+        return "trendar"
+    return "mood"
+
+
+def is_trending_mode(value: Any) -> bool:
+    return normalize_mode(value) == "trendar"
 
 
 def max_minutes(fmt: str) -> int:
@@ -619,7 +805,20 @@ def local_candidates(
 
     # Grounded next-episode suggestion when format is avsnitt + series in progress
     if fmt_n == "avsnitt" and in_progress_series:
-        name = str(in_progress_series).strip()
+        raw_name = str(in_progress_series).strip()
+        # Keep catalog key lowercase, but show a proper title on the card.
+        _pretty = {
+            "seinfeld": "Seinfeld",
+            "vänner": "Vänner",
+            "vanner": "Vänner",
+            "friends": "Friends",
+            "the office": "The Office",
+            "brooklyn nine-nine": "Brooklyn Nine-Nine",
+        }
+        name = _pretty.get(raw_name.lower()) or (
+            raw_name.title() if raw_name.islower() else raw_name
+        )
+        catalog_key = raw_name.lower()
         if lang == "sv":
             pack.insert(
                 0,
@@ -627,7 +826,7 @@ def local_candidates(
                     "suggestion": name,
                     "justification": f"Nästa avsnitt av {name} — du är mitt i det.",
                     "meta": {
-                        "title": name.lower(),
+                        "title": catalog_key,
                         "kind": "series",
                         "series_title": name,
                         "in_progress": True,
@@ -642,7 +841,7 @@ def local_candidates(
                     "suggestion": name,
                     "justification": f"Next episode of {name} — you're in the middle of it.",
                     "meta": {
-                        "title": name.lower(),
+                        "title": catalog_key,
                         "kind": "series",
                         "series_title": name,
                         "in_progress": True,
@@ -668,21 +867,24 @@ def local_candidates(
         out.append({**c, "meta": meta})
 
     if not out:
-        # Last resort: reuse avkopplat comfort titles (always named + streamable).
-        fallback = list((_MOOD_LOCAL.get("avkopplat") or {}).get(lang) or [])
-        for c in fallback:
-            meta = dict(c.get("meta") or {})
-            kind = str(meta.get("kind") or "")
-            if kind and kind != want_kind:
-                continue
-            meta.setdefault("kind", want_kind)
-            meta["format"] = fmt_n
-            meta["mood"] = mood_n
-            meta["local_pack"] = True
-            out.append({**c, "meta": meta})
-            if len(out) >= 2:
+        # Last resort: scan all moods for matching kind (never cross-kind).
+        for mood_key in MOOD_ORDER:
+            fallback = list((_MOOD_LOCAL.get(mood_key) or {}).get(lang) or [])
+            for c in fallback:
+                meta = dict(c.get("meta") or {})
+                kind = str(meta.get("kind") or "")
+                if kind and kind != want_kind:
+                    continue
+                meta.setdefault("kind", want_kind)
+                meta["format"] = fmt_n
+                meta["mood"] = mood_n
+                meta["local_pack"] = True
+                out.append({**c, "meta": meta})
+                if len(out) >= 4:
+                    break
+            if len(out) >= 4:
                 break
-    return out[:5]
+    return out[:8]
 
 
 def apply_context(
@@ -691,13 +893,16 @@ def apply_context(
     fmt: str,
     mood: str,
     in_progress_series: str | None = None,
+    mode: str | None = None,
 ) -> dict[str, Any]:
     """Write format+mood (+ derived minutes/kind) onto decision context."""
     fmt_n = normalize_format(fmt)
     mood_n = normalize_mood(mood)
+    mode_n = normalize_mode(mode if mode is not None else ctx.get("mode"))
     out = dict(ctx)
     out["format"] = fmt_n
     out["mood"] = mood_n
+    out["mode"] = mode_n
     out["kind"] = format_kind(fmt_n)
     out["available_minutes"] = max_minutes(fmt_n)
     if in_progress_series:

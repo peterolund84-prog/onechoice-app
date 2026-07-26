@@ -13,7 +13,7 @@ import logging
 import sqlite3
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -373,6 +373,105 @@ def init_db(path: Path | str | None = None) -> None:
                 ON shopping_items(user_id, checked, created_at DESC)
             """
         )
+        # HTML/API durable sessions (survive process restarts)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_sessions (
+                sid TEXT PRIMARY KEY,
+                session_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_api_sessions_expires
+                ON api_sessions(expires_at)
+            """
+        )
+
+
+def api_session_upsert(
+    sid: str,
+    payload: dict[str, Any],
+    *,
+    max_age_sec: int,
+    path: Path | str | None = None,
+) -> None:
+    """Insert or replace a durable API session row."""
+    init_db(path)
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(seconds=int(max_age_sec))
+    blob = json.dumps(payload, ensure_ascii=False)
+    with get_conn(path) as conn:
+        conn.execute(
+            """
+            INSERT INTO api_sessions (sid, session_json, updated_at, expires_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(sid) DO UPDATE SET
+                session_json = excluded.session_json,
+                updated_at = excluded.updated_at,
+                expires_at = excluded.expires_at
+            """,
+            (
+                sid,
+                blob,
+                now.isoformat(),
+                expires.isoformat(),
+            ),
+        )
+
+
+def api_session_get(
+    sid: str,
+    *,
+    path: Path | str | None = None,
+) -> dict[str, Any] | None:
+    """Load a non-expired session payload, or None."""
+    if not sid:
+        return None
+    init_db(path)
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn(path) as conn:
+        row = conn.execute(
+            """
+            SELECT session_json, expires_at FROM api_sessions
+            WHERE sid = ?
+            """,
+            (sid,),
+        ).fetchone()
+        if not row:
+            return None
+        exp = str(row["expires_at"] or "")
+        if exp and exp < now:
+            conn.execute("DELETE FROM api_sessions WHERE sid = ?", (sid,))
+            return None
+        try:
+            data = json.loads(row["session_json"] or "{}")
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
+
+def api_session_delete(sid: str, *, path: Path | str | None = None) -> None:
+    if not sid:
+        return
+    init_db(path)
+    with get_conn(path) as conn:
+        conn.execute("DELETE FROM api_sessions WHERE sid = ?", (sid,))
+
+
+def api_session_purge_expired(*, path: Path | str | None = None) -> int:
+    """Delete sessions past expires_at. Returns rows removed."""
+    init_db(path)
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn(path) as conn:
+        cur = conn.execute(
+            "DELETE FROM api_sessions WHERE expires_at < ?",
+            (now,),
+        )
+        return int(cur.rowcount or 0)
 
 
 def ensure_public_share(

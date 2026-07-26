@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f5f8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <title>OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css?v=v16-20260726" />
+</head>
+<body>
+  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
+  <main class="app" id="app">
+    <div class="loading">Laddar…</div>
+  </main>
+  <nav class="nav" id="app-nav" data-active="home" aria-label="Huvudmeny"></nav>
+  <script src="/static/app.js?v=v16-20260726"></script>
+  <script>
+    (async function () {
+      const { api, routeDecide, ICONS, SPARK, TIP_ICO, ensureGuest } = window.OC;
+      await ensureGuest();
+      await api.post("/api/home/chooser", {});
+      const home = await api.get("/api/home");
+      const root = document.getElementById("app");
+
+      const cards = (home.domains || [])
+        .map(
+          (d) => `
+        <button class="card" type="button" data-domain="${d.id}">
+          <span class="card-ico">${ICONS[d.icon] || ""}</span>
+          <span class="card-title">${d.label}</span>
+          <span class="card-sub">${d.sub}</span>
+        </button>`
+        )
+        .join("");
+
+      root.innerHTML = `
+        <section class="hero">
+          <div class="hero-orb" aria-hidden="true"></div>
+          <h1 class="hero-title">${home.hero.headline}</h1>
+          <p class="hero-sub">Ett tryck. Jag tar beslutet.</p>
+          <button class="cta" type="button" id="heroCta">
+            <span class="cta-inner">
+              <span class="cta-spark-wrap" aria-hidden="true">${SPARK}</span>
+              <span class="cta-copy">
+                <span class="cta-title">Bestäm åt mig</span>
+                <span class="cta-sub">Jag tar hand om allt</span>
+              </span>
+            </span>
+          </button>
+        </section>
+        <div class="section-label">Vad vill du bestämma?</div>
+        <div class="grid">${cards}</div>
+        <button class="tip" type="button" id="tipBtn">
+          <span class="tip-ico">${TIP_ICO}</span>
+          <span class="tip-text">${home.tip.text}</span>
+        </button>
+        <div class="free" id="freeBox">
+          <input id="freeInput" placeholder="Vad ska du bestämma?" maxlength="200" />
+          <button class="btn btn-primary" type="button" id="freeSubmit">Bestäm åt mig</button>
+          <button class="linkish" type="button" id="fridgeBtn">${home.fridge_label || "Fota kylen"}</button>
+        </div>
+        <p class="error" id="err" hidden></p>
+      `;
+
+      const err = document.getElementById("err");
+      const setBusy = (busy) => {
+        document.querySelectorAll("button").forEach((b) => (b.disabled = busy));
+      };
+      const showErr = (m) => {
+        err.hidden = !m;
+        err.textContent = m || "";
+      };
+
+      document.getElementById("heroCta").onclick = async () => {
+        showErr("");
+        setBusy(true);
+        try {
+          await routeDecide({
+            domain_hint: "food",
+            context_extra: { meal_type: home.hero.meal_type },
+          });
+        } catch (e) {
+          showErr(e.message || "Kunde inte bestämma.");
+          setBusy(false);
+        }
+      };
+
+      root.querySelectorAll("[data-domain]").forEach((btn) => {
+        btn.onclick = async () => {
+          showErr("");
+          setBusy(true);
+          try {
+            await routeDecide({ domain_hint: btn.dataset.domain });
+          } catch (e) {
+            showErr(e.message || "Kunde inte bestämma.");
+            setBusy(false);
+          }
+        };
+      });
+
+      document.getElementById("tipBtn").onclick = () => {
+        document.getElementById("freeBox").classList.toggle("open");
+      };
+      document.getElementById("freeSubmit").onclick = async () => {
+        const q = document.getElementById("freeInput").value.trim();
+        if (!q) return showErr("Skriv en fråga eller välj en kategori.");
+        showErr("");
+        setBusy(true);
+        try {
+          await routeDecide({ question: q, via_router: true });
+        } catch (e) {
+          showErr(e.message || "Kunde inte bestämma.");
+          setBusy(false);
+        }
+      };
+      document.getElementById("fridgeBtn").onclick = () => {
+        showErr("Kylskåpsflödet kommer i HTML-MVP steg 2 — använd Mat just nu.");
+      };
+    })();
+  </script>
+</body>
+</html>

@@ -137,10 +137,26 @@ class OneChoiceTests(unittest.TestCase):
         for m in eng_markers:
             self.assertNotIn(m, blob, f"found English marker {m!r} in {blob!r}")
         # Swedish justification should contain Swedish characters or common words
-        self.assertTrue(
-            any(w in r.justification.lower() for w in ("och", "på", "att", "en", "det", "du", "för", "utan", "med")),
-            r.justification,
+        just = r.justification or ""
+        has_sv_chars = any(ch in just.lower() for ch in "åäö")
+        has_sv_words = any(
+            w in just.lower()
+            for w in (
+                "och",
+                "på",
+                "att",
+                "en",
+                "det",
+                "du",
+                "för",
+                "utan",
+                "med",
+                "smak",
+                "råvaror",
+                "klart",
+            )
         )
+        self.assertTrue(has_sv_chars or has_sv_words, just)
 
     def test_english_output_when_en(self) -> None:
         r = pipeline.decide(

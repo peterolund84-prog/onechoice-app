@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f5f8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <title>Historik — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css?v=v16-20260726" />
+</head>
+<body>
+  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
+  <main class="app" id="app"><div class="loading">Laddar…</div></main>
+  <nav class="nav" id="app-nav" data-active="history" aria-label="Huvudmeny"></nav>
+  <script src="/static/app.js?v=v16-20260726"></script>
+  <script>
+    (async function () {
+      const { api, go, ensureGuest } = window.OC;
+      await ensureGuest();
+      const data = await api.get("/api/history");
+      const rows = data.rows || [];
+      const root = document.getElementById("app");
+      if (!rows.length) {
+        root.innerHTML = `<h1 class="hero-title" style="font-size:1.8rem;text-align:left">Historik</h1>
+          <p class="muted">Inga beslut än. Låt OneChoice bestämma något.</p>`;
+        return;
+      }
+      root.innerHTML = `
+        <h1 class="hero-title" style="font-size:1.8rem;text-align:left;margin-bottom:16px">Historik</h1>
+        <ul class="list">
+          ${rows
+            .map(
+              (r) => `
+            <li style="justify-content:space-between;cursor:pointer" data-id="${r.id}">
+              <div>
+                <div style="font-weight:600">${r.suggestion || "—"}</div>
+                <div class="muted" style="font-size:12px">${r.domain || ""}</div>
+              </div>
+              <span class="muted">Öppna</span>
+            </li>`
+            )
+            .join("")}
+        </ul>`;
+      root.querySelectorAll("[data-id]").forEach((el) => {
+        el.onclick = async () => {
+          const res = await api.post(`/api/history/${el.dataset.id}/open`, {});
+          go(res.page === "execute" ? "/execute" : "/result");
+        };
+      });
+    })();
+  </script>
+</body>
+</html>
