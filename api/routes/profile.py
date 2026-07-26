@@ -8,7 +8,7 @@ from api.secrets import grok_api_key
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
-BUILD_ID = "html-premium-layout-v2-20260726"
+BUILD_ID = "html-spark-positions-v3-20260726"
 
 
 @router.get("")
