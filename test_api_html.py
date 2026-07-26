@@ -93,6 +93,16 @@ class ApiHtmlSmokeTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertGreater(len(r.content), 100)
 
+    def test_icon_buttons_have_visible_chip_styles(self) -> None:
+        from pathlib import Path
+
+        css = (Path(__file__).resolve().parent / "web" / "static" / "app.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("border-radius: 50%", css)
+        self.assertIn("rgba(20, 20, 28, 0.62)", css)
+        self.assertIn(".fav-btn.is-on", css)
+
     def test_media_api_and_share_favorite(self) -> None:
         self.client.post("/api/auth/guest")
         media = self.client.get(

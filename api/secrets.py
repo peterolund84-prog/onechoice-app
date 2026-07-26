@@ -16,7 +16,7 @@ _ALIASES: dict[str, tuple[str, ...]] = {
         "key",
     ),
     "GROK_API_KEY": ("XAI_API_KEY", "grok_api_key"),
-    "TMDB_API_KEY": ("tmdb_api_key",),
+    "TMDB_API_KEY": ("tmdb_api_key", "TMDB_KEY", "tmdb_key"),
 }
 
 
@@ -44,21 +44,30 @@ def _load_toml_secrets() -> dict[str, str]:
                     continue
                 key = str(kk)
                 out[key] = vv
-                # Nested [supabase] url/key → canonical names
+                low = key.lower()
+                # Nested [supabase] / [tmdb] / [api] → canonical names
                 if section in ("supabase", "api", "secrets"):
-                    low = key.lower()
                     if low in ("url", "supabase_url"):
                         out.setdefault("SUPABASE_URL", vv)
                     elif low in ("key", "anon_key", "supabase_key", "supabase_anon_key"):
                         out.setdefault("SUPABASE_KEY", vv)
-                    elif low in ("tmdb_api_key",):
+                    elif low in ("tmdb_api_key", "tmdb_key"):
                         out.setdefault("TMDB_API_KEY", vv)
                     elif low in ("grok_api_key", "xai_api_key"):
                         out.setdefault("GROK_API_KEY", vv)
+                elif section == "tmdb":
+                    if low in ("api_key", "key", "tmdb_api_key", "tmdb_key"):
+                        out.setdefault("TMDB_API_KEY", vv)
     return out
 
 
 _TOML = _load_toml_secrets()
+
+
+def reload_secrets() -> None:
+    """Re-read secrets.toml (e.g. after the file was edited)."""
+    global _TOML
+    _TOML = _load_toml_secrets()
 
 
 def get_secret(name: str, default: str = "") -> str:
@@ -82,6 +91,11 @@ def grok_api_key() -> str:
 
 
 def tmdb_api_key() -> str:
+    key = get_secret("TMDB_API_KEY")
+    if key:
+        return key
+    # Hot-reload once — covers secrets.toml edited while process was up
+    reload_secrets()
     return get_secret("TMDB_API_KEY")
 
 

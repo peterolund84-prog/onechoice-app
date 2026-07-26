@@ -8,7 +8,7 @@ from api.secrets import grok_api_key, supabase_configured, tmdb_api_key
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
 
-BUILD_ID = "html-share-fav-images-v5-20260726"
+BUILD_ID = "html-poster-icon-chips-v6-20260726"
 
 
 @router.get("")
