@@ -88,6 +88,8 @@ CLOTHING_CATALOG: dict[str, dict[str, Any]] = {
 }
 
 # Mock JustWatch-style catalog: title → services + runtime minutes + deep links
+# Fallback-only catalog: deep links + offline local-pack rescue.
+# Availability truth for LLM/trending picks is TMDB /watch/providers?region=SE.
 STREAMING_CATALOG: dict[str, dict[str, Any]] = {
     "the night agent": {
         "services": {"netflix"},

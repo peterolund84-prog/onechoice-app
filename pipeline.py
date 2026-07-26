@@ -2,14 +2,17 @@
 """
 OneChoice decision pipeline.
 
-Shared flow (all domains):
-  question → classify domain → profile + context + history
-  → LLM/local generates ~5 candidates
-  → feasibility_check (domain validator) — discard failures, never show broken decisions
-  → rank survivors (80% close to accepted history, 20% wildcard/"Vildkort")
-  → display ONE + one-line justification + execution step
+Architecture (all domains):
+  AI generates freely → real data verifies → fixed/local pack is fallback only.
 
-Repetition guard: 7 days per domain. Max 3 rerolls, then lock.
+Shared flow:
+  question → classify domain → profile + context + history
+  → LLM generates candidates (local pack only if LLM down/empty)
+  → feasibility_check verifies truth (TMDB SE providers, food feasibility, …)
+  → rank survivors (80% safe / 20% explore), excluding recent_suggestions
+  → display ONE verified suggestion (+ clearly marked local fallback if needed)
+
+Repetition: food per meal rules; movies ~14 days. Max 3 rerolls, then lock.
 """
 
 from __future__ import annotations
