@@ -1,6 +1,6 @@
 /* OneChoice HTML client */
 const DECIDE_SKELETON_MS = 400;
-const DECIDE_TIMEOUT_MS = 20000;
+const DECIDE_TIMEOUT_MS = 35000;
 
 const STATUS_LINES = {
   food: [

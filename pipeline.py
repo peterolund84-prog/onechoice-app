@@ -1395,9 +1395,22 @@ def _generate_candidates(
     language: str,
     grok_api_key: str,
 ) -> list[dict[str, Any]]:
-    if _usable_grok_key(grok_api_key):
+    """LLM candidates with a hard wall-clock cap — local pack is always the fallback.
+
+    The HTML client aborts decide at ~35s. Grok over a home LAN can hang longer than
+    requests' own timeout, so we wrap the call and fall back instead of blowing the
+    client deadline (\"Det tog för lång tid\").
+    """
+    local = _local_candidates(domain, language, recent, context, profile)
+    if not _usable_grok_key(grok_api_key):
+        return local
+    # Food/movie LLM must return well under the client abort window.
+    grok_deadline_s = 10.0 if domain in ("food", "movie", "clothes", "workout") else 12.0
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
         try:
-            return _grok_candidates(
+            box["value"] = _grok_candidates(
                 question,
                 domain,
                 context,
@@ -1408,9 +1421,29 @@ def _generate_candidates(
                 language,
                 grok_api_key,
             )
-        except Exception as exc:
-            log.exception("Grok candidates failed: %s", exc)
-    return _local_candidates(domain, language, recent, context, profile)
+        except Exception as exc:  # noqa: BLE001 — surface to caller via box
+            box["error"] = exc
+
+    # Daemon thread: a hung requests call must not block decide or process exit.
+    import threading
+
+    thr = threading.Thread(target=_run, name=f"grok-cand-{domain}", daemon=True)
+    thr.start()
+    thr.join(timeout=grok_deadline_s)
+    if thr.is_alive():
+        log.warning(
+            "Grok candidates exceeded %.0fs for %s — using local pack",
+            grok_deadline_s,
+            domain,
+        )
+        return local
+    if "error" in box:
+        log.exception("Grok candidates failed: %s", box["error"])
+        return local
+    llm = box.get("value")
+    if llm:
+        return llm
+    return local
 
 
 def _grok_candidates(
@@ -1521,7 +1554,8 @@ Rules:
             # Cap completion size — everyday decisions don't need long essays
             "max_tokens": 600,
         },
-        timeout=12,
+        # Keep under the ThreadPool deadline in _generate_candidates (~10s).
+        timeout=9,
     )
     resp.raise_for_status()
     payload = resp.json()

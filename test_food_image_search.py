@@ -151,6 +151,42 @@ class FoodDecideImageNonBlockingTests(unittest.TestCase):
         self.assertTrue((body.get("url") or "").startswith("/api/media/food"))
         self.assertTrue(calls)
 
+    def test_slow_grok_falls_back_to_local_under_deadline(self) -> None:
+        """Hung Grok must not block food decide past the hard candidate deadline."""
+        import time
+        from unittest.mock import patch
+
+        from fastapi.testclient import TestClient
+
+        from api.main import app
+        import api.services.decide_service as ds
+        import pipeline as pl
+
+        def hang(*_a, **_k):
+            time.sleep(30)
+            return [{"suggestion": "LLM-rätt", "justification": "x", "meta": {}}]
+
+        client = TestClient(app)
+        client.post("/api/auth/guest")
+        with (
+            patch.object(ds, "grok_api_key", return_value="xai-test-key-long"),
+            patch.object(pl, "_grok_candidates", side_effect=hang),
+        ):
+            t0 = time.time()
+            r = client.post(
+                "/api/decide",
+                json={
+                    "domain_hint": "food",
+                    "context_extra": {"meal_type": "lunch"},
+                },
+            )
+            elapsed = time.time() - t0
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json().get("page"), "result")
+        self.assertTrue((r.json().get("decision") or {}).get("suggestion"))
+        # Hard deadline ~10s + small overhead — never approach client 35s abort
+        self.assertLess(elapsed, 14.0, msg=f"decide hung {elapsed:.1f}s on slow Grok")
+
 class FoodCostUsedAmountTests(unittest.TestCase):
     def test_two_egg_omelette_single_or_low_double_digits(self) -> None:
         recipe = {
