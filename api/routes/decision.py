@@ -215,6 +215,107 @@ def execute(sess: SessionDep) -> dict:
     }
 
 
+@router.post("/dish-image")
+def resolve_dish_image(sess: SessionDep) -> dict:
+    """Lazy AI dish image — runs after decide so the 20s client timeout is not blown.
+
+    Fallback chain: AI → local keyword → placeholder. Persists onto the active
+    decision context when successful.
+    """
+    apply_auth(sess)
+    if not sess.current:
+        raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")
+    cur = dict(sess.current)
+    if str(cur.get("domain") or "") != "food":
+        raise HTTPException(status_code=400, detail="Endast matbeslut.")
+    ctx = dict(cur.get("context") or {})
+    suggestion = str(cur.get("suggestion") or "")
+    if not suggestion:
+        raise HTTPException(status_code=400, detail="Saknar rätt.")
+    # Already have a validated AI (or display) URL — no need to search again.
+    existing_display = ctx.get("dish_image_url") or ctx.get("image_display_url")
+    existing_source = ctx.get("dish_image_source") or ctx.get("image_source")
+    if (
+        existing_source == "ai"
+        and isinstance(existing_display, str)
+        and existing_display.startswith("/api/media/")
+    ):
+        return {
+            "ok": True,
+            "url": existing_display,
+            "source": "ai",
+            "pending": False,
+        }
+    try:
+        import food_image_search as fis
+        from api.secrets import grok_api_key
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Bildmodul saknas.") from exc
+
+    key = (grok_api_key() or "").strip()
+    hint = ctx.get("dish_category") or ctx.get("category")
+    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else {}
+    existing_remote = (
+        (recipe.get("image_url") if isinstance(recipe, dict) else None)
+        or ctx.get("image_url")
+    )
+    resolved = fis.resolve_food_image(
+        suggestion,
+        str(hint) if hint else None,
+        api_key=key,
+        recipe_image_url=str(existing_remote).strip()
+        if isinstance(existing_remote, str) and existing_remote.strip()
+        else None,
+        prefer_ai=True,
+    )
+    url = resolved.get("url")
+    source = resolved.get("source") or "placeholder"
+    # Persist onto session decision so execute/share reuse it.
+    ctx["dish_image_url"] = url
+    ctx["dish_image_source"] = source
+    ctx["image_display_url"] = url
+    ctx["image_source"] = source
+    ctx["image_pending"] = False
+    if resolved.get("remote_url"):
+        ctx["image_url"] = resolved["remote_url"]
+    if isinstance(recipe, dict):
+        recipe = dict(recipe)
+        if resolved.get("remote_url"):
+            recipe["image_url"] = resolved["remote_url"]
+        recipe["image_source"] = source
+        recipe["image_display_url"] = url
+        recipe["image_pending"] = False
+        ctx["recipe"] = recipe
+        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+        if shop is not None:
+            shop = dict(shop)
+            shop["recipe"] = recipe
+            ctx["shopping"] = shop
+    cur["context"] = ctx
+    sess.current = cur
+    STORE.save(sess)
+    # Best-effort DB sync so history/reload keeps the image
+    did = sess.decision_id or cur.get("decision_id")
+    if did:
+        try:
+            update = getattr(db, "update_decision_context", None)
+            if callable(update):
+                update(int(did), ctx)
+        except Exception:
+            pass
+    return {
+        "ok": True,
+        "url": url,
+        "source": source,
+        "pending": False,
+        "presentation": {
+            "dish_image_url": url,
+            "dish_image_source": source,
+            "image_pending": False,
+        },
+    }
+
+
 @router.post("/execute/merge-list")
 def merge_list(body: MergeBody, sess: SessionDep) -> dict:
     apply_auth(sess)

@@ -252,6 +252,10 @@ def enrich_decision(
             (recipe.get("image_source") if isinstance(recipe, dict) else None)
             or ctx.get("dish_image_source")
         )
+        presentation["image_pending"] = bool(
+            (recipe.get("image_pending") if isinstance(recipe, dict) else False)
+            or ctx.get("image_pending")
+        )
         presentation["food_meta"] = food_meta_line(ctx)
         # Nutrition may hydrate recipe payloads for execute; result.html must not render it.
         presentation["nutrition"] = nutrition_stats(recipe, suggestion=suggestion)

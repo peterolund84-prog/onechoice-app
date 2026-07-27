@@ -99,6 +99,58 @@ class FoodImageSearchUnitTests(unittest.TestCase):
         self.assertEqual(url, "/api/media/food?url=abc")
 
 
+class FoodDecideImageNonBlockingTests(unittest.TestCase):
+    def test_decide_does_not_call_ai_image_on_critical_path(self) -> None:
+        """Grok image search must not run inside /api/decide (20s client abort)."""
+        from unittest.mock import patch
+
+        from fastapi.testclient import TestClient
+
+        from api.main import app
+        import api.services.decide_service as ds
+
+        calls: list[dict] = []
+
+        def track_search(*_a, **_k):
+            calls.append({"fn": "search"})
+            return "https://images.unsplash.com/photo-x.jpg"
+
+        client = TestClient(app)
+        client.post("/api/auth/guest")
+        with (
+            patch.object(ds, "grok_api_key", return_value="xai-test-key-long"),
+            patch.object(fis, "search_dish_image_url", side_effect=track_search),
+            patch.object(fis, "validate_image_url", return_value=True),
+        ):
+            t0 = __import__("time").time()
+            r = client.post(
+                "/api/decide",
+                json={"domain_hint": "food", "context_extra": {"meal_type": "frukost"}},
+            )
+            elapsed = __import__("time").time() - t0
+        self.assertEqual(r.status_code, 200, r.text)
+        self.assertEqual(r.json().get("page"), "result")
+        self.assertLess(elapsed, 5.0, msg="decide must stay fast without AI image")
+        self.assertEqual(calls, [], msg="AI image search must be lazy, not in decide")
+        pres = (r.json().get("decision") or {}).get("presentation") or {}
+        self.assertTrue(pres.get("image_pending"))
+        self.assertIn(pres.get("dish_image_source"), ("placeholder", None))
+
+        # Lazy upgrade endpoint may call AI search
+        with (
+            patch.object(ds, "grok_api_key", return_value="xai-test-key-long"),
+            patch.object(fis, "search_dish_image_url", side_effect=track_search),
+            patch.object(fis, "validate_image_url", return_value=True),
+        ):
+            # Also patch secrets used by the route
+            with patch("api.secrets.grok_api_key", return_value="xai-test-key-long"):
+                up = client.post("/api/decision/dish-image")
+        self.assertEqual(up.status_code, 200, up.text)
+        body = up.json()
+        self.assertEqual(body.get("source"), "ai")
+        self.assertTrue((body.get("url") or "").startswith("/api/media/food"))
+        self.assertTrue(calls)
+
 class FoodCostUsedAmountTests(unittest.TestCase):
     def test_two_egg_omelette_single_or_low_double_digits(self) -> None:
         recipe = {

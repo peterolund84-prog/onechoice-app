@@ -175,7 +175,7 @@ def _collect_response_text(payload: dict[str, Any]) -> str:
     return "\n".join(chunks)
 
 
-def _grok_image_search(title: str, *, api_key: str) -> str | None:
+def _grok_image_search(title: str, *, api_key: str, timeout: float = 8.0) -> str | None:
     """Ask Grok web_search with enable_image_search for one matching dish photo."""
     import llm_config
 
@@ -189,28 +189,36 @@ def _grok_image_search(title: str, *, api_key: str) -> str | None:
         "No collage, no packaging, no people faces. If nothing matches, return NONE."
     )
     model = llm_config.text_model()
-    resp = requests.post(
-        "https://api.x.ai/v1/responses",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "input": [{"role": "user", "content": prompt}],
-            "tools": [{"type": "web_search", "enable_image_search": True}],
-            "temperature": 0.2,
-        },
-        timeout=60,
-    )
+    try:
+        resp = requests.post(
+            "https://api.x.ai/v1/responses",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "input": [{"role": "user", "content": prompt}],
+                "tools": [{"type": "web_search", "enable_image_search": True}],
+                "temperature": 0.2,
+            },
+            timeout=timeout,
+        )
+    except Exception as exc:
+        log.warning("food image_search request failed: %s", exc)
+        return None
     if resp.status_code != 200:
         log.warning("food image_search HTTP %s: %s", resp.status_code, resp.text[:200])
         return None
-    text = _collect_response_text(resp.json() or {})
+    try:
+        text = _collect_response_text(resp.json() or {})
+    except Exception as exc:
+        log.warning("food image_search parse failed: %s", exc)
+        return None
     if not text or "NONE" in text.strip().upper()[:20]:
         return None
     for url in extract_markdown_image_urls(text):
-        if validate_image_url(url):
+        if validate_image_url(url, timeout=min(4.0, timeout)):
             return url
     return None
 
@@ -220,6 +228,7 @@ def search_dish_image_url(
     *,
     api_key: str = "",
     use_cache: bool = True,
+    timeout: float = 8.0,
 ) -> str | None:
     """Return a validated AI image URL for the dish, or None."""
     key = _cache_key(title)
@@ -241,7 +250,13 @@ def search_dish_image_url(
                 return None
     if not (api_key or "").strip():
         return None
-    url = _grok_image_search(title, api_key=api_key.strip())
+    try:
+        url = _grok_image_search(
+            title, api_key=api_key.strip(), timeout=max(2.0, float(timeout))
+        )
+    except Exception as exc:
+        log.warning("food image_search failed: %s", exc)
+        url = None
     if use_cache:
         cached = _load_cache()
         if not isinstance(cached, dict):
@@ -288,7 +303,9 @@ def resolve_food_image(
 
     # 2) AI image search
     if prefer_ai and (api_key or "").strip():
-        ai_url = search_dish_image_url(title, api_key=api_key, use_cache=use_cache)
+        ai_url = search_dish_image_url(
+            title, api_key=api_key, use_cache=use_cache, timeout=8.0
+        )
         if ai_url:
             log.info("dish image source=ai title=%r", title)
             return {

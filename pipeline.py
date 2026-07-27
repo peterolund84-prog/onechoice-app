@@ -954,7 +954,9 @@ def decide(
             suggestion,
             meta=top.get("meta") if isinstance(top.get("meta"), dict) else {},
         )
-        # Dish image: AI image_search → local keyword → placeholder (never wrong photo)
+        # Dish image on the critical path must be instant — client aborts decide at 20s.
+        # With a Grok key: placeholder now, AI upgrade via /api/decision/dish-image (lazy).
+        # Without a key: local keyword library → placeholder (never block on network).
         try:
             import food_image_search as fis
 
@@ -969,20 +971,37 @@ def decide(
                 existing_url = rec.get("image_url")
             if not existing_url:
                 existing_url = meta_img.get("image_url")
-            resolved = fis.resolve_food_image(
-                suggestion,
-                dish_category,
-                api_key=grok_api_key,
-                recipe_image_url=str(existing_url).strip()
-                if isinstance(existing_url, str) and existing_url.strip()
-                else None,
+            has_grok = bool((grok_api_key or "").strip()) and _usable_grok_key(
+                grok_api_key
             )
+            if has_grok and not (
+                isinstance(existing_url, str) and existing_url.strip()
+            ):
+                # Avoid flashing a mismatched keyword photo while AI is pending.
+                resolved = {
+                    "url": None,
+                    "source": "placeholder",
+                    "remote_url": None,
+                }
+                image_pending = True
+            else:
+                resolved = fis.resolve_food_image(
+                    suggestion,
+                    dish_category,
+                    api_key="",  # never call Grok on the decide critical path
+                    recipe_image_url=str(existing_url).strip()
+                    if isinstance(existing_url, str) and existing_url.strip()
+                    else None,
+                    prefer_ai=False,
+                )
+                image_pending = False
             if isinstance(execution.get("recipe"), dict):
                 rec = dict(execution["recipe"])
                 if resolved.get("remote_url"):
                     rec["image_url"] = resolved["remote_url"]
                 rec["image_source"] = resolved.get("source") or "placeholder"
                 rec["image_display_url"] = resolved.get("url")
+                rec["image_pending"] = image_pending
                 execution["recipe"] = rec
                 if isinstance(execution.get("shopping"), dict):
                     shop = dict(execution["shopping"])
@@ -993,6 +1012,7 @@ def decide(
                 top_meta["image_url"] = resolved["remote_url"]
             top_meta["image_source"] = resolved.get("source") or "placeholder"
             top_meta["image_display_url"] = resolved.get("url")
+            top_meta["image_pending"] = image_pending
             top = dict(top)
             top["meta"] = top_meta
         except Exception as exc:
@@ -1049,6 +1069,14 @@ def decide(
                 (execution.get("recipe") or {}).get("image_source")
                 if isinstance(execution.get("recipe"), dict)
                 else None
+            ),
+            "image_pending": bool(
+                (top.get("meta") or {}).get("image_pending")
+                or (
+                    (execution.get("recipe") or {}).get("image_pending")
+                    if isinstance(execution.get("recipe"), dict)
+                    else False
+                )
             ),
             "image_url": (top.get("meta") or {}).get("image_url")
             or (

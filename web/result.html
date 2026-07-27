@@ -22,7 +22,7 @@
     (async function () {
       const {
         api, go, ensureGuest, esc, cardActionsHtml, bindCardActions, imgOrPh,
-        withDecideLoading, DECIDE_TIMEOUT_MS,
+        withDecideLoading, DECIDE_TIMEOUT_MS, upgradeFoodImage,
       } = window.OC;
       await ensureGuest();
       const root = document.getElementById("app");
@@ -228,6 +228,10 @@
         <p class="error" id="err" hidden></p>
       `;
       bindCardActions();
+
+      if (domain === "food") {
+        upgradeFoodImage(root, pres);
+      }
 
       const showErr = (m) => {
         const el = document.getElementById("err");

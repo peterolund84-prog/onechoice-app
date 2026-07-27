@@ -22,6 +22,7 @@
     (async function () {
       const {
         api, go, ensureGuest, esc, cardActionsHtml, bindCardActions, imgOrPh,
+        upgradeFoodImage,
       } = window.OC;
       await ensureGuest();
       const root = document.getElementById("app");
@@ -110,6 +111,7 @@
         <p class="error" id="err" hidden></p>
       `;
       bindCardActions();
+      upgradeFoodImage(root, pres);
 
       const merge = document.getElementById("merge");
       if (merge) {

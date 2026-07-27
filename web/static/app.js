@@ -524,6 +524,41 @@ function imgOrPh(url, className) {
   return `<img class="${className}" src="${esc(src)}" alt="" loading="lazy" onerror="window.OC&&window.OC.phImg(this)" />`;
 }
 
+/**
+ * After decide returns, upgrade dish photo via AI image_search off the critical path.
+ * Decide never waits on Grok images (client aborts at 20s).
+ */
+async function upgradeFoodImage(root, presentation) {
+  try {
+    const pres = presentation || {};
+    if (!pres.image_pending) return null;
+    if (pres.dish_image_source === "ai" && pres.dish_image_url) return null;
+    const data = await api.post("/api/decision/dish-image", {}, { timeoutMs: 15000 });
+    const url = data && (data.url || (data.presentation && data.presentation.dish_image_url));
+    if (!url || !root) return data;
+    const host = root.querySelector(".food-card") || root;
+    const existing = host.querySelector("img.food-img, .food-img-ph, .food-img");
+    const html = imgOrPh(url, "food-img");
+    if (existing) {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = html;
+      const next = wrap.firstElementChild;
+      if (next) existing.replaceWith(next);
+    } else {
+      const body = host.querySelector(".food-body");
+      if (body) {
+        const wrap = document.createElement("div");
+        wrap.innerHTML = html;
+        const next = wrap.firstElementChild;
+        if (next) body.parentNode.insertBefore(next, body);
+      }
+    }
+    return data;
+  } catch (_) {
+    return null;
+  }
+}
+
 function registerServiceWorker() {
   try {
     if (!("serviceWorker" in navigator)) return;
@@ -562,6 +597,7 @@ window.OC = {
   cardActionsHtml,
   bindCardActions,
   imgOrPh,
+  upgradeFoodImage,
   phImg,
   posterPhHtml,
   skeletonHtml,
