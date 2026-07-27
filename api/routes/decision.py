@@ -151,7 +151,12 @@ def execute(sess: SessionDep) -> dict:
             import food_budget as fbud
 
             meta = cur.get("meta") if isinstance(cur.get("meta"), dict) else {}
-            recipe = fbud.ensure_recipe_cost(recipe, meta=meta, allow_estimate=True)
+            recipe = fbud.ensure_recipe_cost(
+                recipe,
+                meta=meta,
+                allow_estimate=True,
+                meal_type=ctx.get("meal_type"),
+            )
         except Exception:
             pass
     enriched = _enriched(sess) or {}
@@ -169,7 +174,11 @@ def execute(sess: SessionDep) -> dict:
         level = fbud.normalize_meal_budget(ctx.get("meal_budget"))
         show_cost = fbud.budget_active(level)
         if show_cost and isinstance(recipe, dict):
-            cost = fbud.cost_stat(recipe, language=sess.language or "sv")
+            cost = fbud.cost_stat(
+                recipe,
+                language=sess.language or "sv",
+                meal_type=ctx.get("meal_type"),
+            )
             if cost is None and ctx.get("cost_per_portion_sek") is not None:
                 cost = {
                     "sek": fbud.round_cost_sek(ctx.get("cost_per_portion_sek")),

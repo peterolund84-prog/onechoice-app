@@ -3,25 +3,40 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 
-def dish_image_url(title: str, category_hint: str | None = None) -> str | None:
-    """Public URL for a local dish JPEG via API (uvicorn-safe), or None."""
-    from urllib.parse import urlencode
+def dish_image_url(
+    title: str,
+    category_hint: str | None = None,
+    *,
+    recipe: dict[str, Any] | None = None,
+    context: dict[str, Any] | None = None,
+    api_key: str = "",
+) -> str | None:
+    """Public dish image URL: AI (validated) → local keyword → None (placeholder).
 
-    import dish_images as dimg
+    Prefer URLs already resolved on the recipe/context so decide-time AI search
+    is not repeated on every enrich. Never invent a mismatched photo.
+    """
+    import food_image_search as fis
 
-    path = dimg.resolve_dish_image(title, category_hint)
-    if not path:
-        return None
-    name = Path(path).name
-    if not name or ".." in name or "/" in name or "\\" in name:
-        return None
-    q = urlencode({"title": title or "", "category": category_hint or ""})
-    return f"/api/media/dish?{q}"
+    ctx = context if isinstance(context, dict) else {}
+    rec = recipe if isinstance(recipe, dict) else {}
+    for key in ("image_display_url", "dish_image_url"):
+        existing = rec.get(key) or ctx.get(key)
+        if isinstance(existing, str) and existing.startswith("/api/media/"):
+            return existing
 
+    raw = rec.get("image_url") or ctx.get("image_url") or ctx.get("dish_image_remote_url")
+    resolved = fis.resolve_food_image(
+        title,
+        category_hint,
+        api_key=api_key,
+        recipe_image_url=str(raw).strip() if isinstance(raw, str) and raw.strip() else None,
+        prefer_ai=bool((api_key or "").strip()),
+    )
+    return resolved.get("url")
 
 def _shop_item_count(shop: dict[str, Any] | None) -> int:
     if not isinstance(shop, dict):
@@ -223,14 +238,21 @@ def enrich_decision(
     }
     if domain == "food":
         hint = ctx.get("dish_category") or ctx.get("category")
-        presentation["dish_image_url"] = dish_image_url(
-            suggestion, str(hint) if hint else None
-        )
-        presentation["food_meta"] = food_meta_line(ctx)
         shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else {}
         recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
         if not recipe and shop:
             recipe = shop.get("recipe") if isinstance(shop.get("recipe"), dict) else None
+        presentation["dish_image_url"] = dish_image_url(
+            suggestion,
+            str(hint) if hint else None,
+            recipe=recipe if isinstance(recipe, dict) else None,
+            context=ctx,
+        )
+        presentation["dish_image_source"] = (
+            (recipe.get("image_source") if isinstance(recipe, dict) else None)
+            or ctx.get("dish_image_source")
+        )
+        presentation["food_meta"] = food_meta_line(ctx)
         # Nutrition may hydrate recipe payloads for execute; result.html must not render it.
         presentation["nutrition"] = nutrition_stats(recipe, suggestion=suggestion)
     out["presentation"] = presentation

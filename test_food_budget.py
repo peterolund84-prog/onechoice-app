@@ -32,12 +32,14 @@ class FoodBudgetUnitTests(unittest.TestCase):
                 "title": "Kycklingwok",
                 "ingredients": ["kycklingfilé", "broccoli", "ris", "sojasås"],
                 "portioner": 2,
-            }
+                "meal_type": "middag",
+            },
+            meal_type="middag",
         )
         self.assertIn("cost_per_portion_sek", recipe)
         self.assertEqual(recipe["cost_per_portion_sek"] % 5, 0)
         self.assertEqual(recipe.get("cost_label"), "ca")
-
+        self.assertLessEqual(recipe["cost_per_portion_sek"], 70)
 
 class FoodBudgetFeasibilityTests(unittest.TestCase):
     def setUp(self) -> None:

@@ -920,7 +920,10 @@ def decide(
             meta_for_cost = top.get("meta") if isinstance(top.get("meta"), dict) else {}
             if isinstance(execution.get("recipe"), dict):
                 execution["recipe"] = fbud.ensure_recipe_cost(
-                    execution["recipe"], meta=meta_for_cost, allow_estimate=True
+                    execution["recipe"],
+                    meta=meta_for_cost,
+                    allow_estimate=True,
+                    meal_type=meal_type,
                 )
                 cost_val = fbud.read_cost_per_portion(execution["recipe"])
                 if cost_val is not None:
@@ -934,6 +937,7 @@ def decide(
                     shop.get("recipe") if isinstance(shop.get("recipe"), dict) else {},
                     meta=meta_for_cost,
                     allow_estimate=True,
+                    meal_type=meal_type,
                 )
                 shop["recipe"] = rec
                 execution["shopping"] = shop
@@ -950,6 +954,49 @@ def decide(
             suggestion,
             meta=top.get("meta") if isinstance(top.get("meta"), dict) else {},
         )
+        # Dish image: AI image_search → local keyword → placeholder (never wrong photo)
+        try:
+            import food_image_search as fis
+
+            meta_img = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+            rec = (
+                execution.get("recipe")
+                if isinstance(execution.get("recipe"), dict)
+                else {}
+            )
+            existing_url = None
+            if isinstance(rec, dict):
+                existing_url = rec.get("image_url")
+            if not existing_url:
+                existing_url = meta_img.get("image_url")
+            resolved = fis.resolve_food_image(
+                suggestion,
+                dish_category,
+                api_key=grok_api_key,
+                recipe_image_url=str(existing_url).strip()
+                if isinstance(existing_url, str) and existing_url.strip()
+                else None,
+            )
+            if isinstance(execution.get("recipe"), dict):
+                rec = dict(execution["recipe"])
+                if resolved.get("remote_url"):
+                    rec["image_url"] = resolved["remote_url"]
+                rec["image_source"] = resolved.get("source") or "placeholder"
+                rec["image_display_url"] = resolved.get("url")
+                execution["recipe"] = rec
+                if isinstance(execution.get("shopping"), dict):
+                    shop = dict(execution["shopping"])
+                    shop["recipe"] = rec
+                    execution["shopping"] = shop
+            top_meta = dict(meta_img)
+            if resolved.get("remote_url"):
+                top_meta["image_url"] = resolved["remote_url"]
+            top_meta["image_source"] = resolved.get("source") or "placeholder"
+            top_meta["image_display_url"] = resolved.get("url")
+            top = dict(top)
+            top["meta"] = top_meta
+        except Exception as exc:
+            log.warning("resolve_food_image failed: %s", exc)
 
     decision = db.create_decision(
         user_id=user_id,
@@ -991,6 +1038,24 @@ def decide(
             "recipe": execution.get("recipe")
             or (execution.get("shopping") or {}).get("recipe"),
             "dish_category": dish_category,
+            "dish_image_url": (top.get("meta") or {}).get("image_display_url")
+            or (
+                (execution.get("recipe") or {}).get("image_display_url")
+                if isinstance(execution.get("recipe"), dict)
+                else None
+            ),
+            "dish_image_source": (top.get("meta") or {}).get("image_source")
+            or (
+                (execution.get("recipe") or {}).get("image_source")
+                if isinstance(execution.get("recipe"), dict)
+                else None
+            ),
+            "image_url": (top.get("meta") or {}).get("image_url")
+            or (
+                (execution.get("recipe") or {}).get("image_url")
+                if isinstance(execution.get("recipe"), dict)
+                else None
+            ),
             "workout": workout_payload or execution.get("workout"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
             "availability_source": (top.get("meta") or {}).get("availability_source"),
@@ -1491,7 +1556,13 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
         )
         food_rule += (
             " REQUIRED: set meta.cost_per_portion_sek to an estimated integer SEK "
-            "per portion from the ingredient amounts (Swedish supermarket ballpark). "
+            "per portion from the ingredient amounts USED (Swedish supermarket ballpark). "
+            "CRITICAL cost rule: estimate ONLY the amount of each ingredient the recipe "
+            "uses — NOT the price of the full package. "
+            "2 eggs ≈ the per-egg share of a carton (a few kronor), not a whole äggkartong. "
+            "1 msk olja ≈ a few öre, not a whole bottle. "
+            "Pantry staples (salt, pepper, oil, spices) contribute negligibly. "
+            "A 1-portion breakfast is typically ~10–25 kr; a weekday dinner portion ~30–70 kr. "
             "Round to nearest 5. This is an estimate labelled 'ca', NOT a store price — "
             "never invent exact kronor or a shopping-list total."
         )

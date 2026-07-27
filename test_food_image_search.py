@@ -1,0 +1,159 @@
+# -*- coding: utf-8 -*-
+"""AI dish image search + fallback chain + used-amount cost sanity."""
+
+from __future__ import annotations
+
+import unittest
+from unittest.mock import patch
+
+import food_budget as fbud
+import food_image_search as fis
+from api.presentation import dish_image_url, enrich_decision
+
+
+class FoodImageSearchUnitTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        fis.set_search_override(None)
+
+    def test_extract_markdown_image_urls(self) -> None:
+        text = "Here ![dish](https://images.unsplash.com/photo-x.jpg) and done"
+        urls = fis.extract_markdown_image_urls(text)
+        self.assertEqual(urls[0], "https://images.unsplash.com/photo-x.jpg")
+
+    def test_ai_source_when_search_returns_validated_url(self) -> None:
+        remote = "https://images.unsplash.com/photo-omelette.jpg"
+
+        def _fake(_title: str) -> str | None:
+            return remote
+
+        fis.set_search_override(_fake)
+        with patch.object(fis, "validate_image_url", return_value=True):
+            resolved = fis.resolve_food_image(
+                "Proteinomelett med frukt",
+                "omelett",
+                api_key="xai-test",
+                use_cache=False,
+            )
+        self.assertEqual(resolved["source"], "ai")
+        self.assertEqual(resolved["remote_url"], remote)
+        self.assertTrue(resolved["url"].startswith("/api/media/food?url="))
+
+    def test_fallback_local_when_ai_misses(self) -> None:
+        fis.set_search_override(lambda _t: None)
+        resolved = fis.resolve_food_image(
+            "Spaghetti carbonara",
+            "pasta",
+            api_key="xai-test",
+            use_cache=False,
+        )
+        self.assertEqual(resolved["source"], "local")
+        self.assertTrue(resolved["url"].startswith("/api/media/dish?"))
+
+    def test_placeholder_when_no_ai_no_local(self) -> None:
+        fis.set_search_override(lambda _t: None)
+        resolved = fis.resolve_food_image(
+            "Xylophone nebula special",
+            None,
+            api_key="xai-test",
+            use_cache=False,
+        )
+        self.assertEqual(resolved["source"], "placeholder")
+        self.assertIsNone(resolved["url"])
+
+    def test_recipe_image_url_preferred(self) -> None:
+        remote = "https://images.unsplash.com/photo-pasta.jpg"
+        with patch.object(fis, "validate_image_url", return_value=True):
+            resolved = fis.resolve_food_image(
+                "Kycklingpasta med tomat",
+                "pasta",
+                recipe_image_url=remote,
+                api_key="",
+            )
+        self.assertEqual(resolved["source"], "ai")
+        self.assertIn("food?url=", resolved["url"] or "")
+
+    def test_enrich_decision_uses_recipe_display_url(self) -> None:
+        decision = {
+            "domain": "food",
+            "suggestion": "Proteinomelett med frukt",
+            "context": {
+                "dish_category": "omelett",
+                "recipe": {
+                    "title": "Proteinomelett med frukt",
+                    "image_url": "https://images.unsplash.com/photo-x.jpg",
+                    "image_source": "ai",
+                    "image_display_url": "/api/media/food?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-x.jpg",
+                },
+            },
+        }
+        enriched = enrich_decision(decision, language="sv") or {}
+        pres = enriched.get("presentation") or {}
+        self.assertTrue(pres.get("dish_image_url", "").startswith("/api/media/food"))
+        self.assertEqual(pres.get("dish_image_source"), "ai")
+
+    def test_dish_image_url_helper_prefers_context(self) -> None:
+        url = dish_image_url(
+            "Whatever",
+            context={"dish_image_url": "/api/media/food?url=abc"},
+        )
+        self.assertEqual(url, "/api/media/food?url=abc")
+
+
+class FoodCostUsedAmountTests(unittest.TestCase):
+    def test_two_egg_omelette_single_or_low_double_digits(self) -> None:
+        recipe = {
+            "title": "Proteinomelett",
+            "meal_type": "frukost",
+            "portioner": 1,
+            "ingredients": [
+                {"name": "ägg", "amount": "2", "unit": "st"},
+                {"name": "smör", "amount": "1", "unit": "msk"},
+                {"name": "salt", "amount": "1", "unit": "krm"},
+                {"name": "peppar", "amount": "1", "unit": "krm"},
+                {"name": "olja", "amount": "1", "unit": "msk"},
+            ],
+        }
+        out = fbud.ensure_recipe_cost(recipe, allow_estimate=True, meal_type="frukost")
+        sek = out["cost_per_portion_sek"]
+        self.assertLessEqual(sek, 25)
+        self.assertGreaterEqual(sek, 5)
+        self.assertNotEqual(sek, 85)
+
+    def test_package_price_rejected_by_sanity_bound(self) -> None:
+        recipe = {
+            "title": "Äggomelett",
+            "meal_type": "frukost",
+            "portioner": 1,
+            "cost_per_portion_sek": 85,  # whole-package LLM guess
+            "ingredients": [
+                {"name": "ägg", "amount": "2", "unit": "st"},
+                {"name": "mjölk", "amount": "2", "unit": "msk"},
+                {"name": "smör", "amount": "1", "unit": "tsk"},
+            ],
+        }
+        out = fbud.ensure_recipe_cost(recipe, allow_estimate=True, meal_type="frukost")
+        self.assertTrue(out.get("cost_regenerated"))
+        self.assertLessEqual(out["cost_per_portion_sek"], 30)
+        self.assertTrue(fbud.cost_exceeds_sanity(85, meal_type="frukost"))
+
+    def test_used_amount_not_carton(self) -> None:
+        # Name-only eggs must not price a whole carton into one portion
+        per = fbud.estimate_cost_per_portion(
+            ["ägg", "smör", "salt"],
+            servings=1,
+            meal_type="frukost",
+        )
+        self.assertLessEqual(per, 25)
+
+    def test_prompt_mentions_used_amounts(self) -> None:
+        import pipeline
+
+        rules = pipeline._domain_prompt_rules(
+            "food", {"food": {"meal_budget": "any"}}
+        )
+        self.assertIn("ONLY the amount", rules)
+        self.assertIn("Pantry staples", rules)
+
+
+if __name__ == "__main__":
+    unittest.main()

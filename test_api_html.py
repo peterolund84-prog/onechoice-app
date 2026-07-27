@@ -283,7 +283,10 @@ class ApiHtmlSmokeTests(unittest.TestCase):
             self.skipTest("decide did not return result")
         decision = data["decision"]
         pres = decision.get("presentation") or {}
-        self.assertTrue(pres.get("dish_image_url", "").startswith("/api/media/dish"))
+        self.assertTrue(
+            (pres.get("dish_image_url") or "").startswith("/api/media/"),
+            msg=pres.get("dish_image_url"),
+        )
         img = self.client.get(pres["dish_image_url"])
         self.assertEqual(img.status_code, 200)
         self.assertIn("share_text", pres)
