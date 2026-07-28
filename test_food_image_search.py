@@ -14,6 +14,7 @@ from api.presentation import dish_image_url, enrich_decision
 class FoodImageSearchUnitTests(unittest.TestCase):
     def tearDown(self) -> None:
         fis.set_search_override(None)
+        fis.reset_ai_image_search_state()
 
     def test_extract_markdown_image_urls(self) -> None:
         text = "Here ![dish](https://images.unsplash.com/photo-x.jpg) and done"
@@ -98,8 +99,91 @@ class FoodImageSearchUnitTests(unittest.TestCase):
         )
         self.assertEqual(url, "/api/media/food?url=abc")
 
+    def test_resolve_never_raises_when_ai_explodes(self) -> None:
+        def boom(_title: str) -> str | None:
+            raise RuntimeError("image API exploded")
+
+        fis.set_search_override(boom)
+        resolved = fis.resolve_food_image(
+            "Spaghetti carbonara",
+            "pasta",
+            api_key="xai-test",
+            use_cache=False,
+        )
+        self.assertIn(resolved["source"], ("local", "placeholder"))
+        self.assertIsInstance(resolved, dict)
+
+    def test_unsupported_image_search_disables_without_retry_crash(self) -> None:
+        calls = {"n": 0}
+
+        class FakeResp:
+            status_code = 400
+            text = '{"error":"Unknown parameter enable_image_search"}'
+
+            def json(self):
+                return {"error": "Unknown parameter enable_image_search"}
+
+        def fake_post(*_a, **_k):
+            calls["n"] += 1
+            return FakeResp()
+
+        with (
+            patch.object(fis, "_SEARCH_OVERRIDE", None),
+            patch("food_image_search.requests.post", side_effect=fake_post),
+            patch("llm_config.text_model", return_value="grok-4-fast"),
+        ):
+            fis.reset_ai_image_search_state()
+            a = fis.search_dish_image_url(
+                "omelett", api_key="xai-test-key", use_cache=False
+            )
+            self.assertIsNone(a)
+            self.assertFalse(fis.ai_image_search_enabled())
+            b = fis.search_dish_image_url(
+                "pasta", api_key="xai-test-key", use_cache=False
+            )
+            self.assertIsNone(b)
+            # Second call must not hit the network again
+            self.assertEqual(calls["n"], 1)
+
+        # Resolve still falls back to local
+        fis.reset_ai_image_search_state()
+        with (
+            patch.object(fis, "_SEARCH_OVERRIDE", None),
+            patch("food_image_search.requests.post", side_effect=fake_post),
+            patch("llm_config.text_model", return_value="grok-4-fast"),
+        ):
+            fis._disable_ai_image_search("test")
+            resolved = fis.resolve_food_image(
+                "Spaghetti carbonara",
+                "pasta",
+                api_key="xai-test-key",
+                use_cache=False,
+                prefer_ai=True,
+            )
+        self.assertEqual(resolved["source"], "local")
+
+    def test_enrich_survives_resolve_explosion(self) -> None:
+        with patch.object(
+            fis, "resolve_food_image", side_effect=RuntimeError("boom")
+        ):
+            enriched = enrich_decision(
+                {
+                    "domain": "food",
+                    "suggestion": "Tacos",
+                    "context": {"dish_category": "tacos"},
+                },
+                language="sv",
+            )
+        self.assertIsInstance(enriched, dict)
+        pres = enriched.get("presentation") or {}
+        self.assertIsNone(pres.get("dish_image_url"))
+
 
 class FoodDecideImageNonBlockingTests(unittest.TestCase):
+    def tearDown(self) -> None:
+        fis.set_search_override(None)
+        fis.reset_ai_image_search_state()
+
     def test_decide_does_not_call_ai_image_on_critical_path(self) -> None:
         """Grok image search must not run inside /api/decide (20s client abort)."""
         from unittest.mock import patch

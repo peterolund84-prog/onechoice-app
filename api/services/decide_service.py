@@ -200,7 +200,11 @@ def run_decide(
     else:
         page = "result"
 
-    enriched = enrich_decision(data, language=sess.language or "sv")
+    enriched = None
+    try:
+        enriched = enrich_decision(data, language=sess.language or "sv")
+    except Exception:
+        enriched = data if isinstance(data, dict) else None
     # Persist poster/meta from presentation so /api/decision/current stays consistent.
     if isinstance(enriched, dict):
         data = enriched

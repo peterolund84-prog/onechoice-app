@@ -217,21 +217,32 @@ def execute(sess: SessionDep) -> dict:
 
 @router.post("/dish-image")
 def resolve_dish_image(sess: SessionDep) -> dict:
-    """Lazy AI dish image — runs after decide so the 20s client timeout is not blown.
+    """Lazy AI dish image — must never break the decision.
 
-    Fallback chain: AI → local keyword → placeholder. Persists onto the active
-    decision context when successful.
+    Fallback chain: AI → local keyword → placeholder. On any failure returns
+    placeholder with ok=True so the card keeps working.
     """
     apply_auth(sess)
     if not sess.current:
         raise HTTPException(status_code=404, detail="Ingen aktiv beslut.")
     cur = dict(sess.current)
     if str(cur.get("domain") or "") != "food":
-        raise HTTPException(status_code=400, detail="Endast matbeslut.")
+        # Soft no-op — don't 400-crash the client upgrade path
+        return {
+            "ok": True,
+            "url": None,
+            "source": "placeholder",
+            "pending": False,
+        }
     ctx = dict(cur.get("context") or {})
     suggestion = str(cur.get("suggestion") or "")
     if not suggestion:
-        raise HTTPException(status_code=400, detail="Saknar rätt.")
+        return {
+            "ok": True,
+            "url": None,
+            "source": "placeholder",
+            "pending": False,
+        }
     # Already have a validated AI (or display) URL — no need to search again.
     existing_display = ctx.get("dish_image_url") or ctx.get("image_display_url")
     existing_source = ctx.get("dish_image_source") or ctx.get("image_source")
@@ -246,63 +257,83 @@ def resolve_dish_image(sess: SessionDep) -> dict:
             "source": "ai",
             "pending": False,
         }
+
+    url = None
+    source = "placeholder"
+    remote = None
     try:
         import food_image_search as fis
         from api.secrets import grok_api_key
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail="Bildmodul saknas.") from exc
 
-    key = (grok_api_key() or "").strip()
-    hint = ctx.get("dish_category") or ctx.get("category")
-    recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else {}
-    existing_remote = (
-        (recipe.get("image_url") if isinstance(recipe, dict) else None)
-        or ctx.get("image_url")
-    )
-    resolved = fis.resolve_food_image(
-        suggestion,
-        str(hint) if hint else None,
-        api_key=key,
-        recipe_image_url=str(existing_remote).strip()
-        if isinstance(existing_remote, str) and existing_remote.strip()
-        else None,
-        prefer_ai=True,
-    )
-    url = resolved.get("url")
-    source = resolved.get("source") or "placeholder"
-    # Persist onto session decision so execute/share reuse it.
-    ctx["dish_image_url"] = url
-    ctx["dish_image_source"] = source
-    ctx["image_display_url"] = url
-    ctx["image_source"] = source
-    ctx["image_pending"] = False
-    if resolved.get("remote_url"):
-        ctx["image_url"] = resolved["remote_url"]
-    if isinstance(recipe, dict):
-        recipe = dict(recipe)
-        if resolved.get("remote_url"):
-            recipe["image_url"] = resolved["remote_url"]
-        recipe["image_source"] = source
-        recipe["image_display_url"] = url
-        recipe["image_pending"] = False
-        ctx["recipe"] = recipe
-        shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
-        if shop is not None:
-            shop = dict(shop)
-            shop["recipe"] = recipe
-            ctx["shopping"] = shop
-    cur["context"] = ctx
-    sess.current = cur
-    STORE.save(sess)
-    # Best-effort DB sync so history/reload keeps the image
-    did = sess.decision_id or cur.get("decision_id")
-    if did:
-        try:
-            update = getattr(db, "update_decision_context", None)
-            if callable(update):
-                update(int(did), ctx)
-        except Exception:
-            pass
+        key = (grok_api_key() or "").strip()
+        # If AI search was disabled for this process, skip it entirely.
+        prefer_ai = bool(key) and fis.ai_image_search_enabled()
+        hint = ctx.get("dish_category") or ctx.get("category")
+        recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else {}
+        existing_remote = (
+            (recipe.get("image_url") if isinstance(recipe, dict) else None)
+            or ctx.get("image_url")
+        )
+        resolved = fis.resolve_food_image(
+            suggestion,
+            str(hint) if hint else None,
+            api_key=key if prefer_ai else "",
+            recipe_image_url=str(existing_remote).strip()
+            if isinstance(existing_remote, str) and existing_remote.strip()
+            else None,
+            prefer_ai=prefer_ai,
+        )
+        if isinstance(resolved, dict):
+            url = resolved.get("url")
+            source = str(resolved.get("source") or "placeholder")
+            remote = resolved.get("remote_url")
+    except Exception as exc:
+        import logging
+
+        logging.getLogger("onechoice.decision").warning(
+            "dish-image resolve failed: %s", exc
+        )
+        url = None
+        source = "placeholder"
+        remote = None
+
+    try:
+        # Persist onto session decision so execute/share reuse it.
+        recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else {}
+        ctx["dish_image_url"] = url
+        ctx["dish_image_source"] = source
+        ctx["image_display_url"] = url
+        ctx["image_source"] = source
+        ctx["image_pending"] = False
+        if remote:
+            ctx["image_url"] = remote
+        if isinstance(recipe, dict):
+            recipe = dict(recipe)
+            if remote:
+                recipe["image_url"] = remote
+            recipe["image_source"] = source
+            recipe["image_display_url"] = url
+            recipe["image_pending"] = False
+            ctx["recipe"] = recipe
+            shop = ctx.get("shopping") if isinstance(ctx.get("shopping"), dict) else None
+            if shop is not None:
+                shop = dict(shop)
+                shop["recipe"] = recipe
+                ctx["shopping"] = shop
+        cur["context"] = ctx
+        sess.current = cur
+        STORE.save(sess)
+        did = sess.decision_id or cur.get("decision_id")
+        if did:
+            try:
+                update = getattr(db, "update_decision_context", None)
+                if callable(update):
+                    update(int(did), ctx)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     return {
         "ok": True,
         "url": url,

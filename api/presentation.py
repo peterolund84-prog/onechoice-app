@@ -18,25 +18,31 @@ def dish_image_url(
 
     Prefer URLs already resolved on the recipe/context so decide-time AI search
     is not repeated on every enrich. Never invent a mismatched photo.
+    Never raises — image failure must not kill the decision card.
     """
-    import food_image_search as fis
+    try:
+        import food_image_search as fis
 
-    ctx = context if isinstance(context, dict) else {}
-    rec = recipe if isinstance(recipe, dict) else {}
-    for key in ("image_display_url", "dish_image_url"):
-        existing = rec.get(key) or ctx.get(key)
-        if isinstance(existing, str) and existing.startswith("/api/media/"):
-            return existing
+        ctx = context if isinstance(context, dict) else {}
+        rec = recipe if isinstance(recipe, dict) else {}
+        for key in ("image_display_url", "dish_image_url"):
+            existing = rec.get(key) or ctx.get(key)
+            if isinstance(existing, str) and existing.startswith("/api/media/"):
+                return existing
 
-    raw = rec.get("image_url") or ctx.get("image_url") or ctx.get("dish_image_remote_url")
-    resolved = fis.resolve_food_image(
-        title,
-        category_hint,
-        api_key=api_key,
-        recipe_image_url=str(raw).strip() if isinstance(raw, str) and raw.strip() else None,
-        prefer_ai=bool((api_key or "").strip()),
-    )
-    return resolved.get("url")
+        raw = rec.get("image_url") or ctx.get("image_url") or ctx.get("dish_image_remote_url")
+        resolved = fis.resolve_food_image(
+            title,
+            category_hint,
+            api_key=api_key,
+            recipe_image_url=str(raw).strip()
+            if isinstance(raw, str) and raw.strip()
+            else None,
+            prefer_ai=bool((api_key or "").strip()),
+        )
+        return resolved.get("url") if isinstance(resolved, dict) else None
+    except Exception:
+        return None
 
 def _shop_item_count(shop: dict[str, Any] | None) -> int:
     if not isinstance(shop, dict):
@@ -242,22 +248,33 @@ def enrich_decision(
         recipe = ctx.get("recipe") if isinstance(ctx.get("recipe"), dict) else None
         if not recipe and shop:
             recipe = shop.get("recipe") if isinstance(shop.get("recipe"), dict) else None
-        presentation["dish_image_url"] = dish_image_url(
-            suggestion,
-            str(hint) if hint else None,
-            recipe=recipe if isinstance(recipe, dict) else None,
-            context=ctx,
-        )
-        presentation["dish_image_source"] = (
-            (recipe.get("image_source") if isinstance(recipe, dict) else None)
-            or ctx.get("dish_image_source")
-        )
-        presentation["image_pending"] = bool(
-            (recipe.get("image_pending") if isinstance(recipe, dict) else False)
-            or ctx.get("image_pending")
-        )
-        presentation["food_meta"] = food_meta_line(ctx)
+        try:
+            presentation["dish_image_url"] = dish_image_url(
+                suggestion,
+                str(hint) if hint else None,
+                recipe=recipe if isinstance(recipe, dict) else None,
+                context=ctx,
+            )
+            presentation["dish_image_source"] = (
+                (recipe.get("image_source") if isinstance(recipe, dict) else None)
+                or ctx.get("dish_image_source")
+            )
+            presentation["image_pending"] = bool(
+                (recipe.get("image_pending") if isinstance(recipe, dict) else False)
+                or ctx.get("image_pending")
+            )
+        except Exception:
+            presentation["dish_image_url"] = None
+            presentation["dish_image_source"] = "placeholder"
+            presentation["image_pending"] = False
+        try:
+            presentation["food_meta"] = food_meta_line(ctx)
+        except Exception:
+            presentation["food_meta"] = ""
         # Nutrition may hydrate recipe payloads for execute; result.html must not render it.
-        presentation["nutrition"] = nutrition_stats(recipe, suggestion=suggestion)
+        try:
+            presentation["nutrition"] = nutrition_stats(recipe, suggestion=suggestion)
+        except Exception:
+            presentation["nutrition"] = None
     out["presentation"] = presentation
     return out

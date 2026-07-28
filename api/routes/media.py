@@ -45,32 +45,35 @@ def _host_allowed(host: str) -> bool:
 
 
 def _food_host_ok(host: str) -> bool:
-    h = (host or "").lower().strip()
-    if not h or _PRIVATE_HOST.match(h):
-        return False
-    if fis._host_allowed(h):
-        return True
-    # Allow other public hosts when the URL already passed image validation upstream;
-    # still block obvious local/metadata names.
     try:
-        infos = socket.getaddrinfo(h, None)
-    except OSError:
-        return False
-    for info in infos:
-        ip_s = info[4][0]
-        try:
-            ip = ipaddress.ip_address(ip_s)
-        except ValueError:
-            continue
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-        ):
+        h = (host or "").lower().strip()
+        if not h or _PRIVATE_HOST.match(h):
             return False
-    return True
+        if fis._host_allowed(h):
+            return True
+        # Allow other public hosts when the URL already passed image validation upstream;
+        # still block obvious local/metadata names.
+        try:
+            infos = socket.getaddrinfo(h, None)
+        except OSError:
+            return False
+        for info in infos:
+            ip_s = info[4][0]
+            try:
+                ip = ipaddress.ip_address(ip_s)
+            except ValueError:
+                continue
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+                or ip.is_multicast
+            ):
+                return False
+        return True
+    except Exception:
+        return False
 
 @router.get("/dish")
 def dish_image(
