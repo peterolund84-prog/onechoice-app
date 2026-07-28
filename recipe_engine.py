@@ -811,7 +811,7 @@ Rules:
             "temperature": 0.4,
             "max_tokens": 1200,
         },
-        timeout=20,
+        timeout=12,
     )
     resp.raise_for_status()
     payload = resp.json()

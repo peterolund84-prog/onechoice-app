@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1814" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <title>Lista — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css?v=v42-20260728" />
+</head>
+<body>
+  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
+  <main class="app" id="app"><div class="loading">Laddar lista…</div></main>
+  <nav class="nav" id="app-nav" data-active="lista" aria-label="Huvudmeny"></nav>
+  <script src="/static/app.js?v=v42-20260728"></script>
+  <script>
+    (async function () {
+      const { api, ensureGuest, esc, showToast } = window.OC;
+      await ensureGuest();
+      async function render() {
+        const data = await api.get("/api/lista");
+        const items = data.items || [];
+        const root = document.getElementById("app");
+        const doneCount = items.filter((it) => it.checked).length;
+        root.innerHTML = `
+          <h1 class="hero-title" style="font-size:1.8rem;text-align:left;margin-bottom:16px">Inköpslista</h1>
+          ${
+            !items.length
+              ? `<section class="glass-block"><p class="muted" style="margin:0">Listan är tom. Bestäm middag, bocka i vad du behöver och lägg till.</p></section>`
+              : `${
+                  doneCount
+                    ? `<div class="lista-toolbar">
+                         <button class="btn btn-ghost" type="button" id="clearDone">Rensa klara (${doneCount})</button>
+                       </div>`
+                    : ""
+                }
+                <section class="glass-block">
+                  <ul class="list">${items
+                    .map(
+                      (it) =>
+                        `<li class="${it.checked ? "done" : ""}">
+                          <input type="checkbox" data-id="${esc(it.id)}" ${it.checked ? "checked" : ""} />
+                          <span>${esc(it.name)}</span>
+                          <button class="list-del" type="button" data-del="${esc(it.id)}" aria-label="Ta bort ${esc(it.name)}">×</button>
+                        </li>`
+                    )
+                    .join("")}</ul>
+                </section>`
+          }
+          <section class="glass-block">
+            <input id="addName" type="text" placeholder="Lägg till..." autocomplete="off" />
+            <button class="btn btn-primary" type="button" id="addBtn">Lägg till</button>
+            <p class="error" id="err" hidden></p>
+          </section>
+        `;
+        const showErr = (m) => {
+          const el = document.getElementById("err");
+          if (!el) return;
+          el.hidden = !m;
+          el.textContent = m || "";
+        };
+        root.querySelectorAll("input[type=checkbox][data-id]").forEach((el) => {
+          el.onchange = async () => {
+            try {
+              await api.patch(`/api/lista/items/${el.dataset.id}`, { checked: el.checked });
+              render();
+            } catch (e) {
+              showErr(e.message);
+            }
+          };
+        });
+        root.querySelectorAll("[data-del]").forEach((btn) => {
+          btn.onclick = async () => {
+            try {
+              await api.delete(`/api/lista/items/${btn.dataset.del}`);
+              if (typeof showToast === "function") showToast("Borttaget");
+              render();
+            } catch (e) {
+              showErr(e.message);
+            }
+          };
+        });
+        const clearDone = document.getElementById("clearDone");
+        if (clearDone) {
+          clearDone.onclick = async () => {
+            try {
+              const res = await api.post("/api/lista/clear-checked", {});
+              if (typeof showToast === "function") {
+                showToast(res.removed ? `Rensade ${res.removed}` : "Inget att rensa");
+              }
+              render();
+            } catch (e) {
+              showErr(e.message);
+            }
+          };
+        }
+        document.getElementById("addBtn").onclick = async () => {
+          const name = document.getElementById("addName").value.trim();
+          if (!name) return;
+          try {
+            await api.post("/api/lista/items", { name });
+            render();
+          } catch (e) {
+            showErr(e.message);
+          }
+        };
+      }
+      await render();
+    })();
+  </script>
+</body>
+</html>

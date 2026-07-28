@@ -113,6 +113,15 @@ def parse_profile(user: dict[str, Any], context: dict[str, Any] | None = None) -
         food["show_nutrition"] = bool(food.get("show_nutrition"))
     else:
         food["show_nutrition"] = bool(ctx.get("show_nutrition", True))
+    # Meal budget: optional cost ceiling (off by default — Spelar ingen roll)
+    try:
+        import food_budget as fbud
+
+        food["meal_budget"] = fbud.normalize_meal_budget(
+            food.get("meal_budget", ctx.get("meal_budget", fbud.BUDGET_ANY))
+        )
+    except Exception:
+        food.setdefault("meal_budget", str(ctx.get("meal_budget") or "any"))
 
     clothes.setdefault("section", ctx.get("clothing_section") or "båda")  # herr|dam|båda
     clothes.setdefault("sizes", ctx.get("sizes") or {"top": "M", "bottom": "32", "shoes": "42"})
@@ -287,6 +296,30 @@ def _check_food(
     if active is not None and int(active) > max_min and not fridge_mode:
         reasons.append("too_long")
 
+    # Optional meal budget ceiling — generate freely, filter by cost estimate.
+    budget_cost: int | None = None
+    try:
+        import food_budget as fbud
+
+        budget_level = fbud.normalize_meal_budget(
+            (profile.get("food") or {}).get("meal_budget")
+            or context.get("meal_budget")
+        )
+        ceiling = fbud.ceiling_sek(budget_level)
+        if ceiling is not None and not eating_out and not fridge_mode:
+            budget_cost = fbud.cost_from_candidate(candidate)
+            if budget_cost is None:
+                # No ingredients yet — estimate from suggestion keywords lightly
+                budget_cost = fbud.estimate_cost_per_portion(
+                    list((candidate.get("meta") or {}).get("ingredients") or [])
+                    or [suggestion],
+                    servings=2,
+                )
+            if budget_cost is not None and int(budget_cost) > int(ceiling):
+                reasons.append("over_budget")
+    except Exception:
+        budget_cost = None
+
     # Leftovers require evidence of a recent home-cooked dinner (non-fridge food).
     if not fridge_mode:
         try:
@@ -397,6 +430,14 @@ def _check_food(
             servings=1 if meal_type in ("frukost", "kvallsmal") else None,
             meal_type=meal_type,
         )
+        try:
+            import food_budget as fbud
+
+            recipe = fbud.ensure_recipe_cost(recipe, meta=meta, allow_estimate=True)
+            if budget_cost is None:
+                budget_cost = fbud.read_cost_per_portion(recipe)
+        except Exception:
+            pass
         execution = {
             "type": "recipe",
             "label": "Ät nu",
@@ -408,7 +449,14 @@ def _check_food(
             "meal_type": meal_type,
             "max_active_minutes": max_min,
         }
-        return FeasibilityResult(ok=True, execution=execution)
+        enriched_meta = {**(candidate.get("meta") or {})}
+        if budget_cost is not None:
+            enriched_meta["cost_per_portion_sek"] = budget_cost
+        return FeasibilityResult(
+            ok=True,
+            execution=execution,
+            enriched={"meta": enriched_meta} if enriched_meta else None,
+        )
 
     # Middag: recipe first → smart shopping list from structured ingredients
     import shopping_compat as shop_compat
@@ -425,6 +473,17 @@ def _check_food(
     )
     if not shop or not recipe:
         return FeasibilityResult(ok=False, reasons=["shopping_incomplete"])
+    try:
+        import food_budget as fbud
+
+        recipe = fbud.ensure_recipe_cost(recipe, meta=meta, allow_estimate=True)
+        if isinstance(shop, dict):
+            shop = dict(shop)
+            shop["recipe"] = recipe
+        if budget_cost is None:
+            budget_cost = fbud.read_cost_per_portion(recipe)
+    except Exception:
+        pass
 
     execution = {
         "type": "recipe",
@@ -438,16 +497,19 @@ def _check_food(
         "max_active_minutes": max_min,
         "meal_type": meal_type,
     }
+    meta_out = {
+        **(candidate.get("meta") or {}),
+        "ingredients": shop["ingredients"],
+        "shopping": shop,
+    }
+    if budget_cost is not None:
+        meta_out["cost_per_portion_sek"] = budget_cost
     return FeasibilityResult(
         ok=True,
         execution=execution,
         enriched={
             "wildcard": bool(candidate.get("wildcard")),
-            "meta": {
-                **(candidate.get("meta") or {}),
-                "ingredients": shop["ingredients"],
-                "shopping": shop,
-            },
+            "meta": meta_out,
         },
     )
 
@@ -655,27 +717,33 @@ def _check_movie(
     # TMDB: verify the title (poster + rating) for movie decisions.
     # No match => reject hallucinated titles (regenerate once upstream).
     tmdb_meta: dict[str, Any] = {}
+    meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    local_pack = bool(meta.get("local_pack"))
+    meta_kind = str(meta.get("kind") or "").lower()
+    if meta_kind not in ("series", "film"):
+        meta_kind = None
+    if not meta_kind:
+        import movie_domain as md
+
+        meta_kind = md.format_kind(fmt or "avsnitt")
+    display_title = suggestion or title
     try:
         import tmdb as tmdb_mod
 
-        meta = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
-        local_pack = bool(meta.get("local_pack"))
-
-        # Prefer candidate meta.kind, else fall back to context format kind.
-        meta_kind = str(meta.get("kind") or "").lower()
-        if meta_kind not in ("series", "film"):
-            meta_kind = None
-        if not meta_kind:
-            # fmt -> series/film
-            import movie_domain as md
-
-            meta_kind = md.format_kind(fmt or "avsnitt")
-
         tmdb_row = tmdb_mod.lookup_title(title, kind=meta_kind)
         if not tmdb_row:
-            return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+            # Curated local packs must still be choosable offline / without TMDB.
+            if not local_pack:
+                return FeasibilityResult(ok=False, reasons=["tmdb_no_match"])
+            tmdb_row = {}
 
-        display_title = str(tmdb_row.get("title") or suggestion).strip()
+        # Prefer curated candidate label over offline stub keys ("seinfeld").
+        tmdb_title = str(tmdb_row.get("title") or "").strip()
+        display_title = suggestion or tmdb_title or title
+        if tmdb_title and not tmdb_title.islower():
+            display_title = tmdb_title
+        elif suggestion:
+            display_title = suggestion
 
         vote_raw = tmdb_row.get("vote_average")
         vote_f: float | None = None
@@ -695,24 +763,126 @@ def _check_movie(
             "vote_average": tmdb_row.get("vote_average"),
             "year": tmdb_row.get("year"),
         }
-    except FeasibilityResult:
-        raise
+        tmdb_meta = {k: v for k, v in tmdb_meta.items() if v is not None}
     except Exception:
         return FeasibilityResult(ok=False, reasons=["tmdb_error"])
 
-    match = mocks.streaming_availability(
+    low = suggestion.lower()
+    if any(x in low for x in ("hyr för", "rent for", "49 kr", "pay-per-view")) and not allow_rent:
+        return FeasibilityResult(ok=False, reasons=["rental_not_allowed"])
+
+    meta_flags = candidate.get("meta") if isinstance(candidate.get("meta"), dict) else {}
+    is_local_pack = bool(meta_flags.get("local_pack") or local_pack)
+
+    # --- Availability truth: TMDB SE watch/providers (not the LLM, not mocks) ---
+    import movie_domain as md
+
+    se_services: list[str] = []
+    providers_link: str | None = None
+    providers_source: str | None = None
+    tmdb_id = tmdb_meta.get("tmdb_id")
+    if tmdb_id is not None:
+        try:
+            import tmdb as tmdb_mod
+
+            prov = tmdb_mod.watch_providers(
+                int(tmdb_id),
+                kind=meta_kind or "series",
+                region="SE",
+            )
+            if isinstance(prov, dict):
+                se_services = [
+                    mocks.normalize_service(s) for s in (prov.get("services") or []) if s
+                ]
+                providers_link = str(prov.get("link") or "") or None
+                providers_source = str(prov.get("source") or "") or None
+                tmdb_meta["watch_region"] = "SE"
+                tmdb_meta["se_services"] = se_services
+                if providers_source:
+                    tmdb_meta["providers_source"] = providers_source
+        except Exception:
+            se_services = []
+
+    user_set = {mocks.normalize_service(s) for s in services if s}
+    overlap = sorted(user_set & set(se_services)) if user_set else list(se_services)
+
+    # Deep-link enrichment from local catalog (fallback-only for URLs/runtime).
+    catalog_match = mocks.streaming_availability(
         title,
-        user_services=services,
-        max_minutes=minutes,
+        user_services=list(user_set or se_services or ["netflix"]),
+        max_minutes=None,
         allow_rentals=allow_rent,
     )
-    if match:
-        # Soft format kind preference — reject clear mismatches when both known
-        try:
-            import movie_domain as md
 
+    if overlap:
+        service = overlap[0]
+        # Catalog is URL/runtime enrichment only — never the availability truth.
+        cat_key = title.strip().lower()
+        cat_row = mocks.STREAMING_CATALOG.get(cat_key) or {}
+        if not cat_row:
+            for k, v in mocks.STREAMING_CATALOG.items():
+                if k in cat_key or cat_key in k:
+                    cat_row = v
+                    break
+        url = (cat_row.get("links") or {}).get(service) if cat_row else None
+        runtime_min = cat_row.get("runtime_min") if cat_row else None
+        if runtime_min is not None and minutes and int(runtime_min) > int(minutes) + 5:
+            if not is_local_pack:
+                return FeasibilityResult(ok=False, reasons=["too_long"])
+        if not url:
+            url = providers_link or (
+                f"https://www.justwatch.com/se/search?q={quote_plus(display_title or title)}"
+            )
+        match_meta = {
+            "service": service,
+            "runtime_min": runtime_min,
+            "kind": meta_kind or md.format_kind(fmt or "avsnitt"),
+            "availability_source": "tmdb_watch_providers",
+        }
+        try:
             if fmt and not md.matches_format(
-                {**candidate, "meta": {**(candidate.get("meta") or {}), **match}},
+                {**candidate, "meta": {**(candidate.get("meta") or {}), **match_meta}},
+                fmt,
+            ):
+                return FeasibilityResult(ok=False, reasons=[f"format_mismatch:{fmt}"])
+        except Exception:
+            pass
+        detail_bits = []
+        if runtime_min:
+            detail_bits.append(f"{runtime_min} min")
+        detail_bits.append(_service_label(service))
+        return FeasibilityResult(
+            ok=True,
+            execution={
+                "type": "stream",
+                "label": f"Öppna på {_service_label(service)}",
+                "url": url,
+                "detail": " · ".join(detail_bits),
+            },
+            enriched={
+                "suggestion": display_title,
+                "meta": {
+                    **(candidate.get("meta") or {}),
+                    **match_meta,
+                    **tmdb_meta,
+                    "title": title,
+                    "display_title": display_title,
+                },
+            },
+        )
+
+    # No SE flatrate overlap with user services.
+    if not se_services and not is_local_pack:
+        return FeasibilityResult(ok=False, reasons=["unavailable_se"])
+
+    # Local pack only: STREAMING_CATALOG may still rescue offline mood packs.
+    if is_local_pack and catalog_match:
+        try:
+            if fmt and not md.matches_format(
+                {
+                    **candidate,
+                    "meta": {**(candidate.get("meta") or {}), **catalog_match},
+                },
                 fmt,
             ):
                 return FeasibilityResult(ok=False, reasons=[f"format_mismatch:{fmt}"])
@@ -722,63 +892,38 @@ def _check_movie(
             ok=True,
             execution={
                 "type": "stream",
-                "label": f"Öppna på {_service_label(match['service'])}",
-                "url": match.get("url"),
-                "detail": f"{match['runtime_min']} min · {_service_label(match['service'])}",
+                "label": f"Öppna på {_service_label(catalog_match['service'])}",
+                "url": catalog_match.get("url"),
+                "detail": f"{catalog_match['runtime_min']} min · {_service_label(catalog_match['service'])}",
             },
             enriched={
                 "suggestion": display_title,
                 "meta": {
                     **(candidate.get("meta") or {}),
-                    **match,
+                    **catalog_match,
                     **tmdb_meta,
                     "title": title,
                     "display_title": display_title,
+                    "availability_source": "local_catalog_fallback",
                 },
             },
         )
 
-    # Named title but not in mock catalog — still OK with TMDB + JustWatch search.
-    low = suggestion.lower()
-    if any(x in low for x in ("hyr för", "rent for", "49 kr", "pay-per-view")) and not allow_rent:
-        return FeasibilityResult(ok=False, reasons=["rental_not_allowed"])
-
-    # Known catalog title that failed availability → reject (wrong service or too long).
-    key = title.strip().lower()
-    catalog_row = mocks.STREAMING_CATALOG.get(key)
-    if not catalog_row:
-        for k, v in mocks.STREAMING_CATALOG.items():
-            if k in key or key in k:
-                catalog_row = v
-                break
-    if catalog_row:
-        return FeasibilityResult(ok=False, reasons=["unavailable_on_services"])
-
-    import movie_domain as md
-
-    svc = services[0] if services else "netflix"
-    search_q = display_title or title
-    return FeasibilityResult(
-        ok=True,
-        execution={
-            "type": "stream",
-            "label": f"Öppna på {_service_label(svc)}",
-            "url": f"https://www.justwatch.com/se/search?q={quote_plus(search_q)}",
-            "detail": f"Sök {search_q} · {_service_label(svc)}",
-        },
-        enriched={
-            "suggestion": display_title,
-            "meta": {
-                **(candidate.get("meta") or {}),
-                **tmdb_meta,
-                "title": title,
-                "display_title": display_title,
-                "service": svc,
-                "runtime_min": None,
-                "kind": md.format_kind(fmt or "avsnitt") if fmt else None,
+    if se_services and not overlap:
+        return FeasibilityResult(
+            ok=False,
+            reasons=["unavailable_on_services"],
+            enriched={
+                "meta": {
+                    **(candidate.get("meta") or {}),
+                    **tmdb_meta,
+                    "se_services": se_services,
+                    "paywalled": True,
+                }
             },
-        },
-    )
+        )
+
+    return FeasibilityResult(ok=False, reasons=["unavailable_on_services"])
 
 
 def _service_label(svc: str) -> str:

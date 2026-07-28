@@ -76,8 +76,18 @@ STRIPE_SECRET_KEY = "sk_test-..." # valfritt
 
 ## 5) Installera & kör
 
+**Ny UI (HTML + FastAPI) — rekommenderad:**
+
 ```bash
 pip install -r requirements.txt
+uvicorn api.main:app --reload --port 8000
+```
+
+Öppna http://127.0.0.1:8000 — se `README_HTML.md`.
+
+**Legacy Streamlit (finns kvar under övergången):**
+
+```bash
 python -m streamlit run app.py
 ```
 

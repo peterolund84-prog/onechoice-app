@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1a1814" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="OneChoice" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png" />
+  <title>Profil — OneChoice</title>
+  <link rel="stylesheet" href="/static/app.css?v=v42-20260728" />
+</head>
+<body>
+  <header class="header"><div class="logo">OneCho<span class="logo-i">ı<span class="logo-spark" aria-hidden="true"></span></span>ce</div></header>
+  <main class="app" id="app"><div class="loading">Laddar…</div></main>
+  <nav class="nav" id="app-nav" data-active="profile" aria-label="Huvudmeny"></nav>
+  <script src="/static/app.js?v=v42-20260728"></script>
+  <script>
+    (async function () {
+      const { api, ensureGuest, esc, showToast } = window.OC;
+      await ensureGuest();
+      const p = await api.get("/api/profile");
+      const integ = p.integrations || {};
+      const food = p.food || {};
+      const budgetOpts = food.meal_budget_options || [
+        { id: "any", label: "Spelar ingen roll" },
+        { id: "billigt", label: "Håll det billigt" },
+        { id: "snalt", label: "Snålt" },
+      ];
+
+      let aiLine = "AI: ej testad ännu";
+      let keyLine = "";
+      try {
+        const llm = await api.get("/api/health/llm");
+        const key = (llm && llm.key) || {};
+        if (key.source && key.source !== "none") {
+          const pref = key.prefix ? `${key.prefix}…` : "—";
+          keyLine = `Nyckel: ${key.source} · ${pref} · längd ${key.len || 0}`;
+          if (key.env_differs_from_toml) {
+            keyLine += " · (env skiljer sig från secrets.toml — toml vinner)";
+          }
+        }
+        if (llm && llm.ok && llm.model) {
+          aiLine = `AI: ${llm.model} ✓`;
+        } else if (llm && !llm.ok) {
+          const detail = (llm.detail || "").trim();
+          if (/nyckel|no_api_key|saknas/i.test(detail) && !/incorrect|invalid/i.test(detail)) {
+            aiLine = "AI: offline — API-nyckel saknas i lokal secrets.toml";
+          } else if (/incorrect|invalid/i.test(detail)) {
+            aiLine =
+              "AI: offline — xAI avvisar nyckeln (fel/gammal). " +
+              "Streamlit Cloud-nycklar syns inte här — kolla lokal secrets.toml.";
+          } else {
+            aiLine = `AI: offline — ${detail.slice(0, 140) || "ingen modell svarade"}`;
+          }
+        }
+      } catch (e) {
+        aiLine = `AI: offline — ${esc((e && e.message) || "kunde inte nå probe")}`;
+      }
+
+      document.getElementById("app").innerHTML = `
+        <div class="pro">
+          <h2>OneChoice Pro</h2>
+          <p class="muted">Obegränsad historik och skarpare preferenser.</p>
+          <p style="font-weight:700;margin:12px 0">49 kr/mån</p>
+          <button class="btn btn-primary" type="button" disabled>Uppgradera</button>
+        </div>
+        <p class="muted">${p.guest_mode ? "Guest / lokal demo" : esc(p.email || "Inloggad")}</p>
+        <p class="muted" id="ai-status">${esc(aiLine)}</p>
+        ${keyLine ? `<p class="muted" style="font-size:12px">${esc(keyLine)}</p>` : ""}
+
+        <section class="glass-block" style="margin-top:16px">
+          <div class="section-label">Mat — näring &amp; budget</div>
+          <label class="profile-toggle">
+            <input type="checkbox" id="showNutrition" ${food.show_nutrition !== false ? "checked" : ""} />
+            <span>Visa ca-värden (kcal / protein) på receptet</span>
+          </label>
+          <p class="muted" style="font-size:12px;margin:8px 0 14px">
+            Aldrig på beslutskortet — bara under receptet när du lagar.
+          </p>
+          <div class="section-label" style="margin-top:4px">Budget för måltider</div>
+          <div class="chips" id="budgetChips" role="radiogroup" aria-label="Måltidsbudget">
+            ${budgetOpts
+              .map(
+                (o) =>
+                  `<button class="chip ${o.id === (food.meal_budget || "any") ? "active" : ""}" type="button" data-budget="${esc(o.id)}" role="radio" aria-checked="${o.id === (food.meal_budget || "any") ? "true" : "false"}">${esc(o.label)}</button>`
+              )
+              .join("")}
+          </div>
+          <p class="muted" style="font-size:12px;margin:10px 0 0">
+            När budget är på filtreras dyra rätter bort innan valet visas.
+            Kostnad visas som ca-värde bara i receptvyn — aldrig på beslutskortet.
+          </p>
+          <p class="error" id="prefErr" hidden></p>
+        </section>
+
+        <div class="pro" style="margin-top:12px">
+          <h2 style="font-size:1.15rem">Integrationer</h2>
+          <p class="muted">Supabase: ${esc(integ.supabase || "—")}</p>
+          <p class="muted">TMDB (film): ${esc(integ.tmdb || "—")}</p>
+          <p class="muted">Secrets-fil: ${esc(integ.secrets_file || "ej hittad")}</p>
+          <p class="muted" style="font-size:12px;margin-top:8px">
+            HTML/uvicorn läser bara lokal <code>.streamlit/secrets.toml</code> —
+            inte Streamlit Cloud → Secrets.
+          </p>
+        </div>
+        <p class="muted"><strong>Build:</strong> ${esc(p.build)}</p>
+        <p class="muted">Stack: ${esc(p.stack)}</p>
+        <p style="margin-top:20px"><a class="linkish" href="/auth">Logga in</a></p>
+      `;
+
+      const showErr = (m) => {
+        const el = document.getElementById("prefErr");
+        if (!el) return;
+        el.hidden = !m;
+        el.textContent = m || "";
+      };
+
+      async function savePrefs(patch) {
+        showErr("");
+        try {
+          await api.patch("/api/profile", patch);
+          if (typeof showToast === "function") showToast("Sparat");
+        } catch (e) {
+          showErr(e.message || "Kunde inte spara");
+        }
+      }
+
+      const nut = document.getElementById("showNutrition");
+      if (nut) {
+        nut.onchange = () => savePrefs({ show_nutrition: nut.checked });
+      }
+      document.querySelectorAll("#budgetChips [data-budget]").forEach((btn) => {
+        btn.onclick = async () => {
+          document.querySelectorAll("#budgetChips [data-budget]").forEach((b) => {
+            b.classList.toggle("active", b === btn);
+            b.setAttribute("aria-checked", b === btn ? "true" : "false");
+          });
+          await savePrefs({ meal_budget: btn.dataset.budget });
+        };
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -2,14 +2,17 @@
 """
 OneChoice decision pipeline.
 
-Shared flow (all domains):
-  question → classify domain → profile + context + history
-  → LLM/local generates ~5 candidates
-  → feasibility_check (domain validator) — discard failures, never show broken decisions
-  → rank survivors (80% close to accepted history, 20% wildcard/"Vildkort")
-  → display ONE + one-line justification + execution step
+Architecture (all domains):
+  AI generates freely → real data verifies → fixed/local pack is fallback only.
 
-Repetition guard: 7 days per domain. Max 3 rerolls, then lock.
+Shared flow:
+  question → classify domain → profile + context + history
+  → LLM generates candidates (local pack only if LLM down/empty)
+  → feasibility_check verifies truth (TMDB SE providers, food feasibility, …)
+  → rank survivors (80% safe / 20% explore), excluding recent_suggestions
+  → display ONE verified suggestion (+ clearly marked local fallback if needed)
+
+Repetition: food per meal rules; movies ~14 days. Max 3 rerolls, then lock.
 """
 
 from __future__ import annotations
@@ -46,6 +49,7 @@ def seed_rng(seed: int = 1337) -> None:
 
 MAX_REROLLS = 3
 REPEAT_DAYS = 7
+MOVIE_REPEAT_DAYS = 14  # anti-repetition window for film/series
 SAFE_RATIO = 0.80  # bandit: 80% safe / 20% explore (wildcard)
 PREF_SCORE_MIN = -2.0
 PREF_SCORE_MAX = 3.0
@@ -287,12 +291,22 @@ def decide(
                 history=early_history,
             )
         )
+        movie_mode = md.normalize_mode(
+            (context_extra or {}).get("mode")
+            or ctx.get("mode")
+            or "mood"
+        )
         ctx = md.apply_context(
             ctx,
             fmt=movie_format,
             mood=movie_mood,
             in_progress_series=in_progress_series,
+            mode=movie_mode,
         )
+        # On "Nytt förslag", do not pin the in-progress series — otherwise
+        # Avsnitt + history collapses to a single survivor and reroll no-ops.
+        if reroll:
+            ctx["in_progress_series"] = None
 
     # Fridge photo → cook only from confirmed inventory (no shopping list)
     fridge_mode = False
@@ -326,12 +340,14 @@ def decide(
     else:
         history = db.list_decisions(user_id, domain=domain, limit=40, path=db_path)
     prefs = db.get_preferences(user_id, domain, path=db_path)
-    # Repetition guard: per meal_type for food (porridge every morning is fine)
+    # Repetition guard: per meal_type for food; ~14 days for movies/series
     repeat_days = REPEAT_DAYS
     if domain == "food" and meal_type:
         import food_domain as fd
 
         repeat_days = fd.repeat_days(meal_type)
+    elif domain == "movie":
+        repeat_days = MOVIE_REPEAT_DAYS
     recent = db.recent_suggestions(
         user_id,
         domain,
@@ -339,6 +355,8 @@ def decide(
         meal_type=meal_type if domain == "food" else None,
         path=db_path,
     )
+    ctx["recent_suggestions"] = list(recent)
+    ctx["repeat_days"] = repeat_days
 
     explore = (not locked) and (_rng.random() > SAFE_RATIO)
     # Fast path ONLY for habit meals (frukost/kvällsmål) — lunch & middag
@@ -356,17 +374,83 @@ def decide(
             fav_titles = db.list_favorite_suggestions(user_id, domain="food", path=db_path)
         except Exception as exc:
             log.warning("list_favorite_suggestions failed: %s", exc)
-    candidates = _generate_candidates(
-        question=q,
-        domain=domain,
-        context=ctx,
-        profile=profile,
-        history=history,
-        preferences=prefs,
-        recent=recent,
-        language=language,
-        grok_api_key="" if food_local_first else grok_api_key,
+    # Trendar nu: web-search grounded picks — bypass mood matching entirely.
+    trending_mode = domain == "movie" and bool(
+        ctx.get("mode") == "trendar"
+        or (context_extra or {}).get("mode") == "trendar"
     )
+    if trending_mode:
+        import movie_trending as mt
+
+        movie_services = list((profile.get("movie") or {}).get("services") or [])
+        grok_key = (grok_api_key or "").strip()
+        # Trendar is Grok web-search ONLY — never TMDB charts or old catalog packs.
+        if not grok_key:
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=mt.empty_message(language, reason="no_key"),
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "format": movie_format or ctx.get("format"),
+                    "mood": movie_mood or ctx.get("mood"),
+                    "trending_empty": True,
+                    "trending_needs_grok": True,
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
+        trend_cands = mt.build_trending_candidates(
+            language=language,
+            fmt=movie_format or ctx.get("format"),
+            user_services=movie_services,
+            api_key=grok_key,
+            use_cache=True,
+        )
+        trend_funnel = mt.last_trending_funnel()
+        ctx["trending_funnel"] = trend_funnel
+        pick = mt.pick_trending_candidate(trend_cands)
+        if not pick:
+            msg = mt.empty_message(language)
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "format": movie_format or ctx.get("format"),
+                    "mood": movie_mood or ctx.get("mood"),
+                    "trending_empty": True,
+                    "trending_needs_grok": False,
+                    "trending_funnel": trend_funnel,
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
+        # Seed pipeline with grounded picks (available first); skip mood/Grok pack.
+        candidates = [c for c in trend_cands if not (c.get("meta") or {}).get("paywalled")]
+        if not candidates:
+            candidates = [pick]
+    else:
+        candidates = _generate_candidates(
+            question=q,
+            domain=domain,
+            context=ctx,
+            profile=profile,
+            history=history,
+            preferences=prefs,
+            recent=recent,
+            language=language,
+            grok_api_key="" if food_local_first else grok_api_key,
+        )
 
     # Occasion is the primary clothes constraint — pin a matching outfit first
     if domain == "clothes":
@@ -401,7 +485,14 @@ def decide(
             language,
             recent_dinner=ctx.get("recent_dinner_title"),
         )
-        if pinned:
+        # Lunch/middag: LLM is primary when a usable Grok key produced candidates.
+        # Local meal packs only pin when LLM is absent/empty (fallback path).
+        llm_primary_meal = (
+            meal_type in ("lunch", "middag")
+            and _usable_grok_key("" if food_local_first else grok_api_key)
+            and bool(candidates)
+        )
+        if pinned and not llm_primary_meal:
             import food_categories as fcat
 
             pinned = fcat.stamp_dish_categories(pinned)
@@ -512,16 +603,67 @@ def decide(
                 profile=profile,
                 context=ctx,
             )
+        # Trending mode must never fall back to mood/local comfort packs —
+        # empty grounded search → honest "no trends" state instead.
+        if trending_mode and not survivors:
+            import movie_trending as mt
+
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=mt.empty_message(language),
+                context={
+                    **ctx,
+                    "mode": "trendar",
+                    "trending_empty": True,
+                    "trending_funnel": ctx.get("trending_funnel") or mt.last_trending_funnel(),
+                },
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
         # CRITICAL: fridge mode must never fall through to supermarket / kvällsmål packs
+        # Local pack is fallback-only — never pretend it was a fresh AI pick.
         if not survivors and not fridge_mode:
+            local_pool = _local_candidates(domain, language, recent, ctx, profile)
+            for row in local_pool:
+                meta = row.setdefault("meta", {}) if isinstance(row, dict) else {}
+                if isinstance(meta, dict):
+                    meta["local_pack"] = True
+                    meta["fallback"] = True
             survivors = feasibility.filter_feasible(
-                _local_candidates(domain, language, recent, ctx, profile),
+                local_pool,
                 domain=domain,
                 profile=profile,
                 context=ctx,
             )
-        if not survivors and not fridge_mode:
+            if survivors:
+                ctx["fallback_local_pack"] = True
+        if not survivors and not fridge_mode and domain != "movie":
+            # Non-movie domains keep a last-resort guaranteed candidate.
             survivors = [_guaranteed_feasible(domain, language, profile, ctx)]
+            if survivors:
+                ctx["fallback_local_pack"] = True
+        # Movies: never invent Seinfeld-on-repeat — honest refuse when nothing verifies.
+        if not survivors and not fridge_mode and domain == "movie":
+            msg = (
+                "Hittar inget som passar just nu — försök igen."
+                if language == "sv"
+                else "Nothing fits right now — try again."
+            )
+            return DecisionResult(
+                ok=False,
+                domain="movie",
+                suggestion="",
+                justification="",
+                refused=True,
+                refusal_message=msg,
+                context={**ctx, "movie_empty": True},
+                route=(route_meta or {}).get("route"),
+                route_log_id=(route_meta or {}).get("route_log_id"),
+            )
         if not survivors and fridge_mode:
             import fridge_domain as fr
 
@@ -581,8 +723,36 @@ def decide(
             for c in ranked
             if str(c.get("suggestion") or "").strip().lower() != prev_l
         ]
+        if not alt and domain == "movie":
+            # Repetition guard + in-progress pin can collapse the pool.
+            # Rebuild a fresh local pack (no recent filter) for this reroll.
+            import movie_domain as md
+
+            fresh = md.local_candidates(
+                fmt=md.normalize_format(ctx.get("format") or movie_format),
+                mood=md.normalize_mood(ctx.get("mood") or movie_mood),
+                language=language,
+                in_progress_series=None,
+            )
+            fresh_ok = feasibility.filter_feasible(
+                fresh, domain=domain, profile=profile, context=ctx
+            )
+            alt = [
+                c
+                for c in (fresh_ok or fresh)
+                if str(c.get("suggestion") or "").strip().lower() != prev_l
+            ]
         if alt:
-            top = alt[0]
+            # Rotate among alternatives so repeated "Nytt förslag" keeps moving.
+            pick = max(0, int(effective_reroll) - 1) % len(alt)
+            top = alt[pick]
+        elif len(ranked) == 1:
+            # Only one survivor — keep it but mark so UI can explain the stall.
+            top = ranked[0]
+            top = dict(top)
+            meta = dict(top.get("meta") or {})
+            meta["reroll_no_alt"] = True
+            top["meta"] = meta
 
     # Final leftover gate — catches LLM phrases that slipped through ranking
     if domain == "food" and not fridge_mode:
@@ -659,6 +829,23 @@ def decide(
 
     justification = str(top.get("justification") or "")
     suggestion = str(top.get("suggestion") or "")
+    # Clearly mark local-pack fallback so it is never read as a fresh AI pick.
+    top_meta = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+    if ctx.get("fallback_local_pack") or top_meta.get("fallback"):
+        ctx["fallback_local_pack"] = True
+        prefix = (
+            "Lokalt förslag — "
+            if language == "sv"
+            else "Local fallback — "
+        )
+        if justification and not justification.lower().startswith("lokalt"):
+            justification = prefix + justification
+        elif not justification:
+            justification = (
+                "Lokalt förslag när AI/verifiering inte räckte."
+                if language == "sv"
+                else "Local fallback when AI/verification fell short."
+            )
     execution = top.get("execution") if isinstance(top.get("execution"), dict) else None
     if not execution:
         execution = _execution_for(domain, suggestion, language, user)
@@ -726,6 +913,37 @@ def decide(
             rec["active_minutes"] = int(active)
             shop["recipe"] = rec
             execution["shopping"] = shop
+        # One source of truth for cost estimate (constraint + recipe-view stat)
+        try:
+            import food_budget as fbud
+
+            meta_for_cost = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+            if isinstance(execution.get("recipe"), dict):
+                execution["recipe"] = fbud.ensure_recipe_cost(
+                    execution["recipe"],
+                    meta=meta_for_cost,
+                    allow_estimate=True,
+                    meal_type=meal_type,
+                )
+                cost_val = fbud.read_cost_per_portion(execution["recipe"])
+                if cost_val is not None:
+                    top_meta = dict(meta_for_cost)
+                    top_meta["cost_per_portion_sek"] = cost_val
+                    top = dict(top)
+                    top["meta"] = top_meta
+            elif isinstance(execution.get("shopping"), dict):
+                shop = dict(execution["shopping"])
+                rec = fbud.ensure_recipe_cost(
+                    shop.get("recipe") if isinstance(shop.get("recipe"), dict) else {},
+                    meta=meta_for_cost,
+                    allow_estimate=True,
+                    meal_type=meal_type,
+                )
+                shop["recipe"] = rec
+                execution["shopping"] = shop
+                execution["recipe"] = rec
+        except Exception as exc:
+            log.warning("ensure_recipe_cost failed: %s", exc)
     status = "locked" if locked else "shown"
 
     dish_category = None
@@ -736,6 +954,69 @@ def decide(
             suggestion,
             meta=top.get("meta") if isinstance(top.get("meta"), dict) else {},
         )
+        # Dish image on the critical path must be instant — client aborts decide at 20s.
+        # With a Grok key: placeholder now, AI upgrade via /api/decision/dish-image (lazy).
+        # Without a key: local keyword library → placeholder (never block on network).
+        try:
+            import food_image_search as fis
+
+            meta_img = top.get("meta") if isinstance(top.get("meta"), dict) else {}
+            rec = (
+                execution.get("recipe")
+                if isinstance(execution.get("recipe"), dict)
+                else {}
+            )
+            existing_url = None
+            if isinstance(rec, dict):
+                existing_url = rec.get("image_url")
+            if not existing_url:
+                existing_url = meta_img.get("image_url")
+            has_grok = bool((grok_api_key or "").strip()) and _usable_grok_key(
+                grok_api_key
+            )
+            if has_grok and not (
+                isinstance(existing_url, str) and existing_url.strip()
+            ):
+                # Avoid flashing a mismatched keyword photo while AI is pending.
+                resolved = {
+                    "url": None,
+                    "source": "placeholder",
+                    "remote_url": None,
+                }
+                image_pending = True
+            else:
+                resolved = fis.resolve_food_image(
+                    suggestion,
+                    dish_category,
+                    api_key="",  # never call Grok on the decide critical path
+                    recipe_image_url=str(existing_url).strip()
+                    if isinstance(existing_url, str) and existing_url.strip()
+                    else None,
+                    prefer_ai=False,
+                )
+                image_pending = False
+            if isinstance(execution.get("recipe"), dict):
+                rec = dict(execution["recipe"])
+                if resolved.get("remote_url"):
+                    rec["image_url"] = resolved["remote_url"]
+                rec["image_source"] = resolved.get("source") or "placeholder"
+                rec["image_display_url"] = resolved.get("url")
+                rec["image_pending"] = image_pending
+                execution["recipe"] = rec
+                if isinstance(execution.get("shopping"), dict):
+                    shop = dict(execution["shopping"])
+                    shop["recipe"] = rec
+                    execution["shopping"] = shop
+            top_meta = dict(meta_img)
+            if resolved.get("remote_url"):
+                top_meta["image_url"] = resolved["remote_url"]
+            top_meta["image_source"] = resolved.get("source") or "placeholder"
+            top_meta["image_display_url"] = resolved.get("url")
+            top_meta["image_pending"] = image_pending
+            top = dict(top)
+            top["meta"] = top_meta
+        except Exception as exc:
+            log.warning("resolve_food_image failed: %s", exc)
 
     decision = db.create_decision(
         user_id=user_id,
@@ -769,13 +1050,53 @@ def decide(
             "candidates_n": len(candidates),
             "feasible_n": len(survivors),
             "skip_feasibility": skip_feasibility,
+            "fallback_local_pack": bool(ctx.get("fallback_local_pack")),
+            "repeat_days": ctx.get("repeat_days"),
+            "trending_funnel": ctx.get("trending_funnel"),
             "execution_detail": execution.get("detail"),
             "shopping": execution.get("shopping"),
             "recipe": execution.get("recipe")
             or (execution.get("shopping") or {}).get("recipe"),
             "dish_category": dish_category,
+            "dish_image_url": (top.get("meta") or {}).get("image_display_url")
+            or (
+                (execution.get("recipe") or {}).get("image_display_url")
+                if isinstance(execution.get("recipe"), dict)
+                else None
+            ),
+            "dish_image_source": (top.get("meta") or {}).get("image_source")
+            or (
+                (execution.get("recipe") or {}).get("image_source")
+                if isinstance(execution.get("recipe"), dict)
+                else None
+            ),
+            "image_pending": bool(
+                (top.get("meta") or {}).get("image_pending")
+                or (
+                    (execution.get("recipe") or {}).get("image_pending")
+                    if isinstance(execution.get("recipe"), dict)
+                    else False
+                )
+            ),
+            "image_url": (top.get("meta") or {}).get("image_url")
+            or (
+                (execution.get("recipe") or {}).get("image_url")
+                if isinstance(execution.get("recipe"), dict)
+                else None
+            ),
             "workout": workout_payload or execution.get("workout"),
             "route_log_id": (route_meta or {}).get("route_log_id"),
+            "availability_source": (top.get("meta") or {}).get("availability_source"),
+            "se_services": (top.get("meta") or {}).get("se_services"),
+            "meal_budget": (profile.get("food") or {}).get("meal_budget"),
+            "cost_per_portion_sek": (
+                (top.get("meta") or {}).get("cost_per_portion_sek")
+                or (
+                    (execution.get("recipe") or {}).get("cost_per_portion_sek")
+                    if isinstance(execution.get("recipe"), dict)
+                    else None
+                )
+            ),
         },
         execution_type=execution.get("type"),
         execution_label=execution.get("label"),
@@ -1074,9 +1395,22 @@ def _generate_candidates(
     language: str,
     grok_api_key: str,
 ) -> list[dict[str, Any]]:
-    if _usable_grok_key(grok_api_key):
+    """LLM candidates with a hard wall-clock cap — local pack is always the fallback.
+
+    The HTML client aborts decide at ~35s. Grok over a home LAN can hang longer than
+    requests' own timeout, so we wrap the call and fall back instead of blowing the
+    client deadline (\"Det tog för lång tid\").
+    """
+    local = _local_candidates(domain, language, recent, context, profile)
+    if not _usable_grok_key(grok_api_key):
+        return local
+    # Food/movie LLM must return well under the client abort window.
+    grok_deadline_s = 10.0 if domain in ("food", "movie", "clothes", "workout") else 12.0
+    box: dict[str, Any] = {}
+
+    def _run() -> None:
         try:
-            return _grok_candidates(
+            box["value"] = _grok_candidates(
                 question,
                 domain,
                 context,
@@ -1087,9 +1421,29 @@ def _generate_candidates(
                 language,
                 grok_api_key,
             )
-        except Exception as exc:
-            log.exception("Grok candidates failed: %s", exc)
-    return _local_candidates(domain, language, recent, context, profile)
+        except Exception as exc:  # noqa: BLE001 — surface to caller via box
+            box["error"] = exc
+
+    # Daemon thread: a hung requests call must not block decide or process exit.
+    import threading
+
+    thr = threading.Thread(target=_run, name=f"grok-cand-{domain}", daemon=True)
+    thr.start()
+    thr.join(timeout=grok_deadline_s)
+    if thr.is_alive():
+        log.warning(
+            "Grok candidates exceeded %.0fs for %s — using local pack",
+            grok_deadline_s,
+            domain,
+        )
+        return local
+    if "error" in box:
+        log.exception("Grok candidates failed: %s", box["error"])
+        return local
+    llm = box.get("value")
+    if llm:
+        return llm
+    return local
 
 
 def _grok_candidates(
@@ -1200,7 +1554,8 @@ Rules:
             # Cap completion size — everyday decisions don't need long essays
             "max_tokens": 600,
         },
-        timeout=12,
+        # Keep under the ThreadPool deadline in _generate_candidates (~10s).
+        timeout=9,
     )
     resp.raise_for_status()
     payload = resp.json()
@@ -1253,6 +1608,7 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
         "assumed at home; rice, pasta, soy sauce, coconut milk, canned tomatoes = buy."
     )
     if domain == "food":
+        import food_budget as fbud
         import food_categories as fcat
 
         food_rule += (
@@ -1260,6 +1616,27 @@ def _domain_prompt_rules(domain: str, profile: dict[str, Any]) -> str:
             + fcat.dish_category_prompt_list()
             + ". Never invent a category outside that list."
         )
+        food_rule += (
+            " REQUIRED: set meta.cost_per_portion_sek to an estimated integer SEK "
+            "per portion from the ingredient amounts USED (Swedish supermarket ballpark). "
+            "CRITICAL cost rule: estimate ONLY the amount of each ingredient the recipe "
+            "uses — NOT the price of the full package. "
+            "2 eggs ≈ the per-egg share of a carton (a few kronor), not a whole äggkartong. "
+            "1 msk olja ≈ a few öre, not a whole bottle. "
+            "Pantry staples (salt, pepper, oil, spices) contribute negligibly. "
+            "A 1-portion breakfast is typically ~10–25 kr; a weekday dinner portion ~30–70 kr. "
+            "Round to nearest 5. This is an estimate labelled 'ca', NOT a store price — "
+            "never invent exact kronor or a shopping-list total."
+        )
+        budget_level = fbud.normalize_meal_budget(
+            (profile.get("food") or {}).get("meal_budget")
+        )
+        ceiling = fbud.ceiling_sek(budget_level)
+        if ceiling is not None:
+            food_rule += (
+                f" HARD budget: meal_budget={budget_level} — every candidate MUST have "
+                f"meta.cost_per_portion_sek ≤ {ceiling}. Discard anything over the ceiling."
+            )
     rules = {
         "food": food_rule,
         "clothes": (
@@ -1733,11 +2110,43 @@ def _guaranteed_feasible(
             if survivors:
                 picked = survivors[0]
                 break
-        c = picked or (pack[0] if pack else {
-            "suggestion": "Seinfeld",
-            "justification": "Lätt efter en lång dag." if sv else "Easy after a long day.",
-            "meta": {"title": "seinfeld", "kind": "series", "format": fmt, "mood": mood},
-        })
+        if picked:
+            c = picked
+        elif pack:
+            c = pack[0]
+        else:
+            # Never invent a series when the user asked for Film (and vice versa).
+            want = md.format_kind(fmt)
+            if want == "film":
+                c = {
+                    "suggestion": "The Intern",
+                    "justification": (
+                        "Varm feelgood — lätt film utan krav."
+                        if sv
+                        else "Warm feel-good — an easy film night."
+                    ),
+                    "meta": {
+                        "title": "the intern",
+                        "kind": "film",
+                        "format": fmt,
+                        "mood": mood,
+                        "local_pack": True,
+                    },
+                }
+            else:
+                c = {
+                    "suggestion": "Seinfeld",
+                    "justification": (
+                        "Lätt efter en lång dag." if sv else "Easy after a long day."
+                    ),
+                    "meta": {
+                        "title": "seinfeld",
+                        "kind": "series",
+                        "format": fmt,
+                        "mood": mood,
+                        "local_pack": True,
+                    },
+                }
     elif domain == "workout":
         import workout_domain as wd
 

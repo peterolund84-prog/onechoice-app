@@ -88,6 +88,8 @@ CLOTHING_CATALOG: dict[str, dict[str, Any]] = {
 }
 
 # Mock JustWatch-style catalog: title → services + runtime minutes + deep links
+# Fallback-only catalog: deep links + offline local-pack rescue.
+# Availability truth for LLM/trending picks is TMDB /watch/providers?region=SE.
 STREAMING_CATALOG: dict[str, dict[str, Any]] = {
     "the night agent": {
         "services": {"netflix"},
@@ -160,6 +162,24 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "kind": "series",
         "links": {"netflix": "https://www.netflix.com/search?q=Seinfeld"},
     },
+    "the office": {
+        "services": {"netflix", "prime"},
+        "runtime_min": 22,
+        "kind": "series",
+        "links": {
+            "netflix": "https://www.netflix.com/search?q=The%20Office",
+            "prime": "https://www.primevideo.com/search/ref=atv_nb_sr?phrase=The%20Office",
+        },
+    },
+    "brooklyn nine-nine": {
+        "services": {"netflix", "disney_plus"},
+        "runtime_min": 22,
+        "kind": "series",
+        "links": {
+            "netflix": "https://www.netflix.com/search?q=Brooklyn%20Nine-Nine",
+            "disney_plus": "https://www.disneyplus.com/search?q=Brooklyn%20Nine-Nine",
+        },
+    },
     " Succession": {
         "services": {"hbo_max"},
         "runtime_min": 60,
@@ -207,6 +227,86 @@ STREAMING_CATALOG: dict[str, dict[str, Any]] = {
         "runtime_min": 20,
         "kind": "series",
         "links": {"netflix": "https://www.netflix.com/search?q=Explained"},
+    },
+    "the intern": {
+        "services": {"netflix"},
+        "runtime_min": 121,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=The%20Intern"},
+    },
+    "chef": {
+        "services": {"netflix"},
+        "runtime_min": 114,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Chef"},
+    },
+    "about time": {
+        "services": {"netflix"},
+        "runtime_min": 123,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=About%20Time"},
+    },
+    "extraction": {
+        "services": {"netflix"},
+        "runtime_min": 116,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Extraction"},
+    },
+    "the gray man": {
+        "services": {"netflix"},
+        "runtime_min": 129,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=The%20Gray%20Man"},
+    },
+    "red notice": {
+        "services": {"netflix"},
+        "runtime_min": 118,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Red%20Notice"},
+    },
+    "murder mystery": {
+        "services": {"netflix"},
+        "runtime_min": 97,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Murder%20Mystery"},
+    },
+    "the nice guys": {
+        "services": {"netflix"},
+        "runtime_min": 116,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=The%20Nice%20Guys"},
+    },
+    "crazy rich asians": {
+        "services": {"netflix", "hbo_max"},
+        "runtime_min": 120,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Crazy%20Rich%20Asians"},
+    },
+    "free solo": {
+        "services": {"netflix", "disney_plus"},
+        "runtime_min": 100,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Free%20Solo"},
+    },
+    "13th": {
+        "services": {"netflix"},
+        "runtime_min": 100,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=13th"},
+    },
+    "luca": {
+        "services": {"disney_plus", "netflix"},
+        "runtime_min": 95,
+        "kind": "film",
+        "links": {"netflix": "https://www.netflix.com/search?q=Luca"},
+    },
+    "the mitchells vs the machines": {
+        "services": {"netflix"},
+        "runtime_min": 113,
+        "kind": "film",
+        "links": {
+            "netflix": "https://www.netflix.com/search?q=The%20Mitchells%20vs%20the%20Machines"
+        },
     },
 }
 
